@@ -15,6 +15,7 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 - 根目录 `app/` 是早期独立 Java 原型，**不是目标实现**；其应用内 shell 已禁用。不要将其已有能力误认为 fork 已完成的能力。
 - DSH runtime 仍然是当前基线，尚未替换或接入 MiniMax Code/WebUI runtime，故目前不能使用官方插件市场。上游 WebUI 包含 `local-runtime-v2` 的市场、GitHub 插件预览/导入和启停等接口；本项目尚未接入、尚未验证 Android 插件兼容性，不能把 GitHub 下载等同于安全可用。
 - `dsh-go/packages/dsh_client/lib/src/mcode_plugins_api.dart` 已实现 WebUI 插件管理协议客户端：市场、已安装列表、GitHub 预览及固定 commit 导入、安装/卸载/启停。仅连接本机，携带宿主启动凭据，无自动重试。Linux 上已用完整上游 WebUI runtime 验证读取已安装插件；插件变更操作目前只通过协议测试，尚未在 Android 或真实插件上验证。该客户端尚未接入产品 UI。
+- `dsh-go/app/lib/bot/` 已增加 Bot 原生会话界面和状态控制器：创建 Bot/群聊、历史、发送、停止、搜索、事件刷新、390 dp 单列和 1024 dp 双栏布局。3 项 Flutter 测试通过，包含切换会话时旧历史不得覆盖新会话及不重复发送。尚未接入正式 Android 启动器；联调入口为 `lib/dev/minimax_bot_main.dart`，仅用于连接已有本机 Bot 服务；它不是新增的独立应用，也不是已完成的引擎移植。正式默认入口暂时仍为 DSH 基线。
 - 没有完成真正的隔离执行环境。PRoot 只提供兼容层，不是独立 Android UID 的安全沙箱；不要启用同 UID 任意代码执行作为替代。隔离和密钥设计见 [sandbox.md](sandbox.md)。
 
 ## 上游及授权
@@ -73,6 +74,8 @@ MCODE_WEBUI_ENTRY=/path/to/minimax-code/dist-webui-npm/bin/mcode-webui.mjs dart 
 最后一项会启动完整上游 WebUI runtime，使用临时数据目录验证已安装插件查询并清理进程；需先根据上游说明构建 WebUI，Node 原生依赖须可用。此处的上游预览启动器使用开发认证模式，仅用于宿主机测试；Android 正式启动器须配置启动凭据并关闭开发模式。
 
 2026-11-02 尝试完整 Android fork 调试构建：Flutter 依赖解析通过，Gradle 下载直连失败后改用本地 Gradle 9.3.1；随后因 `org.gradle.kotlin.kotlin-dsl:6.4.2` 无法从 Gradle Plugin Portal 解析而失败。尚未进入 Android 源码编译，未产出 fork APK。需要修复环境的 Maven/Gradle 下载及证书/代理配置后重试；不能将此构建失败归因于已修改的 Kotlin 源码，也不能声称源码编译已通过。
+
+后续构建加入宿主机 Gradle init 镜像配置和系统 Java truststore 后，已通过此前依赖解析并编译了 Flutter Gradle 插件；随后 Gradle daemon 意外退出，原因尚待确认。完整 Android 构建仍未通过。UI 测试可单独运行：`cd dsh-go/app && flutter test test/bots/minimax_bot_home_test.dart`，所需字体目录按 `test/support/test_fonts.dart` 配置。
 
 当前上游 `dsh_client/pubspec.lock` 与 `dart pub get --enforce-lockfile` 不完全一致，普通 `pub get` 可能修改锁文件；核对依赖变化，避免无关锁文件更新。上述测试使用真实上游 Bot 服务和临时数据目录，未启动模型 runtime，不能替代 Android 真机验证。当前开发环境曾通过 Flutter 自适应布局测试、Kotlin 设备分类单元测试和 vendored Bot 的 Node 测试；没有可用 Android 设备，未完成 fork APK 的完整验证。
 

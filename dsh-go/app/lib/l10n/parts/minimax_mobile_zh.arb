@@ -1,0 +1,20 @@
+{
+  "mobileBotTitle": "Bot",
+  "mobileBotSearch": "搜索 Bot 和群聊",
+  "mobileBotNew": "创建 Bot",
+  "mobileBotGroup": "创建群聊",
+  "mobileBotName": "名字",
+  "mobileBotRole": "角色与职责",
+  "mobileBotCreate": "创建",
+  "mobileBotCancel": "取消",
+  "mobileBotRetry": "重新连接",
+  "mobileBotOffline": "Bot 服务连接已中断",
+  "mobileBotLoadFailed": "无法加载 Bot 服务，请检查本机运行状态后重试。",
+  "mobileBotSendFailed": "发送未确认，请先检查会话记录再决定是否重发。",
+  "mobileBotChoose": "选择一个 Bot 或群聊",
+  "mobileBotCompose": "发送消息",
+  "mobileBotSend": "发送",
+  "mobileBotStop": "停止回复",
+  "mobileBotEmpty": "创建你的第一个 Bot",
+  "mobileBotMembers": "选择群成员"
+}

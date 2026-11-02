@@ -15266,6 +15266,114 @@ abstract class L10n {
   /// **'关闭后不再用这个服务生成'**
   String get mediaSettingsEnabledHint;
 
+  /// No description provided for @mobileBotTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Bot'**
+  String get mobileBotTitle;
+
+  /// No description provided for @mobileBotSearch.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索 Bot 和群聊'**
+  String get mobileBotSearch;
+
+  /// No description provided for @mobileBotNew.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建 Bot'**
+  String get mobileBotNew;
+
+  /// No description provided for @mobileBotGroup.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建群聊'**
+  String get mobileBotGroup;
+
+  /// No description provided for @mobileBotName.
+  ///
+  /// In zh, this message translates to:
+  /// **'名字'**
+  String get mobileBotName;
+
+  /// No description provided for @mobileBotRole.
+  ///
+  /// In zh, this message translates to:
+  /// **'角色与职责'**
+  String get mobileBotRole;
+
+  /// No description provided for @mobileBotCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建'**
+  String get mobileBotCreate;
+
+  /// No description provided for @mobileBotCancel.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消'**
+  String get mobileBotCancel;
+
+  /// No description provided for @mobileBotRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新连接'**
+  String get mobileBotRetry;
+
+  /// No description provided for @mobileBotOffline.
+  ///
+  /// In zh, this message translates to:
+  /// **'Bot 服务连接已中断'**
+  String get mobileBotOffline;
+
+  /// No description provided for @mobileBotLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法加载 Bot 服务，请检查本机运行状态后重试。'**
+  String get mobileBotLoadFailed;
+
+  /// No description provided for @mobileBotSendFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送未确认，请先检查会话记录再决定是否重发。'**
+  String get mobileBotSendFailed;
+
+  /// No description provided for @mobileBotChoose.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择一个 Bot 或群聊'**
+  String get mobileBotChoose;
+
+  /// No description provided for @mobileBotCompose.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送消息'**
+  String get mobileBotCompose;
+
+  /// No description provided for @mobileBotSend.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送'**
+  String get mobileBotSend;
+
+  /// No description provided for @mobileBotStop.
+  ///
+  /// In zh, this message translates to:
+  /// **'停止回复'**
+  String get mobileBotStop;
+
+  /// No description provided for @mobileBotEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建你的第一个 Bot'**
+  String get mobileBotEmpty;
+
+  /// No description provided for @mobileBotMembers.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择群成员'**
+  String get mobileBotMembers;
+
   /// No description provided for @nearbyThisChat.
   ///
   /// In zh, this message translates to:

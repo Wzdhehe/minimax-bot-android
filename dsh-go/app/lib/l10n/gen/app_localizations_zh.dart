@@ -8318,6 +8318,60 @@ class L10nZh extends L10n {
   String get mediaSettingsEnabledHint => '关闭后不再用这个服务生成';
 
   @override
+  String get mobileBotTitle => 'Bot';
+
+  @override
+  String get mobileBotSearch => '搜索 Bot 和群聊';
+
+  @override
+  String get mobileBotNew => '创建 Bot';
+
+  @override
+  String get mobileBotGroup => '创建群聊';
+
+  @override
+  String get mobileBotName => '名字';
+
+  @override
+  String get mobileBotRole => '角色与职责';
+
+  @override
+  String get mobileBotCreate => '创建';
+
+  @override
+  String get mobileBotCancel => '取消';
+
+  @override
+  String get mobileBotRetry => '重新连接';
+
+  @override
+  String get mobileBotOffline => 'Bot 服务连接已中断';
+
+  @override
+  String get mobileBotLoadFailed => '无法加载 Bot 服务，请检查本机运行状态后重试。';
+
+  @override
+  String get mobileBotSendFailed => '发送未确认，请先检查会话记录再决定是否重发。';
+
+  @override
+  String get mobileBotChoose => '选择一个 Bot 或群聊';
+
+  @override
+  String get mobileBotCompose => '发送消息';
+
+  @override
+  String get mobileBotSend => '发送';
+
+  @override
+  String get mobileBotStop => '停止回复';
+
+  @override
+  String get mobileBotEmpty => '创建你的第一个 Bot';
+
+  @override
+  String get mobileBotMembers => '选择群成员';
+
+  @override
   String get nearbyThisChat => '本对话';
 
   @override

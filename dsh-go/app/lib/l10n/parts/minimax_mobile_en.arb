@@ -1,0 +1,20 @@
+{
+  "mobileBotTitle": "Bot",
+  "mobileBotSearch": "Search bots and groups",
+  "mobileBotNew": "Create bot",
+  "mobileBotGroup": "Create group",
+  "mobileBotName": "Name",
+  "mobileBotRole": "Role and responsibilities",
+  "mobileBotCreate": "Create",
+  "mobileBotCancel": "Cancel",
+  "mobileBotRetry": "Reconnect",
+  "mobileBotOffline": "Bot service disconnected",
+  "mobileBotLoadFailed": "Cannot load the Bot service. Check the local runtime and retry.",
+  "mobileBotSendFailed": "Delivery is unconfirmed. Check the conversation before sending again.",
+  "mobileBotChoose": "Choose a bot or group",
+  "mobileBotCompose": "Send a message",
+  "mobileBotSend": "Send",
+  "mobileBotStop": "Stop reply",
+  "mobileBotEmpty": "Create your first bot",
+  "mobileBotMembers": "Choose group members"
+}

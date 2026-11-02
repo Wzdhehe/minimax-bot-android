@@ -8772,6 +8772,60 @@ class L10nEn extends L10n {
   String get mediaSettingsEnabledHint => 'Turns this service off for generation';
 
   @override
+  String get mobileBotTitle => 'Bot';
+
+  @override
+  String get mobileBotSearch => 'Search bots and groups';
+
+  @override
+  String get mobileBotNew => 'Create bot';
+
+  @override
+  String get mobileBotGroup => 'Create group';
+
+  @override
+  String get mobileBotName => 'Name';
+
+  @override
+  String get mobileBotRole => 'Role and responsibilities';
+
+  @override
+  String get mobileBotCreate => 'Create';
+
+  @override
+  String get mobileBotCancel => 'Cancel';
+
+  @override
+  String get mobileBotRetry => 'Reconnect';
+
+  @override
+  String get mobileBotOffline => 'Bot service disconnected';
+
+  @override
+  String get mobileBotLoadFailed => 'Cannot load the Bot service. Check the local runtime and retry.';
+
+  @override
+  String get mobileBotSendFailed => 'Delivery is unconfirmed. Check the conversation before sending again.';
+
+  @override
+  String get mobileBotChoose => 'Choose a bot or group';
+
+  @override
+  String get mobileBotCompose => 'Send a message';
+
+  @override
+  String get mobileBotSend => 'Send';
+
+  @override
+  String get mobileBotStop => 'Stop reply';
+
+  @override
+  String get mobileBotEmpty => 'Create your first bot';
+
+  @override
+  String get mobileBotMembers => 'Choose group members';
+
+  @override
   String get nearbyThisChat => 'This chat';
 
   @override
