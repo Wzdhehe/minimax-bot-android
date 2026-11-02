@@ -27,6 +27,12 @@ DSH Go 基线 `c1c0abb00907efdf48dcb443581686b67597c5a2`，AGPL-3.0，遵循 `ds
 4. 将 DSH Go UI 改成 Bot 列表、私聊和群聊，接入 Bot 服务及持久化；实现官方 Bot 的任务、记忆和定时等功能。再实现官方插件浏览、安装、启停和卸载，并验证实际插件兼容与权限边界。
 5. 移除远控、手机操控及受限品牌素材，验证手机与多尺寸平板，最后进行真机、真实模型和后台中断恢复测试。按功能清单逐项验收。
 
+### 运行时接口调查线索
+
+固定版本的 WebUI 在 `packages/local-runtime-v2/src/application/session/process-local-application-contract.ts` 中已有 `miniAppAgent` 端口，提供 `run`、`models`、`reply`、`answer` 和事件回调；这与 Bot 的 `miniapp/node/engine.mjs` 对 `context.agent` 的需求接近，可以研究复用该端口或底层 gateway，而不在产品中提供通用 Mini App 功能。该端口要求可信 `caller`、运行代次和会话归属，不能直接伪造或忽略这些检查；需要先设计内置 Bot 的宿主身份并验证会话生命周期和取消行为。
+
+市场操作入口位于 WebUI 的 `packages/local-runtime-v2/src/application/cli-management-application.ts`，包含 `listMarketplacePlugins`、`listInstalledPlugins`、`previewGithubPlugin`、`importGithubPlugin`、`installPlugin`、启停和卸载。研究市场需要同时核对 catalog 的登录要求、包格式、更新以及 Android 原生依赖和插件执行权限；当前这些均未打通。
+
 ## 开发验证
 
 目标 fork 是 Flutter/Android 项目，需 Flutter、Android SDK 及 JDK；参考 `dsh-go/README.md`、`dsh-go/CONTRIBUTING.md` 和 `dsh-go/AGENTS.md`。宿主机 Bot 服务协议测试需要 Node.js 和 Dart：
