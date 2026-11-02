@@ -1,0 +1,11 @@
+/// M Bot settings shell: hub IA, notification prefs, background-running guide.
+library;
+
+export 'src/ia/settings_groups.dart';
+export 'src/platform/platform_services.dart';
+export 'src/platform/fake_platform_services.dart';
+export 'src/prefs/notification_prefs.dart';
+export 'src/prefs/prefs_store.dart';
+export 'src/ui/settings_hub_page.dart';
+export 'src/ui/notification_settings_page.dart';
+export 'src/ui/background_running_page.dart';
