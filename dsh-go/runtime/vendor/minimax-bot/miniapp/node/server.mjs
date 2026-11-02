@@ -110,9 +110,10 @@ function chatReferences(messages, src) {
 
 /**
  * @param {MiniAppContext} context
+ * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean }} [hostOptions]
  * @returns {Promise<MiniAppLifecycle>}
  */
-export async function start(context) {
+export async function start(context, hostOptions = {}) {
   const clientDir = join(context.pluginRoot, 'miniapp/client');
   const store = new Store(context.dataDir);
   const memory = new MemoryStore(context.dataDir);
@@ -694,6 +695,16 @@ export async function start(context) {
   };
 
   const server = createServer((request, response) => {
+    // Android extension: guard the actual listener, including assets and SSE.
+    if (hostOptions.authorizeRequest) {
+      let allowed = false;
+      try { allowed = hostOptions.authorizeRequest(request) === true; } catch { /* deny */ }
+      if (!allowed) {
+        response.writeHead(403, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        response.end(JSON.stringify({ error: 'forbidden', message: 'Local host authentication required' }));
+        return;
+      }
+    }
     route(request, response).catch((error) => {
       const known = error instanceof EngineError || error instanceof MemoryError || error instanceof ReactionError;
       const status = !known

@@ -1,7 +1,7 @@
 /// Local client for the built-in official MiniMax Bot service HTTP API.
 ///
 /// This client does not start the MiniMax host and must be given its local,
-/// authenticated proxy URL. It never retries mutations: after a timeout the
+/// authenticated service URL. It never retries mutations: after a timeout the
 /// caller must reconcile state before attempting the operation again.
 library;
 

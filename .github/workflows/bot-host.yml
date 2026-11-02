@@ -26,7 +26,7 @@ jobs:
           sdk: stable
       - name: Test Bot runtime adapter
         working-directory: dsh-go
-        run: node --test runtime/minimax-bot-host/agent-port.test.mjs
+        run: node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs
       - name: Resolve client test dependencies
         working-directory: dsh-go/packages/dsh_client
         run: dart pub get

@@ -9,7 +9,8 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 ## 当前代码和真实进度
 
 - `dsh-go/` 是 DSH Go 的 Android、Flutter 和本地 runtime 基线，已导入并保留许可；这是改造目标，但现有界面和引擎仍然是 DSH Go，不是完整的 MiniMax Bot 应用。远控相关源码、品牌及受限素材尚未全部移除，不能直接作为成品发布。
-- `dsh-go/runtime/vendor/minimax-bot/` 固定官方 Bot 业务源码，MIT 许可。`packages/dsh_client/lib/src/minimax_bot_api.dart` 是对该服务的本机 HTTP 客户端，测试通过官方服务进行 Bot、群组、历史及事件的接口验证；这不意味着已集成 Android UI、模型引擎或插件市场。客户端只接受 loopback IP，并要求生产部署通过认证代理访问；目前还没有实现该代理。
+- `dsh-go/runtime/vendor/minimax-bot/` 固定官方 Bot 业务源码，MIT 许可。`packages/dsh_client/lib/src/minimax_bot_api.dart` 是对该服务的本机 HTTP 客户端，测试通过官方服务进行 Bot、群组、历史及事件的接口验证；这不意味着已完成 Android UI、模型引擎或插件市场集成。客户端只接受 loopback IP。
+- `dsh-go/runtime/minimax-bot-host/service.mjs` 已实现本机 Bot 服务启动封装：每次启动随机生成 256 bit 凭据，所有路由（含 SSE、静态资源和 MCP）在真实监听端口上认证，拒绝浏览器 Origin 和不匹配 Host，重启后旧凭据失效。Node 服务测试已通过。为此对上游 server.mjs 增加了可选宿主认证参数，修改记录见 vendor/UPSTREAM.md。正式 Android 宿主仍需通过私有通道传递 descriptor，且 Agent 执行隔离尚未解决。
 - `dsh-go/runtime/minimax-bot-host/agent-port.mjs` 是适配官方 Bot 与 WebUI 进程内 Agent 接口的薄层。宿主测试覆盖流式事件、会话续接和取消信号传递；另一个测试串联了真实 Bot 服务、WebUI 源码中的真实 Agent 网关与模拟模型/会话端口，验证网关授权、撤销、消息回传。完整 WebUI 运行时、正式身份注册、Android 部署和安全边界仍未完成。
 - 已对 Android fork 的 manifest 收紧手机操控相关权限，并禁止启动相应通道；设备分类代码使小于 600 dp 的设备固定竖屏，平板遵从系统方向。Android 真机、折叠屏和完整 fork 构建尚未验证。
 - 根目录 `app/` 是早期独立 Java 原型，**不是目标实现**；其应用内 shell 已禁用。不要将其已有能力误认为 fork 已完成的能力。
@@ -51,7 +52,7 @@ Bot 到运行时端口的宿主机测试（使用 Node 24）：
 
 ```bash
 cd dsh-go
-node --test runtime/minimax-bot-host/agent-port.test.mjs
+node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs
 ```
 
 有已安装依赖的固定版本 WebUI 源码时，还可执行跨上游网关的宿主机测试：
