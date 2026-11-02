@@ -10,6 +10,7 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 
 - `dsh-go/` 是 DSH Go 的 Android、Flutter 和本地 runtime 基线，已导入并保留许可；这是改造目标，但现有界面和引擎仍然是 DSH Go，不是完整的 MiniMax Bot 应用。远控相关源码、品牌及受限素材尚未全部移除，不能直接作为成品发布。
 - `dsh-go/runtime/vendor/minimax-bot/` 固定官方 Bot 业务源码，MIT 许可。`packages/dsh_client/lib/src/minimax_bot_api.dart` 是对该服务的本机 HTTP 客户端，测试通过官方服务进行 Bot、群组、历史及事件的接口验证；这不意味着已集成 Android UI、模型引擎或插件市场。客户端只接受 loopback IP，并要求生产部署通过认证代理访问；目前还没有实现该代理。
+- `dsh-go/runtime/minimax-bot-host/agent-port.mjs` 是适配官方 Bot 与 WebUI 进程内 Agent 接口的薄层。宿主测试使用真实 Bot 服务和模拟运行时，覆盖流式事件、会话续接及取消信号传递；还未连接实际 WebUI 运行时，也未建立宿主身份注册、Android 部署或安全边界。
 - 已对 Android fork 的 manifest 收紧手机操控相关权限，并禁止启动相应通道；设备分类代码使小于 600 dp 的设备固定竖屏，平板遵从系统方向。Android 真机、折叠屏和完整 fork 构建尚未验证。
 - 根目录 `app/` 是早期独立 Java 原型，**不是目标实现**；其应用内 shell 已禁用。不要将其已有能力误认为 fork 已完成的能力。
 - DSH runtime 仍然是当前基线，尚未替换或接入 MiniMax Code/WebUI runtime，故目前不能使用官方插件市场。上游 WebUI 包含 `local-runtime-v2` 的市场、GitHub 插件预览/导入和启停等接口；本项目尚未接入、尚未验证 Android 插件兼容性，不能把 GitHub 下载等同于安全可用。
@@ -42,6 +43,13 @@ cd dsh-go/packages/dsh_client
 dart pub get
 dart analyze lib/src/minimax_bot_api.dart test/minimax_bot_api_test.dart
 dart test test/minimax_bot_api_test.dart
+```
+
+Bot 到运行时端口的宿主机测试（使用 Node 24）：
+
+```bash
+cd dsh-go
+node --test runtime/minimax-bot-host/agent-port.test.mjs
 ```
 
 当前上游 `dsh_client/pubspec.lock` 与 `dart pub get --enforce-lockfile` 不完全一致，普通 `pub get` 可能修改锁文件；核对依赖变化，避免无关锁文件更新。上述测试使用真实上游 Bot 服务和临时数据目录，未启动模型 runtime，不能替代 Android 真机验证。当前开发环境曾通过 Flutter 自适应布局测试、Kotlin 设备分类单元测试和 vendored Bot 的 Node 测试；没有可用 Android 设备，未完成 fork APK 的完整验证。
