@@ -9,7 +9,7 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 ## 许可证与代码落点（已拍板）
 
 - **接受 AGPL 开源**：产品基于 [DSH Go](https://github.com/ccch1mneyyy/dsh-Go)（AGPL-3.0，导入为 `dsh-go/`，钉 `c1c0abb00907efdf48dcb443581686b67597c5a2`）外壳，核心换为官方 MiniMax Bot + mcode-webui/minimax-code runtime；新代码可直接在 `dsh-go/` 内改，根下 `packages/` 已有独立模块可继续使用；分发 APK 须遵守 AGPL-3.0 源码提供义务。
-- 考前任务卡与验收命令见 [architecture.md](architecture.md)（T-Settings / T-Sandbox / T-Schedule / T-Plugins / T-Runtime）。外部用 MiniMax Code 按卡开发，本团队验收。
+- 考前任务卡与验收命令见 [architecture.md](architecture.md)（T-Runtime → T-Sandbox → T-Settings → T-Usage → T-Schedule → T-Plugins）。外部用 MiniMax Code 按卡开发，本团队验收。
 - **Runtime 跟 [mcode-webui/minimax-code](https://github.com/mcode-webui/minimax-code) fork**（MIT，`97818b2`）；官方 [MiniMax-AI/minimax-code](https://github.com/MiniMax-AI/minimax-code) 作上游，更新由我们自行合并进 fork。
 - 考前节奏：小步继续开发。插件在 Android 上的安装策略、以及定时验收档位（报告 F.7）**仍未定**。
 
@@ -29,7 +29,7 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 
 ## 设置页 IA 与定时任务口径
 
-完整验收与触碰路径见 [architecture.md](architecture.md) 任务卡 **T-Settings**、**T-Schedule**；分组常量以 `packages/mbot_settings/lib/src/ia/settings_groups.dart` 为准。
+完整验收与触碰路径见 [architecture.md](architecture.md) 任务卡 **T-Settings**、**T-Usage**、**T-Schedule**；分组常量以 `packages/mbot_settings/lib/src/ia/settings_groups.dart` 为准。
 
 摘要：设置分组为账号与模型 · 插件 · 通知 · 定时任务 · 后台运行 · 工作区 · 外观 · 关于（无远控/操控）。后台运行只检测+跳转系统设置；须写明进程被杀后定时不会执行。保活由用户在系统设置完成；死后补跑档位未定，UI/文档不得承诺。
 
@@ -42,7 +42,7 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 
 ## 下一位开发者的优先事项
 
-按 [architecture.md](architecture.md) 考前任务卡顺序交付（每卡一 PR）：**T-Settings** → **T-Sandbox** → **T-Schedule**；**T-Runtime** 与 **T-Plugins** 可并行准备。禁止同 UID 任意 shell、禁止宽存储权限、Key 不进 Agent/插件。插件 Android 安装策略与定时 F.7 仍未定。
+按 [architecture.md](architecture.md) 考前任务卡顺序交付（每卡一 PR）：**T-Runtime** → **T-Sandbox** → **T-Settings** → **T-Usage** → **T-Schedule** → **T-Plugins**。禁止同 UID 任意 shell、禁止宽存储权限、Key 不进 Agent/插件。插件 Android 安装策略与定时 F.7 仍未定。
 
 ### 运行时接口调查线索
 

@@ -56,6 +56,8 @@ flowchart TB
 
 ## 3. 考前任务卡（每卡一 PR）
 
+执行顺序：**T-Runtime** → **T-Sandbox** → **T-Settings** → **T-Usage** → **T-Schedule** → **T-Plugins**（每卡一 PR；可先独立准备的依赖在卡内注明）。
+
 共用禁止项：禁止同 UID 任意 shell；不加 `MANAGE_EXTERNAL_STORAGE`；API Key 不暴露给 Agent/插件；不推 `main`、不 force push、不改历史；推远程/开 PR 须用户同意。
 
 ### T-Settings — 设置骨架接入壳
@@ -69,6 +71,30 @@ flowchart TB
   cd dsh-go/app && flutter test test/bots/minimax_bot_home_test.dart
   ```
   通过：既有 mbot_settings 测试全绿；冷启动能进设置；通知/后台文案符合上表；无远控/操控入口。
+
+### T-Usage — 用量查询（webui 配额面板）
+
+- **目标**：在设置「账号与模型」组展示 MiniMax Coding / M Plan 用量：5 小时限额、周限额（已用 %）、积分余额、计划名；未登录显示「未登录」可刷新。对标 webui 设置页用量条，不做热力图/重置卡（考后可扩）。
+- **复用（webui `@97818b2`）**：
+  - 客户端：`packages/webui/src/runtime/usage-quota.ts`（`UsageQuotaClient.getUsageQuota`）
+  - 契约：`packages/webui/src/shared/contracts/usage-quota.ts`（`WebuiUsageQuotaResult`：`signedIn`、`planName`/`subscriptionType`、`creditBalance`、`quota.fiveHour|weekly.usedPercent/resetAtMs`）
+  - 装配槽：`packages/webui/src/runtime/harness/account.ts` / `assembly.ts` 的 `host.getUsageQuota`
+  - UI 参考：`packages/webui/src/client/features/settings/ui/UsageModelSettings.tsx`、`.../account/ui/UserMenuUsage.tsx`
+  - 云端路径（只经 host，勿在 Dart 直连）：`GET /backend/account/token_plan/remains_percent`；会员 `POST /matrix/api/v1/commerce/get_membership_info`（先 `get_user_extra_info`）；可选摘要 `GET /backend/account/token_plan/usage_summary`（本卡可不接）
+- **鉴权**：webui 用 `@mavis/oauth-core` 租约，**不是** Keystore 里的 API Key。本卡：host 调 `getUsageQuota`；无 OAuth 租约则返回 `{ signedIn: false }`；**禁止**把 API Key / accessToken 交给 Dart、Agent、插件。完整登录流仍属「考后/未定」；本卡只接已有租约或明确的 signed-out 态。
+- **触碰**：
+  - `packages/mbot_settings/`：`lib/src/ia/settings_groups.dart` 在 `accountAndModel` 增用量项（勿与 `workspaceUsage` 工作区占用混淆）；新 UI 页（可 `lib/src/ui/usage_quota_page.dart`）
+  - `dsh-go/packages/dsh_client/lib/src/`：新增用量 API（对标 `mcode_plugins_api.dart` 风格，只收 `WebuiUsageQuotaResult` 形投影，不收密钥）
+  - `dsh-go/runtime/minimax-bot-host/`：挂 `getUsageQuota` → webui `UsageQuotaClient`（钉点见 T-Runtime）
+- **禁止**：Dart/Flutter 持有或打印 OAuth token / API Key；同 UID shell；本卡不做重置卡兑换、积分开关写入、热力图分享图。
+- **依赖**：T-Runtime（host/webui 钉点）；T-Settings（设置入口）。
+- **验收**：
+  ```bash
+  cd packages/mbot_settings && flutter test && dart analyze
+  cd dsh-go/packages/dsh_client && dart analyze lib/src && dart test
+  cd dsh-go && node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs
+  ```
+  通过：无租约时 UI/API 为未登录且无密钥字段；有 mock/夹具租约时可看到 5h/周限额或计划字段；`settings_groups` 含用量入口且在账号与模型下；测试与 analyze 绿；无 Key/token 进日志或 Agent 可见面。
 
 ### T-Sandbox — 工作区守卫 + 存储收紧
 
@@ -137,7 +163,7 @@ flowchart TB
 | 关入口 | 宠物/论坛/操控/Ubuntu 等考前隐藏 |
 | Runtime 进 APK | 设备一次模型往返（高风险） |
 | 考后删模块 + 换品牌 + 源码发布流程 | ASSETS / AGPL 合规 |
-| 仍待决 | 插件 Android 安装/登录；Grok 参考图；FGS 类型；`REQUEST_INSTALL_PACKAGES`；定时死后补跑档；根 `app/` 去留 |
+| 仍待决 | 插件 Android 安装/登录（T-Usage 依赖 OAuth 租约，完整登录流未定）；Grok 参考图；FGS 类型；`REQUEST_INSTALL_PACKAGES`；定时死后补跑档；根 `app/` 去留；用量热力图/重置卡 |
 
 ---
 
@@ -151,4 +177,4 @@ flowchart TB
 
 ## 6. 设置 / 沙箱摘要（细节以任务卡为准）
 
-设置分组与验收口径见 **T-Settings** / `packages/mbot_settings/lib/src/ia/settings_groups.dart`。沙箱用例与 Android 收紧见 **T-Sandbox**；设计背景见 [sandbox.md](sandbox.md)。
+设置分组与验收口径见 **T-Settings** / `packages/mbot_settings/lib/src/ia/settings_groups.dart`。用量查询见 **T-Usage**（账号与模型；勿与 `workspaceUsage` 混淆）。沙箱用例与 Android 收紧见 **T-Sandbox**；设计背景见 [sandbox.md](sandbox.md)。

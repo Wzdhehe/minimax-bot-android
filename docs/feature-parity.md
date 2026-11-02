@@ -2,7 +2,7 @@
 
 用户目标：Android 本机多 Bot，参照官方 MiniMax Bot；runtime 跟 mcode-webui/minimax-code fork（官方 MiniMax Code 为上游）；产品基于 DSH Go（AGPL-3.0）外壳。模型调用使用用户在设置中填写的 Key、Base URL 和模型 ID。无需远程电脑或手机操控；不做传统 Agent 工作台或通用 Mini App 容器。
 
-**落点与许可证（已拍板）：** 接受 AGPL 开源；保留 DSH Go 外壳、只换核心；新代码可直接改 `dsh-go/`，根下 `packages/` 已有模块可继续用；分发 APK 须提供 AGPL 源码。Runtime **跟** [mcode-webui/minimax-code](https://github.com/mcode-webui/minimax-code) fork（MIT，`97818b2`），插件管理复用其插件市场、plugin-management 与 plugin-system；官方 MiniMax-AI/minimax-code 为上游，更新自行合并。考前实现与验收以 [architecture.md](architecture.md) 任务卡为准（T-Settings / T-Sandbox / T-Schedule / T-Plugins / T-Runtime）；本清单为产品全量目标，不代替任务卡。插件 Android 安装策略与定时 F.7 档位**仍未定**。
+**落点与许可证（已拍板）：** 接受 AGPL 开源；保留 DSH Go 外壳、只换核心；新代码可直接改 `dsh-go/`，根下 `packages/` 已有模块可继续用；分发 APK 须提供 AGPL 源码。Runtime **跟** [mcode-webui/minimax-code](https://github.com/mcode-webui/minimax-code) fork（MIT，`97818b2`），插件管理复用其插件市场、plugin-management 与 plugin-system；官方 MiniMax-AI/minimax-code 为上游，更新自行合并。考前实现与验收以 [architecture.md](architecture.md) 任务卡为准（T-Runtime → T-Sandbox → T-Settings → T-Usage → T-Schedule → T-Plugins）；本清单为产品全量目标，不代替任务卡。插件 Android 安装策略与定时 F.7 档位**仍未定**。
 
 参考钉死点：MiniMax Bot 插件 [`0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8`](https://github.com/MiniMax-AI/MiniMax-Code-MiniApps/tree/0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8/plugins/minimax-ai/minimax-bot)；DSH Go 外壳 [`c1c0abb00907efdf48dcb443581686b67597c5a2`](https://github.com/ccch1mneyyy/dsh-Go/tree/c1c0abb00907efdf48dcb443581686b67597c5a2)；runtime（WebUI fork）[`97818b2`](https://github.com/mcode-webui/minimax-code/tree/97818b2)。官方上游合并点在合并时记录。所有条目在针对本项目完成实现和验证前保持未完成，不能因 DSH Go 或上游有功能就视为已接入。
 
@@ -17,6 +17,7 @@
 - [ ] 定时任务创建、查看、修改、删除、单次授权；到点执行与通知按下方「定时任务验收档位」验收（档位待拍板，见下）。
 - [ ] 每 Bot 的使用量、任务列表、筛选、未读、消息操作、表情回应、外观和设置。
 - [ ] 设置页信息架构落地：账号与模型、插件、通知、定时任务、后台运行、工作区与存储、外观、关于（见 [architecture.md](architecture.md) **T-Settings** / `packages/mbot_settings`）；无手机操控/远控入口。
+- [ ] 账号与模型组：用量查询（5h/周限额、积分；见 **T-Usage**，复用 webui `UsageQuotaClient`）。
 - [ ] 通知：App 内总开关与分类开关（至少含定时任务、Bot 消息/完成、出错或打断等可裁剪类别）+ 对应 Android 通知渠道；可深链到系统渠道设置。
 - [ ] 后台运行：检测通知权限、电池优化是否忽略等状态，展示说明，并提供跳转系统设置入口（含可选厂商文案）；**只做检测 + 跳转引导，不做保活黑科技**（不隐蔽多进程拉活、不超范围保活）。
 - [ ] 插件市场：浏览、搜索、来源、版本和权限说明；本机安装、更新、启停、卸载、出错恢复，以及与 MiniMax Code 插件协议的兼容性验证；不将 Mini App 作为插件列出或安装。**官方插件包格式的 `deliveryTargets` 仅允许 `desktop` / `cloud`，没有 `android`**——产品 UI 与验收须明示此限制；**Android 安装策略仍未定**，不能假定市场包默认可在 Android 分发。
