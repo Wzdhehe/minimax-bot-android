@@ -13,7 +13,7 @@
 | 考前**小步继续开发** | 每步可独立验收；考前关入口、考后再删模块 |
 | **App 按 AGPL-3.0 开源**，可直接 fork/复用 DSH Go | 保留 DSH 版权与 `LICENSE`；**新文件加 AGPL 头**；发布 APK 须能提供对应源码；品牌/吉祥物仍受 `dsh-go/ASSETS.md` 限制，发布前替换 |
 | **留壳换芯** | **留**：DSH Flutter UI、Android 原生、通知、设置页、平板布局、插件市场**交互流程**。**换**：DSH 引擎、`plugin-kit` 插件格式、本机 Ubuntu+pnpm 安装方式 → MiniMax runtime + MiniMax 插件协议 |
-| Runtime 钉点 | **仍待用户确认**；**建议钉 webui fork**（`mcode-webui/minimax-code`，MIT，插件市场完整）。候选另有官方 `MiniMax-AI/minimax-code`（`deliveryTargets` 仅 desktop/cloud） |
+| Runtime 钉点 | **已定（用户，2026-11-02）**：跟 webui fork（`mcode-webui/minimax-code`，MIT，main `97818b2`），复用其插件管理（`packages/webui` 插件市场、server `plugin-management.ts`、runtime `src/service/plugin-system`），`mcode_plugins_api.dart` 已对齐；官方 `MiniMax-AI/minimax-code` 更新由我们自行合并 |
 
 **硬约束**：Agent 仅应用私有工作区；PRoot≠安全边界；**禁止同 UID 任意 shell**；路径不可逃逸；API Key 不进 Agent/插件；本机服务鉴权；定时保活由用户系统设置，App 只检测/提示/跳转；UI 不得声称进程被杀后仍执行。
 
@@ -40,8 +40,8 @@
 
 | 仓 | LICENSE | 备注 |
 |---|---|---|
-| `mcode-webui/minimax-code` | MIT | **建议钉**；相对官方超前多、插件市场完整（webui + plugin-management + plugin-system） |
-| `MiniMax-AI/minimax-code` | MIT | 官方；`local-runtime-v2` 同源但有分叉；包格式无 `android` target |
+| `mcode-webui/minimax-code` | MIT | **已定钉**（2026-11-02，main `97818b2`）；相对官方超前多、插件市场完整（webui + plugin-management + plugin-system） |
+| `MiniMax-AI/minimax-code` | MIT | 官方；`local-runtime-v2` 同源但有分叉；包格式无 `android` target；更新由我们自行合并进 fork |
 | MiniMax Bot vendor | MIT | 已钉 `0f2183f` |
 
 钉仓后：`docs/UPSTREAM-RUNTIME.md` 写 commit+日期；CI smoke；升钉重跑。本仓 smoke 脚本现仍按 webui 路径编写。
@@ -141,7 +141,7 @@ resolveWorkspacePath(workspaceRoot: Path, userPath: String): Result<Path, Sandbo
 | **M1** | 考前关闭宠物/论坛/操控/Ubuntu 等入口；许可头检查 | 冷启动无上述入口；新文件有 AGPL 头 | 1–2d |
 | **M2** | 默认进 Bot UI；`mbot_settings` 接入设置 | 通知/后台条目与 §6 文案达标 | 2–4d |
 | **M3** | 路径守卫接入宿主 + S1–S12 | CI 绿；无同 UID shell | 1–2d |
-| **M4** | 钉 runtime（待确认，建议 webui）+ host smoke | 文档钉点；smoke 绿 | 2–4d |
+| **M4** | 钉 runtime（webui fork `97818b2`）+ host smoke | 文档钉点；smoke 绿 | 2–4d |
 | **M5** | 设置：Keystore、插件 UI（明示无 android target） | Key 不进 Agent；限制有提示 | 3–5d |
 | **M6** | Runtime 进 APK（高风险） | 设备一次模型往返；失败不回退 shell | 10–20d |
 | **M7** | 定时档 A + 引导 C；档 B 诚实文档 | 存活到点通知；UI 不说谎 | 3–5d |
@@ -153,13 +153,12 @@ resolveWorkspacePath(workspaceRoot: Path, userPath: String): Result<Path, Sandbo
 
 ## 8. 仍待决
 
-1. **Runtime 钉 webui 还是官方**（建议 webui）。  
-2. 插件无 `android` target 时的分发/登录策略。  
-3. Grok 布局参考图与禁忌元素。  
-4. FGS 类型 / 是否上架。  
-5. 是否保留 `REQUEST_INSTALL_PACKAGES`。  
-6. 定时死后是否补跑（默认：仅进程存活）。  
-7. 根 `app/` 原型去留。
+1. 插件无 `android` target 时的分发/登录策略。  
+2. Grok 布局参考图与禁忌元素。  
+3. FGS 类型 / 是否上架。  
+4. 是否保留 `REQUEST_INSTALL_PACKAGES`。  
+5. 定时死后是否补跑（默认：仅进程存活）。  
+6. 根 `app/` 原型去留。
 
 ---
 
@@ -167,5 +166,5 @@ resolveWorkspacePath(workspaceRoot: Path, userPath: String): Result<Path, Sandbo
 
 - 撤回「DSH 只参考不链接 / APK 去 AGPL」；改为 **AGPL 开源 + 留壳换芯**。  
 - 里程碑回到 **在 `dsh-go` 上改**；根 `packages/*` 为可接入模块，不以「替代整个壳」为前提。  
-- Runtime 仍待确认，建议 webui。  
+- Runtime 已定（2026-11-02）：跟 webui fork，官方更新自行合并。  
 - 沙箱硬线与「不用 Ubuntu+pnpm 安装」不变。
