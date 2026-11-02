@@ -6,6 +6,7 @@ on:
       - 'dsh-go/packages/dsh_client/**'
       - 'dsh-go/runtime/minimax-bot-host/**'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
+      - 'docs/UPSTREAM-RUNTIME.md'
       - '.github/workflows/bot-host.yml'
   workflow_dispatch:
 
@@ -36,3 +37,46 @@ jobs:
       - name: Test Bot HTTP and plugin wire contracts
         working-directory: dsh-go/packages/dsh_client
         run: dart test test/minimax_bot_api_test.dart test/mcode_plugins_api_test.dart
+
+  upstream-runtime-pin:
+    name: Pin and smoke the upstream runtime fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test the upstream runtime pin
+        working-directory: dsh-go
+        run: node --test runtime/minimax-bot-host/upstream-runtime-pin.test.mjs
+      - name: Read upstream runtime pin
+        id: pin
+        working-directory: dsh-go/runtime/minimax-bot-host
+        run: |
+          node --input-type=module -e '
+            const { pathToFileURL } = await import("node:url");
+            const mod = await import(pathToFileURL(process.argv[1]).href);
+            console.log("repository=" + mod.UPSTREAM_RUNTIME_REPOSITORY);
+            console.log("commit=" + mod.UPSTREAM_RUNTIME_COMMIT);
+          ' ./upstream-runtime-pin.mjs >> "$GITHUB_OUTPUT"
+      - name: Check out the pinned upstream runtime
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pin.outputs.repository }}
+          ref: ${{ steps.pin.outputs.commit }}
+          path: upstream-runtime
+      - name: Verify the pin, the document and the checkout agree
+        working-directory: dsh-go/runtime/minimax-bot-host
+        run: node upstream-runtime-pin-check.mjs --source "$GITHUB_WORKSPACE/upstream-runtime"
+      - name: Install the upstream build tool
+        working-directory: upstream-runtime
+        run: |
+          esbuild_version="$(node -p "require('./package.json').devDependencies.esbuild")"
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/esbuild" "esbuild@$esbuild_version"
+          echo "ESBUILD_BIN=$RUNNER_TEMP/esbuild/node_modules/.bin/esbuild" >> "$GITHUB_ENV"
+      - name: Smoke the Bot host against the pinned upstream runtime
+        working-directory: dsh-go
+        env:
+          WEBUI_SOURCE: ${{ github.workspace }}/upstream-runtime
+        run: bash runtime/minimax-bot-host/run-upstream-gateway-smoke.sh
