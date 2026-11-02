@@ -1,5 +1,7 @@
 # Android 上的 Agent 隔离设计
 
+> 考前落地与验收命令见 [architecture.md](architecture.md) **T-Sandbox**（含删除 `dsh_file_paths.xml` 的 `external-path`、升 `targetSdk`、`dataExtractionRules` 排除 `minimax_bot_provider`）。下文为设计背景，不代替任务卡。
+
 ## 现状
 
 当前 App 是原型：模型交互与文件工具在主应用进程中，文件工具仅允许访问应用私有工作区并要求确认写入；没有实现独立 Agent 沙箱。此前同 UID 的 shell 工具已关闭。Key 在 Android Keystore 保护下存储，但在主应用与引擎没有系统级隔离时，不能把加密存储描述成对同 UID 恶意代码的隔离。

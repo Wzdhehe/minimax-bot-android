@@ -1,23 +1,28 @@
 # 功能目标和验收
 
-用户目标：Android 本机多 Bot，参照 MiniMax Bot、MiniMax Code、DSH Go 和 mcode-webui/minimax-code。模型调用使用用户在设置中填写的 Key、Base URL 和模型 ID。无需远程电脑或手机操控；不做传统 Agent 工作台或通用 Mini App 容器。
+用户目标：Android 本机多 Bot，参照官方 MiniMax Bot；runtime 跟 mcode-webui/minimax-code fork（官方 MiniMax Code 为上游）；产品基于 DSH Go（AGPL-3.0）外壳。模型调用使用用户在设置中填写的 Key、Base URL 和模型 ID。无需远程电脑或手机操控；不做传统 Agent 工作台或通用 Mini App 容器。
 
-基线：MiniMax Bot 插件 [`0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8`](https://github.com/MiniMax-AI/MiniMax-Code-MiniApps/tree/0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8/plugins/minimax-ai/minimax-bot)，DSH Go [`c1c0abb00907efdf48dcb443581686b67597c5a2`](https://github.com/ccch1mneyyy/dsh-Go/tree/c1c0abb00907efdf48dcb443581686b67597c5a2)，WebUI [`97818b2`](https://github.com/mcode-webui/minimax-code/tree/97818b2)。所有条目在针对本项目完成实现和验证前保持未完成，不能因上游有功能就视为已接入。
+**落点与许可证（已拍板）：** 接受 AGPL 开源；保留 DSH Go 外壳、只换核心；新代码可直接改 `dsh-go/`，根下 `packages/` 已有模块可继续用；分发 APK 须提供 AGPL 源码。Runtime **跟** [mcode-webui/minimax-code](https://github.com/mcode-webui/minimax-code) fork（MIT，`97818b2`），插件管理复用其插件市场、plugin-management 与 plugin-system；官方 MiniMax-AI/minimax-code 为上游，更新自行合并。考前实现与验收以 [architecture.md](architecture.md) 任务卡为准（T-Settings / T-Sandbox / T-Schedule / T-Plugins / T-Runtime）；本清单为产品全量目标，不代替任务卡。插件 Android 安装策略与定时 F.7 档位**仍未定**。
 
-- [ ] 本机安装、校验、启动、停止与升级 MiniMax Code 运行时；处理异常中断和进程清理。
-- [ ] 将官方 MiniMax Bot 的业务逻辑作为内置 Bot 服务接入 MiniMax Code 运行时：启动、持久化、会话恢复、审批和问答；不实现通用 Mini App 容器。
+参考钉死点：MiniMax Bot 插件 [`0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8`](https://github.com/MiniMax-AI/MiniMax-Code-MiniApps/tree/0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8/plugins/minimax-ai/minimax-bot)；DSH Go 外壳 [`c1c0abb00907efdf48dcb443581686b67597c5a2`](https://github.com/ccch1mneyyy/dsh-Go/tree/c1c0abb00907efdf48dcb443581686b67597c5a2)；runtime（WebUI fork）[`97818b2`](https://github.com/mcode-webui/minimax-code/tree/97818b2)。官方上游合并点在合并时记录。所有条目在针对本项目完成实现和验证前保持未完成，不能因 DSH Go 或上游有功能就视为已接入。
+
+- [ ] 本机安装、校验、启动、停止与升级 MiniMax Code 运行时（mcode-webui/minimax-code fork）；处理异常中断和进程清理。
+- [ ] 将官方 MiniMax Bot 的业务逻辑作为内置 Bot 服务接入上述 runtime：启动、持久化、会话恢复、审批和问答；不实现通用 Mini App 容器。
 - [ ] 创建、编辑、删除长期 Bot：名字、角色、指令、头像、模型及推理设置；Chief Bot 管理团队。
 - [ ] 一对一对话、消息流、会话历史、附件、图片/音视频/文件卡片和隔离预览。
 - [ ] 群聊、成员管理、@ 提及、回复模式、接力和群组记录。
 - [ ] Bot 间派发、结果回传、批次去重与不确定状态处理。
 - [ ] 后台 helper、任务队列、并发限制、状态、停止、结果及审批。
 - [ ] Bot 与团队记忆、查看与编辑、上下文预算、修订冲突、日志和隐私处理。
-- [ ] 定时任务创建、查看、修改、删除、单次授权和设备进程中断后的状态处理。
+- [ ] 定时任务创建、查看、修改、删除、单次授权；到点执行与通知按下方「定时任务验收档位」验收（档位待拍板，见下）。
 - [ ] 每 Bot 的使用量、任务列表、筛选、未读、消息操作、表情回应、外观和设置。
-- [ ] 插件市场：浏览、搜索、来源、版本和权限说明；本机安装、更新、启停、卸载、出错恢复，以及与 MiniMax Code 插件协议的兼容性验证；不将 Mini App 作为插件列出或安装。
+- [ ] 设置页信息架构落地：账号与模型、插件、通知、定时任务、后台运行、工作区与存储、外观、关于（见 [architecture.md](architecture.md) **T-Settings** / `packages/mbot_settings`）；无手机操控/远控入口。
+- [ ] 通知：App 内总开关与分类开关（至少含定时任务、Bot 消息/完成、出错或打断等可裁剪类别）+ 对应 Android 通知渠道；可深链到系统渠道设置。
+- [ ] 后台运行：检测通知权限、电池优化是否忽略等状态，展示说明，并提供跳转系统设置入口（含可选厂商文案）；**只做检测 + 跳转引导，不做保活黑科技**（不隐蔽多进程拉活、不超范围保活）。
+- [ ] 插件市场：浏览、搜索、来源、版本和权限说明；本机安装、更新、启停、卸载、出错恢复，以及与 MiniMax Code 插件协议的兼容性验证；不将 Mini App 作为插件列出或安装。**官方插件包格式的 `deliveryTargets` 仅允许 `desktop` / `cloud`，没有 `android`**——产品 UI 与验收须明示此限制；**Android 安装策略仍未定**，不能假定市场包默认可在 Android 分发。
 - [ ] Key / Base URL 配置、模型切换和失败处理；密钥不应由可执行任意代码的 Agent 直接读取。
 - [ ] 独立执行边界、受控文件和网络、逐次审批、停止与资源限制；PRoot 仅用于兼容，不视作安全隔离。
-- [ ] 仅本机：移除远程连接、手机操控及其权限、第三方品牌和不允许复用的美术素材。
+- [ ] 仅本机：无远程连接、无手机操控及其权限；无第三方品牌和不允许复用的美术素材；**分发 APK 满足 AGPL-3.0 源码提供义务**。
 - [ ] 验证手机竖屏、各尺寸平板横屏/竖屏、折叠/多窗口；真实设备与真实 MiniMax 模型端到端测试。
 
 ## 界面与布局
@@ -26,4 +31,14 @@
 
 平板使用窗口宽度自适应：紧凑窗口单列，中等窗口优先保证会话可读性，宽窗口展开会话列表与聊天，可按空间展示详情。设备方向按 Android 最小屏宽区分：小于 600 dp 视为手机，限制竖屏；600 dp 及以上允许系统旋转。折叠设备、分屏和厂商系统的实际行为需要真机检验。
 
-Android 的后台执行和定时能力受系统限制。验收时区分「应用进程存活时运行」和「系统结束进程后是否能恢复」，不把前者描述成永久在线。
+## 定时任务验收档位（候选，待拍板）
+
+Android 的后台执行和定时能力受系统限制。官方 MiniMax Bot 在进程内以约 30s 间隔轮询调度，**服务进程不在时不会触发**。下列档位是验收候选，**尚未选定**；选型取决于用户对架构报告 **F.7**（定时「死后是否补跑」/是否引入 Alarm 等）的拍板。文档与 UI **绝不能**写成「App 能在进程被杀后保证到点执行」，除非已实现并验证相应机制且用户明确选择该档。
+
+| 候选档位 | 标准（实现并验证后才可勾选对应验收） |
+|---|---|
+| **A. 进程存活** | 前台服务/引擎在；到点约 30s 内 fire；通知权限开启时送达 |
+| **B. 进程被杀** | UI 与文档均写明「不会执行」；可选显示「有 N 个任务可能错过」；**禁止**宣称已补跑，除非真做了 Alarm/拉起并成功跑完且用户选定该增强 |
+| **C. 引导** | 未关电池优化等时设置页显示「需设置」并可跳转；不自动反复弹系统框骚扰 |
+
+在 F.7 拍板前，对外说明不得超出已核实的上游行为（进程内轮询、进程死后不触发），也不得把任一候选档位写成已定产品承诺。是否增加「死后尝试拉起或仅发未能执行通知」属可选增强，须单独决策。

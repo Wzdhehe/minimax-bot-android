@@ -18,16 +18,20 @@
 
 ## 本项目目前的决策和差距
 
+> **历史原型路径（已弃用）：** 下文「首版采用 Android 原生 UI…」描述的是根目录 `app/` Java 原型的早期决策，**不是**当前目标实现。
+>
+> **当前已拍板方向：** 接受 AGPL 开源，保留 DSH Go 外壳（`dsh-go/`）、只换核心，可直接改 `dsh-go/`，根下 `packages/` 已有模块可继续用，分发 APK 须提供源码；runtime 跟 mcode-webui/minimax-code fork（MIT，`97818b2`），插件管理复用其插件市场、plugin-management 与 plugin-system；官方 MiniMax-AI/minimax-code 为上游，更新自行合并。插件 Android 安装策略与 F.7 档位仍未定。官方 MiniMax Bot 尚未接入产品路径。工作计划见 [architecture.md](architecture.md)；交接见根 README 与 [DEVELOPMENT.md](DEVELOPMENT.md)。
+
 首版采用 Android 原生 UI 和独立的轻量本机工具循环，直接连接用户配置的兼容 API；它是可验证的 Agent 原型，**不是**将 MiniMax Code 或 DSH Go 完整移植。工作区文件读写由应用进行路径限制。与应用共用 UID 的 shell 不构成独立沙箱，命令工具已关闭，待独立隔离和受控工具通道完成后再启用。密钥通过 Android Keystore 加密，消息与工作区当前没有额外应用层加密。
 
 对照 WebUI 后，本项目只做本机多 Bot，不做手机界面操控；将直接嵌入运行时作为优先评估方向；本地 ACP 适配器仅为备选实验，尚未接入 App。官方 mcode 在隔离环境的实测会话中报告了 `auto` 权限模式；若将 ACP 用于实际任务，必须主动设置并确认交互审批模式，不能假定默认会询问。官方 mcode 自定义 Provider 设置会将密钥明文保存到配置文件，必须解决其与手机 Keystore 存储的衔接，不能假设仅设置环境变量就能避免落盘。
 
-要接近 DSH Go 底层体验，应先选择并固定 Android ARM64 可执行环境，评估 MiniMax Code 的 Node 原生依赖与工具包是否能在 PRoot/Android 下正常工作；实现有界安装与完整性校验、CLI 进程生命周期、Agent 会话流和审批桥接，再接入 Bot、记忆、群聊和互派任务。进程恢复、Android 后台限制、可访问文件范围、网络、资源占用、许可证与真机兼容性需要单独验证。
+产品 runtime 已定为 mcode-webui/minimax-code fork（`97818b2`）：应，评估 Node 原生依赖与工具包在 Android（含能否沿用 DSH Go 的 PRoot 兼容层；PRoot 不是安全边界）上的可行性；实现有界安装与完整性校验、进程生命周期、Agent 会话流和审批桥接，再接入 Bot、记忆、群聊和互派任务。进程恢复、后台限制、文件范围、网络、资源占用、许可证与真机兼容性需要单独验证。
 
 [MiniMax 官方模型接口文档](https://platform.minimax.io/docs/guides/text-generation)给出了 OpenAI 兼容 Base URL、模型 ID 和 Chat Completions 请求示例。自定义 URL 的模型需要自行确认兼容性。[Grok Bot 移动端文档](https://docs.x.ai/grok-bot/mobile)描述了对标产品的 Bot、任务、审批与同步功能；本项目不依赖其云电脑。
 
 ## 可参考的开源 Android Bot App
 
-- [DSH Go](https://github.com/ccch1mneyyy/dsh-Go)：可在 Android 设备本机运行 DSH，并提供 DS Bot 的原生 Bot 页面和群聊；支持自定义 OpenAI / Anthropic 兼容模型渠道。DS Bot 是 DSH 插件，与官方 MiniMax Bot 的宿主协议不同。DSH Go 主体为 AGPL-3.0，品牌及吉祥物另有限制。当前 fork 以它为基础，但还未切换至 MiniMax Code 宿主。
+- [DSH Go](https://github.com/ccch1mneyyy/dsh-Go)：可在 Android 设备本机运行 DSH，并提供 DS Bot 的原生 Bot 页面和群聊；支持自定义 OpenAI / Anthropic 兼容模型渠道。DS Bot 是 DSH 插件，与官方 MiniMax Bot 的宿主协议不同。DSH Go 主体为 AGPL-3.0，品牌及吉祥物另有限制。本仓库导入的 `dsh-go/` 是产品外壳，核心换为官方 MiniMax Bot + mcode-webui fork runtime。
 - [DS Bot App](https://github.com/QingJ01/DS-Bot-App)：Apache-2.0 的 Android 多 Bot 和群聊 App，使用电脑或服务器上的 DSH 执行，手机需配对并保持主机在线；可借鉴界面和交互，但不满足本项目本机执行约束。
 - [AnythingLLM Mobile](https://github.com/Mintplex-Labs/anythingllm-mobile)：GPL-3.0-or-later 的 Android/iOS 本机 AI 助手，提供本地模型及自定义兼容接口；其与本项目所需多 Bot、群聊和插件协议的功能重合度仍需验证。

@@ -1,170 +1,154 @@
-# M Bot Android 架构基线
+# M Bot Android 架构基线（MiniMax Code 工作计划）
 
-- **基线 commit**：`326a921`（`main`）
-- **文档日期**：2026-11-02（Asia/Shanghai）；**策略修订**：同日改「AGPL 开源 + 留壳换芯」
-- **对照**：`/workspace/minimax-bot-android-review.md`；沙箱用例待对齐 `mbot-sandbox-escape-cases.md`
+- **基线**：`origin/main` 含 `e32fbd7`（Keystore Key）；本文档分支自 `326a921` 起叠文档
+- **日期**：2026-11-02（Asia/Shanghai）
+- **用法**：外部用 MiniMax Code 按下方**考前任务卡**开发；本团队只做验收。对照 `/workspace/minimax-bot-android-review.md`
 
 ---
 
-## 1. 已决事项与后果
+## 1. 已决事项
 
 | 决定 | 后果 |
 |---|---|
-| 考前**小步继续开发** | 每步可独立验收；考前关入口、考后再删模块 |
-| **App 按 AGPL-3.0 开源**，可直接 fork/复用 DSH Go | 保留 DSH 版权与 `LICENSE`；**新文件加 AGPL 头**；发布 APK 须能提供对应源码；品牌/吉祥物仍受 `dsh-go/ASSETS.md` 限制，发布前替换 |
-| **留壳换芯** | **留**：DSH Flutter UI、Android 原生、通知、设置页、平板布局、插件市场**交互流程**。**换**：DSH 引擎、`plugin-kit` 插件格式、本机 Ubuntu+pnpm 安装方式 → MiniMax runtime + MiniMax 插件协议 |
-| Runtime 钉点 | **已定（用户，2026-11-02）**：跟 webui fork（`mcode-webui/minimax-code`，MIT，main `97818b2`），复用其插件管理（`packages/webui` 插件市场、server `plugin-management.ts`、runtime `src/service/plugin-system`），`mcode_plugins_api.dart` 已对齐；官方 `MiniMax-AI/minimax-code` 更新由我们自行合并 |
+| 考前小步开发 | 每卡一 PR；考前关入口，考后再删模块 |
+| AGPL-3.0 开源 + **留壳换芯** | 留 DSH Flutter/Android/通知/设置/平板/插件市场交互；换 DSH 引擎、plugin-kit、手机内 Ubuntu+pnpm → MiniMax runtime + 插件协议。新文件加 AGPL 头；发布须能提供源码；品牌素材受 `dsh-go/ASSETS.md` 限制 |
+| Runtime | **跟** `mcode-webui/minimax-code`（MIT，`97818b2`）；复用其插件管理。官方 `MiniMax-AI/minimax-code` 更新自行合并 |
 
-**硬约束**：Agent 仅应用私有工作区；PRoot≠安全边界；**禁止同 UID 任意 shell**；路径不可逃逸；API Key 不进 Agent/插件；本机服务鉴权；定时保活由用户系统设置，App 只检测/提示/跳转；UI 不得声称进程被杀后仍执行。
+**硬约束**：Agent 仅应用私有工作区；PRoot≠安全边界；禁止同 UID 任意 shell；路径不可逃逸；API Key 不进 Agent/插件；本机服务鉴权；定时保活由用户系统设置，App 只检测/提示/跳转；UI 不得声称进程被杀后仍执行。**不采用**手机内 Ubuntu+pnpm 安装链。
 
-**明确不采用**：DSH 在手机内跑 Ubuntu + pnpm 的插件/依赖安装路径。
+**Key 存储（`e32fbd7`，审查已过）**：`BotSettingsPlugin.kt` + `bot_settings.dart`；`minimax_bot_provider` SharedPreferences（`MODE_PRIVATE`）存 AES-GCM 密文+IV；AndroidKeyStore；无日志；`readKeyForBroker` 未挂 MethodChannel；`allowBackup="false"`（升 targetSdk≥31 时须另配 dataExtractionRules，见 T-Sandbox）。
 
 ---
 
 ## 2. 基线资产（处置）
 
-| 路径 | 约规模 / 许可 | 处置 |
-|---|---|---|
-| `dsh-go/app/` Flutter+Android | ~768 Dart / ~175 Kotlin main；AGPL | **壳**：继续改；关无用入口 |
-| `dsh-go/packages/dsh_client` 等 | AGPL | 可复用；远控相关不纳入产品 |
-| `dsh-go/sdk/plugin-kit`、引擎侧 schedule 等 | 混 MIT/AGPL | **芯**：逐步停用，不作为插件/引擎真相来源 |
-| `dsh-go/runtime/vendor/minimax-bot/` | MIT，`0f2183f` | **保留**，内置 Bot |
-| `dsh-go/runtime/minimax-bot-host/` | 本仓薄宿主 ~303 行 | **保留并扩展**，对接 MiniMax runtime |
-| 根 `packages/mbot_settings/` | 开发中 | **可并入或接入** DSH 设置页（以开发实际模块名为准） |
-| 根 `packages/mbot-workspace-guard/` 等 | 开发中 | 沙箱守卫；接入宿主强制点 |
-| 根 `app/` Java 原型 | ~455 行 | 待决归档/删除 |
-
----
-
-## 3. Runtime / 上游
-
-| 仓 | LICENSE | 备注 |
-|---|---|---|
-| `mcode-webui/minimax-code` | MIT | **已定钉**（2026-11-02，main `97818b2`）；相对官方超前多、插件市场完整（webui + plugin-management + plugin-system） |
-| `MiniMax-AI/minimax-code` | MIT | 官方；`local-runtime-v2` 同源但有分叉；包格式无 `android` target；更新由我们自行合并进 fork |
-| MiniMax Bot vendor | MIT | 已钉 `0f2183f` |
-
-钉仓后：`docs/UPSTREAM-RUNTIME.md` 写 commit+日期；CI smoke；升钉重跑。本仓 smoke 脚本现仍按 webui 路径编写。
-
----
-
-## 4. 目标分层（在 DSH 基线上改）
+| 路径 | 处置 |
+|---|---|
+| `dsh-go/app/` Flutter+Android（AGPL） | 壳：继续改 |
+| `dsh-go/packages/dsh_client` | 可复用；含 `lib/src/mcode_plugins_api.dart` |
+| `dsh-go/sdk/plugin-kit`、DSH 引擎 schedule | 芯：逐步停用 |
+| `dsh-go/runtime/vendor/minimax-bot/`（MIT `0f2183f`） | 保留 |
+| `dsh-go/runtime/minimax-bot-host/` | 保留并扩展 |
+| 根 `packages/mbot_settings/`（分支 `feat/settings-skeleton`） | 设置骨架，待接入壳 |
+| 根 `packages/mbot-workspace-guard/`（分支 `feat/mbot-workspace-guard`） | 路径守卫，待接入宿主 |
+| 根 `app/` Java 原型 | 待决归档/删除 |
 
 ```mermaid
 flowchart TB
-  UI[dsh-go Flutter 壳: Bot/设置/通知/平板]
-  Native[dsh-go Android: FGS/渠道/跳转系统设置]
+  UI[dsh-go Flutter 壳]
+  Native[dsh-go Android]
   Host[minimax-bot-host]
-  Bot[vendor minimax-bot MIT]
-  RT[MiniMax local-runtime-v2 钉点]
-  SB[路径守卫 packages 或 runtime]
+  Bot[vendor minimax-bot]
+  RT[local-runtime-v2 @97818b2]
+  SB[mbot-workspace-guard]
   WS[(files/workspace)]
   Key[(Keystore)]
-
   UI --> Native
   UI --> Host
   Host --> Bot
   Host --> RT
   Host --> SB --> WS
   Native --> Key
-  RT -.->|经主应用/broker| Key
+  RT -.->|经 broker| Key
 ```
-
-- 默认入口切到 Bot UI；宠物/论坛/手机操控/本机 Ubuntu 等**考前隐藏或禁用入口**，考后删除代码与权限。
-- 插件：UI 流程可参考 DSH 设置，**协议与安装**走 MiniMax（非 plugin-kit、非设备内 Ubuntu+pnpm）。
-- 鉴权：loopback + Bearer；拒 Origin；Host 匹配；重启换凭据。
 
 ---
 
-## 5. 沙箱接口约定（验收依据）
+## 3. 考前任务卡（每卡一 PR）
 
-> 与审查 `mbot-sandbox-escape-cases.md` 对齐；未落盘前以下列为基线。
+共用禁止项：禁止同 UID 任意 shell；不加 `MANAGE_EXTERNAL_STORAGE`；API Key 不暴露给 Agent/插件；不推 `main`、不 force push、不改历史；推远程/开 PR 须用户同意。
 
-### 5.1 工作区根
+### T-Settings — 设置骨架接入壳
 
-`context.getFilesDir()/workspace`（专用子树）。不把整个 `files/`、密钥、WebView 缓存交给 Agent。API 只接受工作区相对路径；SAF 经 broker 拷贝/FD 导入。
+- **目标**：把 `packages/mbot_settings/`（通知页、后台运行页、6 组占位）接入 DSH 设置入口；分组与 `lib/src/ia/settings_groups.dart` 一致：账号与模型 · 插件 · 通知 · 定时任务 · 后台运行 · 工作区 · 外观 · 关于。总开关关则子项灰显；后台页只跳系统设置，文案写明进程被杀后定时不跑。
+- **触碰**：`packages/mbot_settings/`；`dsh-go/app/lib/` 设置路由/入口；必要时 `dsh-go/app/pubspec.yaml`。
+- **依赖**：无（可先于沙箱）。
+- **验收**：
+  ```bash
+  cd packages/mbot_settings && flutter test && dart analyze
+  cd dsh-go/app && flutter test test/bots/minimax_bot_home_test.dart
+  ```
+  通过：既有 mbot_settings 测试全绿；冷启动能进设置；通知/后台文案符合上表；无远控/操控入口。
 
-### 5.2 守卫
+### T-Sandbox — 工作区守卫 + 存储收紧
 
-```text
-resolveWorkspacePath(workspaceRoot: Path, userPath: String): Result<Path, SandboxError>
-```
+- **目标**：`packages/mbot-workspace-guard/` 接入宿主 FS 强制点；删 FileProvider 宽外部路径；升 `targetSdk`；备份排除 Key prefs。
+- **触碰**：
+  - `packages/mbot-workspace-guard/`（`src/index.js`；`npm test` = `node --test`）
+  - `dsh-go/runtime/minimax-bot-host/`（强制调用点）
+  - `dsh-go/app/android/app/src/main/res/xml/dsh_file_paths.xml`：**删除** `<external-path name="storage" path="." />`
+  - `dsh-go/app/android/app/build.gradle.kts`：`targetSdk` 现为 **28** → 升到**当前 Play 要求版本**（根 `app/build.gradle` 现为 35，可作参考；升后去掉/调整 `ExpiredTargetSdkVersion` lint 豁免）
+  - `dsh-go/app/android/app/src/main/AndroidManifest.xml`：`targetSdk≥31` 时配置 `dataExtractionRules`（及 `fullBackupContent`），排除 `minimax_bot_provider` SharedPreferences 的云备份与设备迁移
+- **接口**：`resolveWorkspacePath(root, userPath)`；拒空/`\0`/绝对/`..`/symlink 逃逸/前缀混淆/`/sdcard`/他 App 目录。根：`context.getFilesDir()/workspace`。
+- **依赖**：守卫模块已在 `feat/mbot-workspace-guard`（`da717eb`，8/8）；本卡负责接入与 Android 侧收紧。
+- **验收**：
+  ```bash
+  cd packages/mbot-workspace-guard && npm test
+  cd dsh-go && node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs
+  ```
+  通过：守卫测试全绿；宿主强制调用可测；`dsh_file_paths.xml` 无 `external-path` storage；`targetSdk` 已升；读 `/sdcard` 失败（真机或仪器测试）；`dataExtractionRules`/`fullBackupContent` 排除 `minimax_bot_provider`；无同 UID shell。
 
-拒绝空/`\0`/绝对路径；分段处理 `.`/`..`；**逐段**解析 symlink；最终路径必须以 canonical(root) 为前缀（防前缀攻击）；拒绝 `/sdcard`、其他 App 目录等；注意 TOCTOU（resolve 后替换 symlink）；写权限不放宽路径规则。
+### T-Schedule — 定时任务 + 通知（进程存活档）
 
-错误码：`EMPTY` | `ABSOLUTE` | `ESCAPE` | `DENIED_SYSTEM` | `NOT_FOUND` | `IO`。
+- **目标**：进程/约定服务存活时到点执行并发通知；设置可开关通知渠道；后台页只检测+跳转。UI/文档不得承诺进程被杀后仍执行（死后补跑档位未定）。
+- **触碰**：`dsh-go/app/` 通知渠道与设置；Bot 调度相关（vendor/host，不引入 Ubuntu+pnpm）；`packages/mbot_settings/` 通知/后台/定时分组。
+- **依赖**：T-Settings（入口与文案）。
+- **验收**：
+  ```bash
+  cd packages/mbot_settings && flutter test
+  cd dsh-go/app && flutter test test/bots/minimax_bot_home_test.dart
+  ```
+  通过：存活场景到点有通知；关总开关不发；文案含「进程被杀后不会执行」；无保活黑科技。
 
-### 5.3 强制层
+### T-Plugins — 插件市场（webui 插件管理）
 
-宿主 / Android broker 在 FS 工具执行前调用；Agent/UI 自检无效。**禁止同 UID 任意 shell**。不采用 DSH 手机内 Ubuntu+pnpm 安装链。
+- **目标**：设置页插件组对接 webui fork 的 plugin-management / plugin-system；UI 走已有 `mcode_plugins_api.dart`（市场、安装、卸载、启停）。明示官方包格式无 `android` target；安装策略未定前不得假装可装任意桌面插件。禁止设备内 Ubuntu+pnpm。
+- **触碰**：`dsh-go/packages/dsh_client/lib/src/mcode_plugins_api.dart`；设置插件 UI；host/runtime 侧接入 fork 的 plugin-management（钉点见 T-Runtime）。
+- **依赖**：T-Runtime（协议后端）；T-Settings（入口）。
+- **验收**：
+  ```bash
+  cd dsh-go/packages/dsh_client
+  dart analyze lib/src/mcode_plugins_api.dart test/mcode_plugins_api_test.dart test/mcode_plugins_runtime_test.dart
+  dart test test/mcode_plugins_api_test.dart
+  # 有已构建的 webui 时：
+  MCODE_WEBUI_ENTRY=/path/to/minimax-code/dist-webui-npm/bin/mcode-webui.mjs dart test test/mcode_plugins_runtime_test.dart
+  ```
+  通过：协议测试绿；UI 能列出/启停（以宿主机或 mock 为准）；无 android target 有提示；无同 UID shell、无 Key 泄露。
 
-### 5.4 用例 S1–S12
+### T-Runtime — 钉 webui fork `97818b2`
 
-相对合法路径成功；`..`、绝对路径、外指 symlink、中间目录 symlink 逃逸、前缀攻击、`\0`、TOCTOU、其他包目录、空/`..`/`/` → 非成功。真机补「读 `/sdcard` 失败」。
+- **目标**：文档与 CI/smoke 钉 `mcode-webui/minimax-code@97818b2`；host 能对 fork 做 smoke；写 `docs/UPSTREAM-RUNTIME.md`（commit+日期）。升钉须重跑。
+- **触碰**：`dsh-go/runtime/minimax-bot-host/`；上游钉点文档；必要时 vendor/锁文件。
+- **依赖**：无（可与 T-Plugins 并行准备）。
+- **验收**：
+  ```bash
+  cd dsh-go
+  node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs
+  WEBUI_SOURCE=/path/to/minimax-code@97818b2 bash runtime/minimax-bot-host/run-upstream-gateway-smoke.sh
+  ```
+  通过：host 测试绿；smoke 绿（或文档记录阻塞原因）；钉点文件与 `97818b2` 一致。
 
 ---
 
-## 6. 设置页 IA
+## 4. 考后 / 未发卡（勿提前扩 scope）
 
-分组：账号与模型 · 插件 · **通知** · 定时任务 · **后台运行** · 工作区 · 外观 · 关于（无远控/操控）。`packages/mbot_settings/` 可并入 DSH 设置信息架构。
-
-### 6.1 通知
-
-| 条目 | 验收 |
+| 原里程碑 | 内容 |
 |---|---|
-| 总开关 | `areNotificationsEnabled()`；跳转 `ACTION_APP_NOTIFICATION_SETTINGS` |
-| 分类：定时 / 完成 / 出错 / 待确认 | 各渠道；App 关则不发 |
-| 系统渠道设置 | 深链后状态一致 |
-
-文案不承诺「后台保证送达」。
-
-### 6.2 后台运行
-
-| 条目 | 检测 / 跳转 | 验收 |
-|---|---|---|
-| 引擎是否在跑 | FGS/服务状态 | 与真实一致 |
-| 通知权限 | 同上 | 与通知页一致 |
-| 电池优化 | `isIgnoringBatteryOptimizations` → `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 或应用详情 | 不循环弹窗 |
-| 厂商后台文案 | MANUFACTURER 选文案；Intent 失败则应用详情 | 标明 ROM 可能失效 |
-| 最近任务锁定 | 仅文案 | 不假装已检测 |
-| 风险说明 | 固定文案 | **必须**写：进程被杀后定时**不会**执行 |
-
-只检测、提示、跳转；无保活黑科技。
+| 关入口 | 宠物/论坛/操控/Ubuntu 等考前隐藏 |
+| Runtime 进 APK | 设备一次模型往返（高风险） |
+| 考后删模块 + 换品牌 + 源码发布流程 | ASSETS / AGPL 合规 |
+| 仍待决 | 插件 Android 安装/登录；Grok 参考图；FGS 类型；`REQUEST_INSTALL_PACKAGES`；定时死后补跑档；根 `app/` 去留 |
 
 ---
 
-## 7. 里程碑（在 DSH 基线上改）
+## 5. 验收流程
 
-| 步 | 内容 | 验收 | 粗估 |
-|---|---|---|---|
-| **M0** | 本文；E0 文档由开发分支 | 策略为「留壳换芯 + AGPL 开源」 | 0.5d |
-| **M1** | 考前关闭宠物/论坛/操控/Ubuntu 等入口；许可头检查 | 冷启动无上述入口；新文件有 AGPL 头 | 1–2d |
-| **M2** | 默认进 Bot UI；`mbot_settings` 接入设置 | 通知/后台条目与 §6 文案达标 | 2–4d |
-| **M3** | 路径守卫接入宿主 + S1–S12 | CI 绿；无同 UID shell | 1–2d |
-| **M4** | 钉 runtime（webui fork `97818b2`）+ host smoke | 文档钉点；smoke 绿 | 2–4d |
-| **M5** | 设置：Keystore、插件 UI（明示无 android target） | Key 不进 Agent；限制有提示 | 3–5d |
-| **M6** | Runtime 进 APK（高风险） | 设备一次模型往返；失败不回退 shell | 10–20d |
-| **M7** | 定时档 A + 引导 C；档 B 诚实文档 | 存活到点通知；UI 不说谎 | 3–5d |
-| **M8** | 考后删除已关闭模块；换品牌素材；源码发布流程 | APK 与源码对应；ASSETS 合规 | 3–6d |
-
-考前优先 **M1–M4**。
+1. **外部开发（MiniMax Code）**：按任务卡开独立分支，本地提交；附上该卡「验收」命令的完整输出；不推 `main`。
+2. **审查**：复跑验收命令；核对硬约束（沙箱、无同 UID shell、无宽存储权限、Key 不进 Agent/插件、定时文案诚实）。
+3. **架构**：对照本文与代码路径/接口是否一致；不一致则改文档或退回开发。
 
 ---
 
-## 8. 仍待决
+## 6. 设置 / 沙箱摘要（细节以任务卡为准）
 
-1. 插件无 `android` target 时的分发/登录策略。  
-2. Grok 布局参考图与禁忌元素。  
-3. FGS 类型 / 是否上架。  
-4. 是否保留 `REQUEST_INSTALL_PACKAGES`。  
-5. 定时死后是否补跑（默认：仅进程存活）。  
-6. 根 `app/` 原型去留。
-
----
-
-## 9. 与前版/报告差异
-
-- 撤回「DSH 只参考不链接 / APK 去 AGPL」；改为 **AGPL 开源 + 留壳换芯**。  
-- 里程碑回到 **在 `dsh-go` 上改**；根 `packages/*` 为可接入模块，不以「替代整个壳」为前提。  
-- Runtime 已定（2026-11-02）：跟 webui fork，官方更新自行合并。  
-- 沙箱硬线与「不用 Ubuntu+pnpm 安装」不变。
+设置分组与验收口径见 **T-Settings** / `packages/mbot_settings/lib/src/ia/settings_groups.dart`。沙箱用例与 Android 收紧见 **T-Sandbox**；设计背景见 [sandbox.md](sandbox.md)。
