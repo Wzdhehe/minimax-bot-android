@@ -16,7 +16,7 @@
 
 **硬约束**：Agent 仅应用私有工作区；PRoot≠安全边界；禁止同 UID 任意 shell；路径不可逃逸；API Key 不进 Agent/插件；本机服务鉴权；定时保活由用户系统设置，App 只检测/提示/跳转；UI 不得声称进程被杀后仍执行。**不采用**手机内 Ubuntu+pnpm 安装链。
 
-**Key 存储（`e32fbd7`，审查已过）**：`BotSettingsPlugin.kt` + `bot_settings.dart`；`minimax_bot_provider` SharedPreferences（`MODE_PRIVATE`）存 AES-GCM 密文+IV；AndroidKeyStore；无日志；`readKeyForBroker` 未挂 MethodChannel；`allowBackup="false"`（升 targetSdk≥31 时须另配 dataExtractionRules，见 T-Sandbox）。
+**Key 存储（`e32fbd7`，审查已过；多供应商扩展见 T-Providers）**：`BotSettingsPlugin.kt` + `bot_settings.dart`；`minimax_bot_provider` SharedPreferences（`MODE_PRIVATE`）存 AES-GCM 密文+IV；AndroidKeyStore；无日志；`readKeyForBroker` 未挂 MethodChannel；`allowBackup="false"`（升 targetSdk≥31 时须另配 dataExtractionRules，见 T-Sandbox）。
 
 ---
 
@@ -56,7 +56,7 @@ flowchart TB
 
 ## 3. 考前任务卡（每卡一 PR）
 
-执行顺序：**T-Runtime** → **T-Sandbox** → **T-Settings** → **T-Usage** → **T-Schedule** → **T-Plugins**（每卡一 PR；可先独立准备的依赖在卡内注明）。
+执行顺序：**T-Runtime** → **T-Sandbox** → **T-Settings** → **T-Providers** → **T-Usage** → **T-Schedule** → **T-Plugins**（每卡一 PR；可先独立准备的依赖在卡内注明）。
 
 共用禁止项：禁止同 UID 任意 shell；不加 `MANAGE_EXTERNAL_STORAGE`；API Key 不暴露给 Agent/插件；不推 `main`、不 force push、不改历史；推远程/开 PR 须用户同意。
 
@@ -72,9 +72,38 @@ flowchart TB
   ```
   通过：既有 mbot_settings 测试全绿；冷启动能进设置；通知/后台文案符合上表；无远控/操控入口。
 
+
+### T-Providers — 三方模型 / Key 接入（webui BYOK）
+
+- **目标**：设置「账号与模型」支持**多供应商**，不限 MiniMax Key。列表可增删改；每项含类型（`apiFormat`）、`baseUrl`、Key、模型列表；可为 Bot 选默认模型。对标 webui Custom Model / MiniMax API（BYOK）页；`apiFormat` 取值与 webui 一致：`anthropic-messages` · `openai-completions` · `openai-responses` · `google-generative-ai`。
+- **复用（webui `@97818b2`）**：
+  - 配置树：`packages/config/src/byok-config.ts`（`parseCustomProvidersConfig` / `parseMinimaxApiConfig`）；`packages/config/src/config.ts` 的 `CustomProviderConfig` / `MinimaxApiConfig` / `ProviderOptions`（`apiKey`·`baseURL`·`authMode`）；`packages/config/src/local-model-provider-write.ts` 的 `updateLocalByokConfig`（根：`minimax_api` · `custom_provider`）；`packages/config/src/provider-auth-mode.ts`（`managed-login` | `api-key` | `oauth`）
+  - 模型键：`packages/local-runtime/src/config/model-key.ts`（`custom_provider:<key>/modelId` · `minimax_api/...` · 内建 `provider/...`）
+  - 管理服务：`packages/local-runtime-v2/src/service/model-system/management/service-custom-provider-operations.ts`、`service-minimax-operations.ts`、`service.ts`、`provider-key.ts`
+  - 请求时选端点/Key：`packages/local-runtime/src/runtime/model-resolver.ts`（`LocalModelResolver` 经 `byokConfigGetter` / `providerConfig` 取 `options.baseURL` + `options.apiKey`）
+  - 操作名：`listUserModelProviders` · `createUserModelProvider` · `updateUserModelProvider` · `deleteUserModelProvider` · `testUserModelProvider` · `revealModelProviderApiKey` · `upsertMiniMaxApiKey` · `listModels` · `selectModel`（见 `packages/webui/src/shared/operation-names.ts`；校验 `packages/webui/src/server/operation/provider.ts`）
+  - 契约/投影：`packages/webui/src/shared/contracts/models.ts`（`WebuiModelProviderView`：`hasApiKey`·`maskedApiKey`·`baseUrl`·`apiFormat`，**无明文 Key**）；`packages/webui/src/server/projections/model-provider.ts`（`toWebuiModelProviderView`）
+  - UI 参考：`packages/webui/src/client/features/models/ui/ProviderFormPanel.public.tsx`；`.../application/provider-editor.ts`；`.../contracts/provider-editor.ts`（`WEBUI_MODEL_PROVIDER_APIS`）；`.../contracts/provider-port.ts`
+- **本仓触碰**：
+  - `dsh-go/app/android/.../bot/BotSettingsPlugin.kt` + `dsh-go/app/lib/bot/bot_settings.dart`（`e32fbd7` 现为**单** Key：`minimax_bot_provider` prefs + Keystore AES-GCM；`load()` 只回 `hasKey`/`baseUrl`/`model`；`readKeyForBroker` 未挂 MethodChannel）→ **扩展为每供应商一条**：元数据可明文存私有 prefs（id、name、apiFormat、baseUrl、model 列表、默认模型、enabled）；**每个 provider 的 Key 单独 Keystore 加密**；Dart/MethodChannel **只见** `hasKey` / 掩码 / 元数据，不见明文
+  - `packages/mbot_settings/`：`settings_groups.dart` 现有 `apiKey`·`baseUrl`·`defaultModel` 占位 → 供应商列表页（增删改）+ 默认模型选择；账号与模型组入口对齐
+  - `dsh-go/packages/dsh_client/lib/src/`：供应商/模型 API（对标 `mcode_plugins_api.dart`，投影 `WebuiModelProviderView` / `listModels` / `selectModel`，**不收密钥**）
+  - `dsh-go/runtime/minimax-bot-host/`：挂上述 operations → webui/runtime 管理服务；**请求前**由 native broker 注入该 provider 的 Key（勿把 Key 写进可被 Agent 读的 config/env）
+- **接口（安全边界）**：Dart 仅 `hasKey` + provider 元数据 + 掩码；明文 Key 只在 native broker / 宿主进程内、按请求注入 runtime；**永不**进 Agent、插件、日志、导出；备份排除规则随 T-Sandbox 的 `dataExtractionRules`（升 targetSdk 时覆盖多 Key prefs）。桌面 webui 把 BYOK 写在 `<dataDir>/config.yaml`（0o600）；**安卓不以明文 yaml 存 Key**，元数据可跟 runtime 配置同步，Key 走 Keystore。
+- **禁止**：同 UID shell；`MANAGE_EXTERNAL_STORAGE`；把 `revealModelProviderApiKey` 的明文回给 Flutter UI 常驻展示（若需「显示一次」须用户手势且不落盘/不进日志）；Key 进 Agent 工作区或插件可读路径。
+- **依赖**：T-Runtime（host/webui 钉点）；T-Settings（设置入口）。可与 T-Usage 并行准备，但默认模型/供应商列表 UI 以本卡为准。
+- **验收**：
+  ```bash
+  cd packages/mbot_settings && flutter test && dart analyze
+  cd dsh-go/packages/dsh_client && dart analyze lib/src && dart test
+  cd dsh-go/app && flutter test test/bots/minimax_bot_home_test.dart
+  cd dsh-go && node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs
+  ```
+  通过：能增删改至少一类自定义供应商（含 `apiFormat`+`baseUrl`+模型列表）并设默认模型；Dart/测试断言拿不到明文 Key（仅 `hasKey`/掩码）；mock/夹具下 host 能按 provider 注入 Key 完成一次解析或 test 调用；无 Key 进日志/Agent 可见面；analyze 与既有测试绿。
+
 ### T-Usage — 用量查询（webui 配额面板）
 
-- **目标**：在设置「账号与模型」组展示 MiniMax Coding / M Plan 用量：5 小时限额、周限额（已用 %）、积分余额、计划名；未登录显示「未登录」可刷新。对标 webui 设置页用量条，不做热力图/重置卡（考后可扩）。
+- **目标**：在设置「账号与模型」组展示 MiniMax Coding / M Plan 用量：5 小时限额、周限额（已用 %）、积分余额、计划名；未登录显示「未登录」可刷新。对标 webui 设置页用量条，不做热力图/重置卡（考后可扩）。**仅 MiniMax 账号/OAuth 租约**有用量；T-Providers 下的自定义/三方供应商显示「不支持」（webui `usage-quota.ts` 走 MiniMax 后端，未发现通用三方用量接口）。
 - **复用（webui `@97818b2`）**：
   - 客户端：`packages/webui/src/runtime/usage-quota.ts`（`UsageQuotaClient.getUsageQuota`）
   - 契约：`packages/webui/src/shared/contracts/usage-quota.ts`（`WebuiUsageQuotaResult`：`signedIn`、`planName`/`subscriptionType`、`creditBalance`、`quota.fiveHour|weekly.usedPercent/resetAtMs`）
@@ -86,15 +115,15 @@ flowchart TB
   - `packages/mbot_settings/`：`lib/src/ia/settings_groups.dart` 在 `accountAndModel` 增用量项（勿与 `workspaceUsage` 工作区占用混淆）；新 UI 页（可 `lib/src/ui/usage_quota_page.dart`）
   - `dsh-go/packages/dsh_client/lib/src/`：新增用量 API（对标 `mcode_plugins_api.dart` 风格，只收 `WebuiUsageQuotaResult` 形投影，不收密钥）
   - `dsh-go/runtime/minimax-bot-host/`：挂 `getUsageQuota` → webui `UsageQuotaClient`（钉点见 T-Runtime）
-- **禁止**：Dart/Flutter 持有或打印 OAuth token / API Key；同 UID shell；本卡不做重置卡兑换、积分开关写入、热力图分享图。
-- **依赖**：T-Runtime（host/webui 钉点）；T-Settings（设置入口）。
+- **禁止**：Dart/Flutter 持有或打印 OAuth token / API Key；同 UID shell；本卡不做重置卡兑换、积分开关写入、热力图分享图；不为三方供应商伪造用量数字。
+- **依赖**：T-Runtime（host/webui 钉点）；T-Settings（设置入口）；T-Providers（账号与模型下供应商切换时，非 MiniMax 显示「不支持」）。
 - **验收**：
   ```bash
   cd packages/mbot_settings && flutter test && dart analyze
   cd dsh-go/packages/dsh_client && dart analyze lib/src && dart test
   cd dsh-go && node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs
   ```
-  通过：无租约时 UI/API 为未登录且无密钥字段；有 mock/夹具租约时可看到 5h/周限额或计划字段；`settings_groups` 含用量入口且在账号与模型下；测试与 analyze 绿；无 Key/token 进日志或 Agent 可见面。
+  通过：无租约时 UI/API 为未登录且无密钥字段；有 mock/夹具租约时可看到 5h/周限额或计划字段；非 MiniMax 供应商用量为「不支持」；`settings_groups` 含用量入口且在账号与模型下；测试与 analyze 绿；无 Key/token 进日志或 Agent 可见面。
 
 ### T-Sandbox — 工作区守卫 + 存储收紧
 
@@ -163,7 +192,7 @@ flowchart TB
 | 关入口 | 宠物/论坛/操控/Ubuntu 等考前隐藏 |
 | Runtime 进 APK | 设备一次模型往返（高风险） |
 | 考后删模块 + 换品牌 + 源码发布流程 | ASSETS / AGPL 合规 |
-| 仍待决 | 插件 Android 安装/登录（T-Usage 依赖 OAuth 租约，完整登录流未定）；Grok 参考图；FGS 类型；`REQUEST_INSTALL_PACKAGES`；定时死后补跑档；根 `app/` 去留；用量热力图/重置卡 |
+| 仍待决 | 插件 Android 安装/登录（T-Usage 依赖 OAuth 租约，完整登录流未定）；Grok 参考图；FGS 类型；`REQUEST_INSTALL_PACKAGES`；定时死后补跑档；根 `app/` 去留；用量热力图/重置卡；三方供应商用量（现「不支持」） |
 
 ---
 
@@ -177,4 +206,4 @@ flowchart TB
 
 ## 6. 设置 / 沙箱摘要（细节以任务卡为准）
 
-设置分组与验收口径见 **T-Settings** / `packages/mbot_settings/lib/src/ia/settings_groups.dart`。用量查询见 **T-Usage**（账号与模型；勿与 `workspaceUsage` 混淆）。沙箱用例与 Android 收紧见 **T-Sandbox**；设计背景见 [sandbox.md](sandbox.md)。
+设置分组与验收口径见 **T-Settings** / `packages/mbot_settings/lib/src/ia/settings_groups.dart`。三方模型/Key 见 **T-Providers**；用量查询见 **T-Usage**（仅 MiniMax；勿与 `workspaceUsage` 混淆）。沙箱用例与 Android 收紧见 **T-Sandbox**；设计背景见 [sandbox.md](sandbox.md)。
