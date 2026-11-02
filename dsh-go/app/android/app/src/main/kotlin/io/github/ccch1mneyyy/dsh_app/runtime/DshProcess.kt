@@ -71,6 +71,7 @@ class DshProcess(
      * [safe] boots the rescue profile instead of `web` (see [SafeMode.profileArg]).
      */
     fun start(guestEnv: Map<String, String>, binds: List<String> = emptyList(), safe: Boolean = false, phone: Boolean = false, directEngine: Boolean = false, directFailed: Boolean = false, onLaunchMethod: ((Boolean) -> Unit)? = null) {
+        check(!phone) { "Phone control is unavailable in the Bot-only build" }
         check(process == null) { "already started" }
         var selection = DirectLaunch.select(rootfs, directEngine, safe, directFailed)
         // Only PRoot's fake hard links stand in Direct's way: tidy them once no runtime process is left.

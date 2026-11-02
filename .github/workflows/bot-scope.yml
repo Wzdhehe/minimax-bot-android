@@ -1,0 +1,14 @@
+name: Bot fork scope checks
+on:
+  push:
+    paths: ['dsh-go/**', '.github/workflows/bot-scope.yml']
+  pull_request:
+    paths: ['dsh-go/**', '.github/workflows/bot-scope.yml']
+  workflow_dispatch:
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest app/test_scope/test_bot_manifest.py
+        working-directory: dsh-go

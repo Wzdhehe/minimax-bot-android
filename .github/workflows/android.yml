@@ -1,5 +1,10 @@
-name: Android build
-on: [push, pull_request, workflow_dispatch]
+name: Prototype Android build
+on:
+  push:
+    paths: ['app/**', 'build.gradle', 'settings.gradle', 'gradle.properties', 'gradle/**', 'gradlew']
+  pull_request:
+    paths: ['app/**', 'build.gradle', 'settings.gradle', 'gradle.properties', 'gradle/**', 'gradlew']
+  workflow_dispatch:
 jobs:
   debug:
     runs-on: ubuntu-latest
@@ -15,5 +20,5 @@ jobs:
       - run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: minimax-bot-debug
+          name: prototype-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk

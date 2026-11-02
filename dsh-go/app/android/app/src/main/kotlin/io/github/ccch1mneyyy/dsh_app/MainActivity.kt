@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
@@ -90,6 +91,7 @@ class MainActivity : FlutterActivity() {
             intent.replaceExtras(Bundle())
         }
         super.onCreate(savedInstanceState)
+        applyDeviceOrientation(resources.configuration)
         // Fully transparent system bars, no OEM scrim behind the gesture handle.
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
@@ -106,13 +108,22 @@ class MainActivity : FlutterActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        applyDeviceOrientation(newConfig)
         // Light / dark: a custom launch screen's plain splash colour (the page's) may change with it.
         LaunchThemeSync.sync(this)
     }
 
+    private fun applyDeviceOrientation(configuration: Configuration) {
+        val target = if (BotDeviceClass.isTablet(configuration.smallestScreenWidthDp)) {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        if (requestedOrientation != target) requestedOrientation = target
+    }
+
     override fun onResume() {
         super.onResume()
-        io.github.ccch1mneyyy.dsh_app.phone.background.BackgroundControl.get(applicationContext).restoreKeptChannel()
         inForeground = true
         // Coming back counts as activity: the first frames may not be scheduled yet.
         framesActive = true

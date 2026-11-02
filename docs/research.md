@@ -25,3 +25,9 @@
 要接近 DSH Go 底层体验，应先选择并固定 Android ARM64 可执行环境，评估 MiniMax Code 的 Node 原生依赖与工具包是否能在 PRoot/Android 下正常工作；实现有界安装与完整性校验、CLI 进程生命周期、Agent 会话流和审批桥接，再接入 Bot、记忆、群聊和互派任务。进程恢复、Android 后台限制、可访问文件范围、网络、资源占用、许可证与真机兼容性需要单独验证。
 
 [MiniMax 官方模型接口文档](https://platform.minimax.io/docs/guides/text-generation)给出了 OpenAI 兼容 Base URL、模型 ID 和 Chat Completions 请求示例。自定义 URL 的模型需要自行确认兼容性。[Grok Bot 移动端文档](https://docs.x.ai/grok-bot/mobile)描述了对标产品的 Bot、任务、审批与同步功能；本项目不依赖其云电脑。
+
+## 可参考的开源 Android Bot App
+
+- [DSH Go](https://github.com/ccch1mneyyy/dsh-Go)：可在 Android 设备本机运行 DSH，并提供 DS Bot 的原生 Bot 页面和群聊；支持自定义 OpenAI / Anthropic 兼容模型渠道。DS Bot 是 DSH 插件，与官方 MiniMax Bot 的宿主协议不同。DSH Go 主体为 AGPL-3.0，品牌及吉祥物另有限制。当前 fork 以它为基础，但还未切换至 MiniMax Code 宿主。
+- [DS Bot App](https://github.com/QingJ01/DS-Bot-App)：Apache-2.0 的 Android 多 Bot 和群聊 App，使用电脑或服务器上的 DSH 执行，手机需配对并保持主机在线；可借鉴界面和交互，但不满足本项目本机执行约束。
+- [AnythingLLM Mobile](https://github.com/Mintplex-Labs/anythingllm-mobile)：GPL-3.0-or-later 的 Android/iOS 本机 AI 助手，提供本地模型及自定义兼容接口；其与本项目所需多 Bot、群聊和插件协议的功能重合度仍需验证。
