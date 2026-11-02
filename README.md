@@ -11,7 +11,7 @@
 
 文件工具限制在应用私有工作区。**命令工具不同：确认执行的 shell 命令拥有应用自身的文件和网络权限，可能访问工作区以外的应用私有文件，或启动持续运行的子进程；请先检查命令。** 命令工作目录为该私有工作区，使用 Android 系统 `/system/bin/sh`，不是 Ubuntu、PRoot 或 MiniMax Code。单次前台命令等待最长 30 秒，输出显示给模型的前 50 KB；结束 shell 不保证结束其自行分离的子进程。
 
-本项目没有内置 MiniMax Code CLI 或 DSH Go 的 PRoot/Ubuntu 运行时，也没有后台持久运行、群聊、Bot 互派任务、插件、工作区文件导入导出或设备应用控制。Android 结束应用进程后正在进行的任务会中断；写入已经发生的副作用不会自动回滚。应用目前是原型，需要在实际设备及真实 API 上继续验证。请勿将初版视为 Grok Bot 或 DSH Go 的功能等价实现。
+仓库里另有尚未接入应用的 ACP 客户端实验，已经测试本机消息和官方 CLI 的初始化握手；这不代表 Android 移植已完成。本项目没有内置 MiniMax Code CLI 或 DSH Go 的 PRoot/Ubuntu 运行时，也没有后台持久运行、群聊、Bot 互派任务、插件、工作区文件导入导出或设备应用控制。Android 结束应用进程后正在进行的任务会中断；写入已经发生的副作用不会自动回滚。应用目前是原型，需要在实际设备及真实 API 上继续验证。请勿将初版视为 Grok Bot 或 DSH Go 的功能等价实现。
 
 ## 构建
 
@@ -31,8 +31,9 @@ APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。该 APK 为调试签名
 
 ```bash
 mkdir -p /tmp/minimax-tests
-javac -cp "$JSON_JAR" -d /tmp/minimax-tests app/src/main/java/com/example/minimaxbot/Agent.java tests/com/example/minimaxbot/AgentTest.java
+javac -cp "$JSON_JAR" -d /tmp/minimax-tests app/src/main/java/com/example/minimaxbot/{Agent,AcpClient}.java tests/com/example/minimaxbot/{AgentTest,AcpClientTest}.java
 java -cp "$JSON_JAR:/tmp/minimax-tests" com.example.minimaxbot.AgentTest
+java -cp "$JSON_JAR:/tmp/minimax-tests" com.example.minimaxbot.AcpClientTest
 ```
 
 调研结论和实际功能差距见 [docs/research.md](docs/research.md)。本项目为独立实现，没有复制这些仓库的代码或商标素材。

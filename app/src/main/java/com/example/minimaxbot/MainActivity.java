@@ -57,7 +57,19 @@ public final class MainActivity extends Activity {
         Button b = new Button(this); b.setText(label); b.setTextSize(14); b.setAllCaps(false); b.setTextColor(primary ? Color.WHITE : INK); b.setBackground(shape(primary ? PURPLE : Color.WHITE, 14)); b.setPadding(dp(16),0,dp(16),0); return b;
     }
     private void root() {
-        page = column(); page.setBackgroundColor(BG); page.setPadding(dp(20),dp(16),dp(20),dp(12)); setContentView(page);
+        page = column(); page.setBackgroundColor(BG); page.setPadding(dp(20),dp(16),dp(20),dp(12));
+        page.setOnApplyWindowInsetsListener((view, insets) -> {
+            int top, bottom;
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.displayCutout());
+                top = bars.top; bottom = bars.bottom;
+            } else {
+                top = insets.getSystemWindowInsetTop(); bottom = insets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(dp(20), dp(16) + top, dp(20), dp(12) + bottom);
+            return insets;
+        });
+        setContentView(page);
     }
     private void save() { prefs.edit().putString("bots", bots.toString()).apply(); }
     private JSONObject findBot(String id) {
