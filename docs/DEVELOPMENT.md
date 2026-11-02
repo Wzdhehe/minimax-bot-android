@@ -77,3 +77,5 @@ MCODE_WEBUI_ENTRY=/path/to/minimax-code/dist-webui-npm/bin/mcode-webui.mjs dart 
 当前上游 `dsh_client/pubspec.lock` 与 `dart pub get --enforce-lockfile` 不完全一致，普通 `pub get` 可能修改锁文件；核对依赖变化，避免无关锁文件更新。上述测试使用真实上游 Bot 服务和临时数据目录，未启动模型 runtime，不能替代 Android 真机验证。当前开发环境曾通过 Flutter 自适应布局测试、Kotlin 设备分类单元测试和 vendored Bot 的 Node 测试；没有可用 Android 设备，未完成 fork APK 的完整验证。
 
 使用小而可验证的提交，维护本文件及功能清单，并及时推送私有仓库。不要提交 API Key、令牌、用户数据、构建缓存或临时上游 checkout。
+
+`.github/workflows/bot-host.yml` 在相关源码推送后运行 Bot 适配层和 Dart 协议测试。此 CI 不构建 Android、不启动完整 WebUI runtime；完整上游联调需要按前述命令单独运行。

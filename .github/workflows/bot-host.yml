@@ -1,0 +1,38 @@
+name: Bot host and protocol checks
+
+on:
+  push:
+    paths:
+      - 'dsh-go/packages/dsh_client/**'
+      - 'dsh-go/runtime/minimax-bot-host/**'
+      - 'dsh-go/runtime/vendor/minimax-bot/**'
+      - '.github/workflows/bot-host.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Test Bot runtime adapter
+        working-directory: dsh-go
+        run: node --test runtime/minimax-bot-host/agent-port.test.mjs
+      - name: Resolve client test dependencies
+        working-directory: dsh-go/packages/dsh_client
+        run: dart pub get
+      - name: Analyze Bot and plugin clients
+        working-directory: dsh-go/packages/dsh_client
+        run: dart analyze lib/src/minimax_bot_api.dart lib/src/mcode_plugins_api.dart test/minimax_bot_api_test.dart test/mcode_plugins_api_test.dart test/mcode_plugins_runtime_test.dart
+      - name: Test Bot HTTP and plugin wire contracts
+        working-directory: dsh-go/packages/dsh_client
+        run: dart test test/minimax_bot_api_test.dart test/mcode_plugins_api_test.dart
