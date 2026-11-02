@@ -93,6 +93,7 @@ class _BotHomeState extends State<BotHome> {
       } else {
         await bot.createBot(name.text, role.text);
       }
+      _composer.clear();
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.mobileBotLoadFailed)));
@@ -308,7 +309,14 @@ class _BotHomeState extends State<BotHome> {
                 content: Text(context.l10n.mobileBotLoadFailed),
                 actions: [TextButton(onPressed: bot.start, child: Text(context.l10n.mobileBotRetry))],
               ),
-            if (!bot.connected && !bot.loading && bot.error == null) Text(context.l10n.mobileBotOffline),
+            if (!bot.connected && !bot.loading && bot.error == null)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(child: Text(context.l10n.mobileBotOffline)),
+                  TextButton(onPressed: bot.start, child: Text(context.l10n.mobileBotRetry)),
+                ],
+              ),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -322,7 +330,13 @@ class _BotHomeState extends State<BotHome> {
                       ],
                     );
                   }
-                  return bot.selectedChat == null ? _list() : _chat(false);
+                  return PopScope(
+                    canPop: bot.selectedChat == null,
+                    onPopInvokedWithResult: (didPop, result) {
+                      if (!didPop) unawaited(bot.select(null));
+                    },
+                    child: bot.selectedChat == null ? _list() : _chat(false),
+                  );
                 },
               ),
             ),

@@ -20,6 +20,7 @@ class BotController extends ChangeNotifier {
   StreamSubscription<Map<String, Object?>>? _events;
   Timer? _refreshTimer;
   Future<void>? _refreshing;
+  bool _refreshAgain = false;
 
   List<Map<String, Object?>> get bots => _rows(snapshot['bots']);
   List<Map<String, Object?>> get groups => _rows(snapshot['groups']);
@@ -54,7 +55,17 @@ class BotController extends ChangeNotifier {
     await refresh();
   }
 
-  Future<void> refresh() => _refreshing ??= _refresh().whenComplete(() => _refreshing = null);
+  Future<void> refresh() {
+    _refreshAgain = true;
+    return _refreshing ??= _drainRefresh().whenComplete(() => _refreshing = null);
+  }
+
+  Future<void> _drainRefresh() async {
+    while (_refreshAgain && !_disposed) {
+      _refreshAgain = false;
+      await _refresh();
+    }
+  }
 
   Future<void> _refresh() async {
     try {
