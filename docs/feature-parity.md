@@ -2,10 +2,11 @@
 
 用户目标：Android 本机多 Bot，参照官方 MiniMax Bot；runtime 跟 mcode-webui/minimax-code fork（官方 MiniMax Code 为上游）；产品基于 DSH Go（AGPL-3.0）外壳。模型调用使用用户在设置中填写的 Key、Base URL 和模型 ID。无需远程电脑或手机操控；不做传统 Agent 工作台或通用 Mini App 容器。
 
-**落点与许可证（已拍板）：** 接受 AGPL 开源；保留 DSH Go 外壳、只换核心；新代码可直接改 `dsh-go/`，根下 `packages/` 已有模块可继续用；分发 APK 须提供 AGPL 源码。Runtime **跟** [mcode-webui/minimax-code](https://github.com/mcode-webui/minimax-code) fork（MIT，`97818b2`），插件管理复用其插件市场、plugin-management 与 plugin-system；官方 MiniMax-AI/minimax-code 为上游，更新自行合并。考前实现与验收以 [architecture.md](architecture.md) 任务卡为准（T-Runtime → T-Sandbox → T-Settings → T-Usage → T-Schedule → T-Plugins）；本清单为产品全量目标，不代替任务卡。插件 Android 安装策略与定时 F.7 档位**仍未定**。
+**落点与许可证（已拍板）：** 接受 AGPL 开源；保留 DSH Go 外壳、只换核心；新代码可直接改 `dsh-go/`，根下 `packages/` 已有模块可继续用；分发 APK 须提供 AGPL 源码。Runtime **跟** [mcode-webui/minimax-code](https://github.com/mcode-webui/minimax-code) fork（MIT，`97818b2`），插件管理复用其插件市场、plugin-management 与 plugin-system；官方 MiniMax-AI/minimax-code 为上游，更新自行合并。考前实现与验收以 [architecture.md](architecture.md) 任务卡为准（T-Runtime → T-Sandbox → T-Settings → **T-Providers** → T-Usage → T-Schedule → T-Plugins）；本清单为产品全量目标，不代替任务卡。插件 Android 安装策略与定时 F.7 档位**仍未定**。
 
-参考钉死点：MiniMax Bot 插件 [`0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8`](https://github.com/MiniMax-AI/MiniMax-Code-MiniApps/tree/0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8/plugins/minimax-ai/minimax-bot)；DSH Go 外壳 [`c1c0abb00907efdf48dcb443581686b67597c5a2`](https://github.com/ccch1mneyyy/dsh-Go/tree/c1c0abb00907efdf48dcb443581686b67597c5a2)；runtime（WebUI fork）[`97818b2`](https://github.com/mcode-webui/minimax-code/tree/97818b2)。官方上游合并点在合并时记录。所有条目在针对本项目完成实现和验证前保持未完成，不能因 DSH Go 或上游有功能就视为已接入。
+参考钉死点：MiniMax Bot 插件 [`0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8`](https://github.com/MiniMax-AI/MiniMax-Code-MiniApps/tree/0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8/plugins/minimax-ai/minimax-bot)；DSH Go 外壳 [`c1c0abb00907efdf48dcb443581686b67597c5a2`](https://github.com/ccch1mneyyy/dsh-Go/tree/c1c0abb00907efdf48dcb443581686b67597c5a2)；runtime（WebUI fork）[`97818b2`](https://github.com/mcode-webui/minimax-code/tree/97818b2)。**runtime 钉点的权威记录是 [UPSTREAM-RUNTIME.md](UPSTREAM-RUNTIME.md)**（含 commit、日期、tree、进入 bundle 的文件指纹与升钉流程），机器可读真值源在 `dsh-go/runtime/minimax-bot-host/upstream-runtime-pin.mjs`。官方上游合并点在合并时记录。所有条目在针对本项目完成实现和验证前保持未完成，不能因 DSH Go 或上游有功能就视为已接入。
 
+- [x] 上游 runtime 钉点与升钉流程：钉点文件、`docs/UPSTREAM-RUNTIME.md`、checkout 的 commit/tree/洁净状态、以及实际进入 bundle 的每个上游文件 sha256 四方一致，CI 在 PR 与 push 上强制；宿主测试、上游网关 smoke 与 19 项钉点测试通过。**只覆盖宿主契约层**，不证明完整 runtime、插件市场或 Android 可用。
 - [ ] 本机安装、校验、启动、停止与升级 MiniMax Code 运行时（mcode-webui/minimax-code fork）；处理异常中断和进程清理。
 - [ ] 将官方 MiniMax Bot 的业务逻辑作为内置 Bot 服务接入上述 runtime：启动、持久化、会话恢复、审批和问答；不实现通用 Mini App 容器。
 - [ ] 创建、编辑、删除长期 Bot：名字、角色、指令、头像、模型及推理设置；Chief Bot 管理团队。

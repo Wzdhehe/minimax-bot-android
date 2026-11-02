@@ -26,6 +26,7 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 - `dsh-go/app/lib/bot/` 已增加 Bot 原生会话界面和状态控制器：创建 Bot/群聊、历史、发送、停止、搜索、事件刷新、390 dp 单列和 1024 dp 双栏布局。3 项 Flutter 测试通过，包含切换会话时旧历史不得覆盖新会话及不重复发送。尚未接入正式 Android 启动器；联调入口为 `lib/dev/minimax_bot_main.dart`，仅用于连接已有本机 Bot 服务；它不是新增的独立应用，也不是已完成的引擎移植。正式默认入口暂时仍为 DSH 基线。
 - Bot 列表的设置入口已增加 Base URL、模型 ID、Key 输入和删除 Key。`BotSettingsPlugin.kt` 在 Android 宿主中用 Keystore AES-GCM 加密 Key，Dart 读取设置时只得到 `hasKey`，不会得到保存的 Key。此设置尚未接入实际 MiniMax Code provider 或原生模型请求 broker；不能声称填写后即可进行模型对话。加解密需要 Android 真机验证，独立 Kotlin 编译与 Dart 检查不能替代它。
 - 没有完成真正的隔离执行环境。PRoot 只提供兼容层，不是独立 Android UID 的安全沙箱；不要启用同 UID 任意代码执行作为替代。隔离和密钥设计见 [sandbox.md](sandbox.md)。
+- 上游 runtime 钉点已落地（**T-Runtime 卡**）：`dsh-go/runtime/minimax-bot-host/upstream-runtime-pin.mjs` 是机器可读钉点（`mcode-webui/minimax-code@97818b2890b4acae1c6bd1200a226ff506680628`，2026-10-31，MIT），`upstream-runtime-pin-check.mjs` 强制「钉点文件 ↔ 文档 ↔ checkout ↔ bundle 字节」四方一致，`docs/UPSTREAM-RUNTIME.md` 是人类可读的钉点文档。宿主测试与上游网关 smoke 均通过；19 项钉点测试通过。**这只钉住了宿主契约层**，不证明完整 runtime、插件市场或 Android 可用；上游真实的 session 端口实现从未被打包执行。
 
 
 ## 设置页 IA 与定时任务口径
@@ -69,13 +70,26 @@ cd dsh-go
 node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs
 ```
 
-有已安装依赖的固定版本 WebUI 源码时，还可执行跨上游网关的宿主机测试：
+有已安装依赖的固定版本 WebUI 源码时，还可执行跨上游网关的宿主机测试。**必须使用钉点 commit 的源码**，否则钉点校验会失败；钉点与升钉流程见 [UPSTREAM-RUNTIME.md](UPSTREAM-RUNTIME.md)：
 
 ```bash
-WEBUI_SOURCE=/path/to/minimax-code bash runtime/minimax-bot-host/run-upstream-gateway-smoke.sh
+WEBUI_SOURCE=/path/to/minimax-code@97818b2 bash runtime/minimax-bot-host/run-upstream-gateway-smoke.sh
 ```
 
-此测试会使用该源码自带的 esbuild 将真实网关与本仓库的适配层打包到临时文件；模型和会话执行仍为测试桩，不证明完整 runtime、插件安装或 Android 可用。测试结束删除临时数据。
+非 git 的导出目录（tarball 等）没有 HEAD，必须显式声明 commit：
+
+```bash
+WEBUI_SOURCE_COMMIT=97818b2890b4acae1c6bd1200a226ff506680628 \
+  bash runtime/minimax-bot-host/run-upstream-gateway-smoke.sh
+```
+
+此测试会使用该源码自带的 esbuild 将真实网关与本仓库的适配层打包到临时文件；模型和会话执行仍为测试桩，不证明完整 runtime、插件安装或 Android 可用。测试结束删除临时数据。该脚本还会校验 checkout 的 tree、工作树洁净状态与实际进入 bundle 的每个上游文件的 sha256，被改动过的工作树会被拒绝。
+
+钉点机制自身的测试：
+
+```bash
+cd dsh-go && node --test runtime/minimax-bot-host/upstream-runtime-pin.test.mjs
+```
 
 插件客户端验证：
 
@@ -96,12 +110,46 @@ MCODE_WEBUI_ENTRY=/path/to/minimax-code/dist-webui-npm/bin/mcode-webui.mjs dart 
 
 ## 本轮暂停交接（用户要求保存后结束）
 
-已推送的主要进展包括原生 Bot 会话 UI、Bot 监听端口认证、插件协议客户端与宿主联调，以及自动化检查。当前工作不能视为成品：正式入口依旧是 DSH，MiniMax Code runtime 尚未打包进手机，Bot 与完整模型引擎的生产接入、设置到 provider 的联通、真正的执行隔离、插件界面和真机验收均未完成。继续时先阅读本节和功能清单，优先完成生产启动器与运行时连接，再切换正式入口；不要恢复同 UID 命令执行来绕过隔离问题。
+### 本轮（2026-11-03）做了什么
 
-最后一批设置修改已通过 Bot 目录与联调入口的 Flutter 静态检查、3 项 Bot 界面/状态测试，以及 `BotSettingsPlugin.kt` 针对 Android 35 API 和 Flutter embedding 的独立 Kotlin 编译。Keystore 实际加解密、完整 MainActivity/Android APK 构建和真实模型调用仍未验证。
+本轮工作在分支 `feat/t-runtime`（已快进合入 `dev/integration`）；**远程 `main` 未改动**，未 force push。
 
-当前上游 `dsh_client/pubspec.lock` 与 `dart pub get --enforce-lockfile` 不完全一致，普通 `pub get` 可能修改锁文件；核对依赖变化，避免无关锁文件更新。上述测试使用真实上游 Bot 服务和临时数据目录，未启动模型 runtime，不能替代 Android 真机验证。当前开发环境曾通过 Flutter 自适应布局测试、Kotlin 设备分类单元测试和 vendored Bot 的 Node 测试；没有可用 Android 设备，未完成 fork APK 的完整验证。
+1. **集成分支**：从 `origin/main`（`e32fbd7`）新建 `dev/integration`，依次合并 `docs/arch-baseline`、`feat/settings-skeleton`、`feat/mbot-workspace-guard`。唯一冲突在 `docs/DEVELOPMENT.md`（两边都改了同一条进度条目），已手工合并：保留主干更完整的 Bot 界面条目与 Keystore 条目，其余按 `docs/arch-baseline` 的改写，两边信息都不丢。`feat/mbot-workspace-guard` 与 `feat/settings-skeleton` 合并无冲突。
+2. **T-Runtime 卡**（分支 `feat/t-runtime`，见上文「当前代码和真实进度」最后一条）：把上游 runtime 钉点从散文变成被强制的事实，并经两轮独立评审后加固。
+
+### 实际执行过的验证
+
+```bash
+cd dsh-go
+node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs   # 3 pass
+WEBUI_SOURCE=<97818b2 的 checkout> bash runtime/minimax-bot-host/run-upstream-gateway-smoke.sh         # PASS
+node --test runtime/minimax-bot-host/upstream-runtime-pin.test.mjs                                   # 19 pass
+```
+
+`.github/workflows/bot-host.yml` 的 `upstream-runtime-pin` job 在一个全新 worktree（零 `node_modules`）里按 workflow 逐步本地复现通过；YAML 语法已校验。
+
+第一版钉点机制经对抗性评审**发现真实缺陷并已修复**：当时只校验 checkout 的 HEAD 与文件存在性，工作树被改动（未提交）时检查与 smoke 仍全绿，而实际打进 bundle 的是被改过的代码。现在钉点额外绑定 tree hash、工作树洁净状态与每个进入 bundle 的上游文件 sha256，并从 8 个只测「常量自洽」的用例扩到 19 个含反向用例的测试。
+
+### 未验证 / 不能当作已完成
+
+- **真 GitHub Actions 从未运行过**（不推送即无法触发）。CI 结论均来自本地逐步复现；`actions/checkout` 以 40 位 sha 作 ref 的行为未在真 runner 上实测。
+- **Node 24 未实跑**（本地 22.19.0，上游 engines 允许 `>=22.19 <23`）；**bash 3.2（macOS）未实测**（脚本已避免 bash 4+ 特性）。
+- 钉点只覆盖**宿主契约层**；上游真实 session 端口实现从未被打包执行，smoke 证明的是适配层契约形状，不是上游 runtime 行为。
+- 钉点树**尚未**打包进 APK；`dsh-go/` 内当前仍是 DSH runtime。
+- Android 构建与真机验证本轮**完全未做**，见下方遗留项。
+
+### 下一位的顺序
+
+按 [architecture.md](architecture.md) 任务卡顺序：**T-Sandbox** → **T-Settings** → **T-Providers** → **T-Usage** → **T-Schedule** → **T-Plugins**。每卡一分支、一 PR。T-Runtime 已完成并通过验收。
+
+### 遗留项与注意事项
+
+- **CI 触碰范围的一处判断**（供审阅者复核）：T-Runtime 卡的「触碰」列的是 `dsh-go/runtime/minimax-bot-host/`、上游钉点文档、必要时 vendor/锁文件，但卡的「目标」写明「文档与 **CI/smoke** 钉」，故本轮改了 `.github/workflows/bot-host.yml`（新增 `upstream-runtime-pin` job，并把 `docs/UPSTREAM-RUNTIME.md` 加进触发路径；同时补上 `pull_request` 触发）。若认为这超出卡面，请在 `docs/architecture.md` 的 T-Runtime「触碰」行补上 CI 文件。
+- `README.md`、`docs/architecture.md`、`docs/feature-parity.md` 与本文件正文里仍散落着硬编码的短 sha `97818b2`；**升钉时它们会与新钉点矛盾且当前无人检查**。升钉流程见 [UPSTREAM-RUNTIME.md](UPSTREAM-RUNTIME.md)，其中也列出了本卡的边界。
+- 最后一批设置修改已通过 Bot 目录与联调入口的 Flutter 静态检查、3 项 Bot 界面/状态测试，以及 `BotSettingsPlugin.kt` 针对 Android 35 API 和 Flutter embedding 的独立 Kotlin 编译。Keystore 实际加解密、完整 MainActivity/Android APK 构建和真实模型调用仍未验证。
+- 当前上游 `dsh_client/pubspec.lock` 与 `dart pub get --enforce-lockfile` 不完全一致，普通 `pub get` 可能修改锁文件；核对依赖变化，避免无关锁文件更新。上述测试使用真实上游 Bot 服务和临时数据目录，未启动模型 runtime，不能替代 Android 真机验证。当前开发环境曾通过 Flutter 自适应布局测试、Kotlin 设备分类单元测试和 vendored Bot 的 Node 测试；没有可用 Android 设备，未完成 fork APK 的完整验证。
+- 2026-11-02 的 Android 构建尝试记录仍然有效：Gradle 依赖解析与 Flutter Gradle 插件编译已过，随后 Gradle daemon 意外退出；再试时进入应用 Gradle 配置并自动安装 NDK `28.2.13676358`，随后 `/tmp` 空间不足导致下载失败。**完整 Android 构建仍未通过**；不要把 partial NDK 目录当作已安装工具链，也不要把构建失败归因于已修改的 Kotlin 源码。
 
 使用小而可验证的提交，维护本文件及功能清单，并及时推送私有仓库。不要提交 API Key、令牌、用户数据、构建缓存或临时上游 checkout。
 
-`.github/workflows/bot-host.yml` 在相关源码推送后运行 Bot 适配层和 Dart 协议测试。此 CI 不构建 Android、不启动完整 WebUI runtime；完整上游联调需要按前述命令单独运行。
+`.github/workflows/bot-host.yml` 在相关源码推送后运行 Bot 适配层和 Dart 协议测试，并在钉点相关文件变动时 checkout 钉点 commit 跑上游网关 smoke。此 CI 不构建 Android、不启动完整 WebUI runtime；完整上游联调需要按前述命令单独运行。
