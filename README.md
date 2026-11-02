@@ -1,8 +1,8 @@
 # MiniMax Bot for Android
 
-> **当前开发方向：基于 DSH Go 改造。** `dsh-go/` 是从 [DSH Go](https://github.com/ccch1mneyyy/dsh-Go) 的 `c1c0abb00907efdf48dcb443581686b67597c5a2` 导入的基线源码，保留 AGPL-3.0 许可证及第三方声明。它仍是上游原始应用，并不代表 MiniMax Bot 移植已完成；远控、手机操控和原品牌素材也仍在基线中，正式成品必须移除或替换。`dsh-go/runtime/vendor/minimax-bot/` 是官方 MIT 插件源码快照，尚未接入本机运行时。根目录 Android 应用是早期独立原型，仅供实验，不是目标实现。
+> **当前开发方向：基于 DSH Go 改造。** `dsh-go/` 是从 [DSH Go](https://github.com/ccch1mneyyy/dsh-Go) 的 `c1c0abb00907efdf48dcb443581686b67597c5a2` 导入的基线源码，保留 AGPL-3.0 许可证及第三方声明。它仍是上游原始应用，并不代表 MiniMax Bot 移植已完成；远控、手机操控和原品牌素材也仍在基线中，正式成品必须移除或替换。`dsh-go/runtime/vendor/minimax-bot/` 是官方 MIT Bot 源码快照（上游以 Mini App 形式发布），尚未接入本机运行时。根目录 Android 应用是早期独立原型，仅供实验，不是目标实现。
 
-一个手机本机运行的 Bot / Agent 实验版。以 MiniMax Bot 的长期角色和 DSH Go 的本机运行思路为参考，界面、对话、工具调度和工具执行都在 Android 上运行；**模型推理通过你配置的 OpenAI Chat Completions 兼容 API 完成，需要网络**。不需要远程电脑或自建云环境。
+目标是手机本机运行的多 Bot 应用，不需要远程电脑或自建云环境；模型调用需要网络。开发现状、交接和下一步见 [开发交接文档](docs/DEVELOPMENT.md)。下面的功能、构建方式和验证只描述根目录的早期原型，不代表 DSH Go 改造版已经具备这些能力。
 
 ## 当前功能
 
@@ -38,4 +38,4 @@ java -cp "$JSON_JAR:/tmp/minimax-tests" com.example.minimaxbot.AgentTest
 java -cp "$JSON_JAR:/tmp/minimax-tests" com.example.minimaxbot.AcpClientTest
 ```
 
-调研结论和实际功能差距见 [docs/research.md](docs/research.md)，隔离方案见 [docs/sandbox.md](docs/sandbox.md)。本项目为独立实现，没有复制这些仓库的代码或商标素材。
+调研结论和实际功能差距见 [docs/research.md](docs/research.md)，隔离方案见 [docs/sandbox.md](docs/sandbox.md)。本仓库包含上游 DSH Go 和 MiniMax Bot 源码；来源、许可证和素材限制见相关声明，正式成品须处理上游受限素材。

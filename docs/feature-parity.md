@@ -1,11 +1,11 @@
 # 功能目标和验收
 
-用户目标：Android 本机多 Bot，参照 MiniMax Bot、MiniMax Code、DSH Go 和 mcode-webui/minimax-code。模型调用使用用户在设置中填写的 Key、Base URL 和模型 ID。无需远程电脑或手机操控。
+用户目标：Android 本机多 Bot，参照 MiniMax Bot、MiniMax Code、DSH Go 和 mcode-webui/minimax-code。模型调用使用用户在设置中填写的 Key、Base URL 和模型 ID。无需远程电脑或手机操控；不做传统 Agent 工作台或通用 Mini App 容器。
 
 基线：MiniMax Bot 插件 [`0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8`](https://github.com/MiniMax-AI/MiniMax-Code-MiniApps/tree/0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8/plugins/minimax-ai/minimax-bot)，DSH Go [`c1c0abb00907efdf48dcb443581686b67597c5a2`](https://github.com/ccch1mneyyy/dsh-Go/tree/c1c0abb00907efdf48dcb443581686b67597c5a2)，WebUI [`97818b2`](https://github.com/mcode-webui/minimax-code/tree/97818b2)。所有条目在针对本项目完成实现和验证前保持未完成，不能因上游有功能就视为已接入。
 
 - [ ] 本机安装、校验、启动、停止与升级 MiniMax Code 运行时；处理异常中断和进程清理。
-- [ ] MiniMax Bot 插件及宿主 API：启动、持久化、会话恢复、审批和问答。
+- [ ] 将官方 MiniMax Bot 的业务逻辑作为内置 Bot 服务接入 MiniMax Code 运行时：启动、持久化、会话恢复、审批和问答；不实现通用 Mini App 容器。
 - [ ] 创建、编辑、删除长期 Bot：名字、角色、指令、头像、模型及推理设置；Chief Bot 管理团队。
 - [ ] 一对一对话、消息流、会话历史、附件、图片/音视频/文件卡片和隔离预览。
 - [ ] 群聊、成员管理、@ 提及、回复模式、接力和群组记录。
@@ -14,7 +14,7 @@
 - [ ] Bot 与团队记忆、查看与编辑、上下文预算、修订冲突、日志和隐私处理。
 - [ ] 定时任务创建、查看、修改、删除、单次授权和设备进程中断后的状态处理。
 - [ ] 每 Bot 的使用量、任务列表、筛选、未读、消息操作、表情回应、外观和设置。
-- [ ] 插件市场：浏览、搜索、来源、版本和权限说明；本机安装、更新、启停、卸载、出错恢复，以及与 MiniMax 插件协议的兼容性验证。
+- [ ] 插件市场：浏览、搜索、来源、版本和权限说明；本机安装、更新、启停、卸载、出错恢复，以及与 MiniMax Code 插件协议的兼容性验证；不将 Mini App 作为插件列出或安装。
 - [ ] Key / Base URL 配置、模型切换和失败处理；密钥不应由可执行任意代码的 Agent 直接读取。
 - [ ] 独立执行边界、受控文件和网络、逐次审批、停止与资源限制；PRoot 仅用于兼容，不视作安全隔离。
 - [ ] 仅本机：移除远程连接、手机操控及其权限、第三方品牌和不允许复用的美术素材。

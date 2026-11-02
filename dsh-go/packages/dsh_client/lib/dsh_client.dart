@@ -28,6 +28,7 @@ export 'src/errors.dart';
 export 'src/features_api.dart';
 export 'src/files_api.dart';
 export 'src/media_meta.dart';
+export 'src/minimax_bot_api.dart';
 export 'src/goals_api.dart';
 export 'src/messages_api.dart';
 export 'src/models.dart';
