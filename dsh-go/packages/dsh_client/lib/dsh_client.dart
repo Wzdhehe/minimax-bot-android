@@ -13,6 +13,8 @@
 /// * [ChatTranscript] — optional reducer from events to chat items.
 library;
 
+export 'src/mcode_plugins_api.dart';
+
 export 'src/agents_api.dart';
 export 'src/carrier.dart';
 export 'src/client_inventory_api.dart';

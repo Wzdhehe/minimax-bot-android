@@ -14,6 +14,7 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 - 已对 Android fork 的 manifest 收紧手机操控相关权限，并禁止启动相应通道；设备分类代码使小于 600 dp 的设备固定竖屏，平板遵从系统方向。Android 真机、折叠屏和完整 fork 构建尚未验证。
 - 根目录 `app/` 是早期独立 Java 原型，**不是目标实现**；其应用内 shell 已禁用。不要将其已有能力误认为 fork 已完成的能力。
 - DSH runtime 仍然是当前基线，尚未替换或接入 MiniMax Code/WebUI runtime，故目前不能使用官方插件市场。上游 WebUI 包含 `local-runtime-v2` 的市场、GitHub 插件预览/导入和启停等接口；本项目尚未接入、尚未验证 Android 插件兼容性，不能把 GitHub 下载等同于安全可用。
+- `dsh-go/packages/dsh_client/lib/src/mcode_plugins_api.dart` 已实现 WebUI 插件管理协议客户端：市场、已安装列表、GitHub 预览及固定 commit 导入、安装/卸载/启停。仅连接本机，携带宿主启动凭据，无自动重试。Linux 上已用完整上游 WebUI runtime 验证读取已安装插件；插件变更操作目前只通过协议测试，尚未在 Android 或真实插件上验证。该客户端尚未接入产品 UI。
 - 没有完成真正的隔离执行环境。PRoot 只提供兼容层，不是独立 Android UID 的安全沙箱；不要启用同 UID 任意代码执行作为替代。隔离和密钥设计见 [sandbox.md](sandbox.md)。
 
 ## 上游及授权
@@ -59,6 +60,19 @@ WEBUI_SOURCE=/path/to/minimax-code bash runtime/minimax-bot-host/run-upstream-ga
 ```
 
 此测试会使用该源码自带的 esbuild 将真实网关与本仓库的适配层打包到临时文件；模型和会话执行仍为测试桩，不证明完整 runtime、插件安装或 Android 可用。测试结束删除临时数据。
+
+插件客户端验证：
+
+```bash
+cd dsh-go/packages/dsh_client
+dart analyze lib/src/mcode_plugins_api.dart test/mcode_plugins_api_test.dart test/mcode_plugins_runtime_test.dart
+dart test test/mcode_plugins_api_test.dart
+MCODE_WEBUI_ENTRY=/path/to/minimax-code/dist-webui-npm/bin/mcode-webui.mjs dart test test/mcode_plugins_runtime_test.dart
+```
+
+最后一项会启动完整上游 WebUI runtime，使用临时数据目录验证已安装插件查询并清理进程；需先根据上游说明构建 WebUI，Node 原生依赖须可用。此处的上游预览启动器使用开发认证模式，仅用于宿主机测试；Android 正式启动器须配置启动凭据并关闭开发模式。
+
+2026-11-02 尝试完整 Android fork 调试构建：Flutter 依赖解析通过，Gradle 下载直连失败后改用本地 Gradle 9.3.1；随后因 `org.gradle.kotlin.kotlin-dsl:6.4.2` 无法从 Gradle Plugin Portal 解析而失败。尚未进入 Android 源码编译，未产出 fork APK。需要修复环境的 Maven/Gradle 下载及证书/代理配置后重试；不能将此构建失败归因于已修改的 Kotlin 源码，也不能声称源码编译已通过。
 
 当前上游 `dsh_client/pubspec.lock` 与 `dart pub get --enforce-lockfile` 不完全一致，普通 `pub get` 可能修改锁文件；核对依赖变化，避免无关锁文件更新。上述测试使用真实上游 Bot 服务和临时数据目录，未启动模型 runtime，不能替代 Android 真机验证。当前开发环境曾通过 Flutter 自适应布局测试、Kotlin 设备分类单元测试和 vendored Bot 的 Node 测试；没有可用 Android 设备，未完成 fork APK 的完整验证。
 
