@@ -12,6 +12,7 @@ for line in sys.stdin:
     if method == 'initialize': result(message, {'protocolVersion': 1, 'agentInfo': {'name': 'fake'}})
     elif method == 'session/new': result(message, {'sessionId': 'test-session'})
     elif method == 'session/load': result(message, {})
+    elif method == 'session/set_config_option': result(message, {'configOptions':[{'id':'permissionMode','currentValue':'default'}]})
     elif method == 'session/prompt':
         emit({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':'test-session','update':{'sessionUpdate':'agent_message_chunk','content':{'type':'text','text':'hello'}}}})
         emit({'jsonrpc':'2.0','id':777,'method':'session/request_permission','params':{'sessionId':'test-session','toolCall':{'title':'write file'},'options':[{'optionId':'yes','kind':'allow_once'},{'optionId':'no','kind':'reject_once'}]}})

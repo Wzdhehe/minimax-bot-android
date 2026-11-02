@@ -153,7 +153,7 @@ public final class MainActivity extends Activity {
         CountDownLatch latch = new CountDownLatch(1); AtomicBoolean approved = new AtomicBoolean(false);
         runOnUiThread(() -> {
             if(isFinishing() || isDestroyed()) { latch.countDown(); return; }
-            AlertDialog d=new AlertDialog.Builder(this).setTitle("允许"+action+"？").setMessage((action.equals("运行本机命令") ? "命令拥有本应用的文件和网络权限，可能启动继续运行的子进程。\n\n" : "")+content).setNegativeButton("拒绝",(x,w)->latch.countDown()).setPositiveButton("允许",(x,w)-> { approved.set(true); latch.countDown(); }).setOnCancelListener(x->latch.countDown()).create(); d.show();
+            AlertDialog d=new AlertDialog.Builder(this).setTitle("允许"+action+"？").setMessage(content).setNegativeButton("拒绝",(x,w)->latch.countDown()).setPositiveButton("允许",(x,w)-> { approved.set(true); latch.countDown(); }).setOnCancelListener(x->latch.countDown()).create(); d.show();
         });
         return latch.await(2,TimeUnit.MINUTES) && approved.get();
     }

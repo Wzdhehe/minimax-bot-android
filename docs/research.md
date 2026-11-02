@@ -13,14 +13,14 @@
 - [MiniMax Code](https://github.com/MiniMax-AI/minimax-code)：官方开源终端 coding agent，支持 TUI、无头 `mcode exec`、ACP 和 TypeScript SDK，提供文件、命令、插件等能力。仓库指出开源覆盖 CLI 而不含桌面应用源码；第一方代码默认 MIT，细节需查各文件及第三方声明。它依赖 Node.js 和相关原生工具，不能假定普通 Linux 构建可直接在 Android 上运行。
 - [DSH Go](https://github.com/ccch1mneyyy/dsh-Go)：DeepSeek Harness 的第三方 Android 客户端，本机模式将 Ubuntu rootfs、Node.js 和 DSH 封装到手机，默认使用 PRoot，模型 API 仍由用户配置；也有远控模式，但本项目不采用。项目代码主要为 AGPL-3.0，`sdk/` 和 `examples/` 为 MIT，名称及素材另有限制。查看的提交：`c1c0abb00907efdf48dcb443581686b67597c5a2`。其打包脚本会固定并校验运行时构件，值得参考；如直接移植代码必须遵守各组件许可证。
 - [Deepseek-Harness-Local-Android](https://github.com/Soodok/Deepseek-Harness-Local-Android)：另一种将 DSH 和 Node 打包进 Android 的方式，可以对照研究 Bionic 运行时、设备架构、安装包大小和工具链兼容性。
-- [mcode-webui/minimax-code](https://github.com/mcode-webui/minimax-code)：候选 WebUI 仓库（当前账号有管理权限，且曾向其提交 WebUI PR），调研快照 `97818b2`。它直接在 Node 进程中承载 `@mavis/local-runtime-v2`，通过仅限本机的 WebSocket 和有界消息协议供界面使用，并在冷启动时将未完成任务标记为中断。源码在同一仓库，WebUI 是 MIT；原生依赖和第三方组件需分别核对。它不等同于已经完成 Android 移植。
-- [mcode-webui/minimax-code-web](https://github.com/mcode-webui/minimax-code-web)：另一份相关 WebUI 代码，默认使用 ACP 本地子进程，说明两种客户端均可接入相同引擎。此前曾误认为这是用户所指仓库，实际身份待用户确认。
+- [mcode-webui/minimax-code](https://github.com/mcode-webui/minimax-code)：用户确认的 WebUI 仓库（当前账号曾向其提交 WebUI PR），调研快照 `97818b2`。它直接在 Node 进程中承载 `@mavis/local-runtime-v2`，通过仅限本机的 WebSocket 和有界消息协议供界面使用，并在冷启动时将未完成任务标记为中断。源码在同一仓库，WebUI 是 MIT；原生依赖和第三方组件需分别核对。已在 Linux 上完成构建并用隔离测试数据启动，本机首页返回 HTTP 200；这不能证明其 Android 移植可行。
+- [mcode-webui/minimax-code-web](https://github.com/mcode-webui/minimax-code-web)：另一份相关 WebUI 代码，默认使用 ACP 本地子进程，说明两种客户端均可接入相同引擎。它不是用户所指的仓库。
 
 ## 本项目目前的决策和差距
 
-首版采用 Android 原生 UI 和独立的轻量本机工具循环，直接连接用户配置的兼容 API；它是可验证的 Agent 原型，**不是**将 MiniMax Code 或 DSH Go 完整移植。工作区文件读写与 shell 是两种不同权限边界，后者运行在应用权限下且必须逐次确认。密钥通过 Android Keystore 加密，消息与工作区当前没有额外应用层加密。
+首版采用 Android 原生 UI 和独立的轻量本机工具循环，直接连接用户配置的兼容 API；它是可验证的 Agent 原型，**不是**将 MiniMax Code 或 DSH Go 完整移植。工作区文件读写由应用进行路径限制。与应用共用 UID 的 shell 不构成独立沙箱，命令工具已关闭，待独立隔离和受控工具通道完成后再启用。密钥通过 Android Keystore 加密，消息与工作区当前没有额外应用层加密。
 
-对照 WebUI 后，本项目将直接嵌入运行时作为优先评估方向；本地 ACP 适配器仅为备选实验，尚未接入 App。官方 mcode 自定义 Provider 设置会将密钥明文保存到配置文件，必须解决其与手机 Keystore 存储的衔接，不能假设仅设置环境变量就能避免落盘。
+对照 WebUI 后，本项目只做本机多 Bot，不做手机界面操控；将直接嵌入运行时作为优先评估方向；本地 ACP 适配器仅为备选实验，尚未接入 App。官方 mcode 在隔离环境的实测会话中报告了 `auto` 权限模式；若将 ACP 用于实际任务，必须主动设置并确认交互审批模式，不能假定默认会询问。官方 mcode 自定义 Provider 设置会将密钥明文保存到配置文件，必须解决其与手机 Keystore 存储的衔接，不能假设仅设置环境变量就能避免落盘。
 
 要接近 DSH Go 底层体验，应先选择并固定 Android ARM64 可执行环境，评估 MiniMax Code 的 Node 原生依赖与工具包是否能在 PRoot/Android 下正常工作；实现有界安装与完整性校验、CLI 进程生命周期、Agent 会话流和审批桥接，再接入 Bot、记忆、群聊和互派任务。进程恢复、Android 后台限制、可访问文件范围、网络、资源占用、许可证与真机兼容性需要单独验证。
 

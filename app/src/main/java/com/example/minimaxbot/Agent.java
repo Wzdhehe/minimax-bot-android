@@ -9,7 +9,6 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URI;
-import java.util.concurrent.TimeUnit;
 import java.nio.charset.StandardCharsets;
 import javax.net.ssl.HttpsURLConnection;
 
@@ -36,8 +35,7 @@ final class Agent {
         return new JSONArray()
                 .put(tool("list_files", "List files in a local workspace directory", path, new JSONArray().put("path")))
                 .put(tool("read_file", "Read a UTF-8 file in the local workspace", path, new JSONArray().put("path")))
-                .put(tool("write_file", "Create or replace a UTF-8 file after user approval", write, new JSONArray().put("path").put("content")))
-                .put(tool("run_command", "Run a command on this Android device after user approval, in the app sandbox, starting in the workspace", new JSONObject().put("command", field("Command to execute with Android sh")), new JSONArray().put("command")));
+                .put(tool("write_file", "Create or replace a UTF-8 file after user approval", write, new JSONArray().put("path").put("content")));
     }
     private File safePath(String path) throws Exception {
         File base = root.getCanonicalFile();
@@ -53,28 +51,7 @@ final class Agent {
         }
     }
     private String execute(String name, JSONObject args) throws Exception {
-        if (name.equals("run_command")) {
-            String command = args.getString("command");
-            if (command.trim().isEmpty() || command.length() > 10000) throw new Exception("Invalid command");
-            if (!approval.approve("运行本机命令", command)) return "User declined the command.";
-            Process process = new ProcessBuilder("/system/bin/sh", "-c", command).directory(root).redirectErrorStream(true).start();
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            Thread reader = new Thread(() -> {
-                try (InputStream input = process.getInputStream()) {
-                    byte[] buffer = new byte[4096]; int count;
-                    while ((count = input.read(buffer)) != -1) {
-                        synchronized (output) { int keep = Math.min(count, Math.max(0, 50000 - output.size())); output.write(buffer, 0, keep); }
-                    }
-                } catch (Exception ignored) { }
-            }, "command-output");
-            reader.start();
-            boolean finished = process.waitFor(30, TimeUnit.SECONDS);
-            if (!finished) process.destroyForcibly();
-            reader.join(2000);
-            synchronized (output) {
-                return "Exit: " + (finished ? Integer.toString(process.exitValue()) : "timed out after 30 seconds") + "\n" + new String(output.toByteArray(), StandardCharsets.UTF_8) + (output.size() >= 50000 ? "\n[output truncated]" : "");
-            }
-        }
+        if (!name.equals("list_files") && !name.equals("read_file") && !name.equals("write_file")) throw new Exception("Unknown tool");
         File file = safePath(args.getString("path"));
         if (name.equals("list_files")) {
             File[] children = file.listFiles();
@@ -100,7 +77,7 @@ final class Agent {
     String run(String baseUrl, String key, String model, String prompt, JSONArray history) throws Exception {
         if (!root.exists() && !root.mkdirs()) throw new Exception("Cannot create workspace");
         JSONArray messages = new JSONArray();
-        messages.put(message("system", prompt + "\n你可以使用本机工作区工具。只能访问这个应用的私有工作区；写入文件和执行命令需要用户批准。命令在 Android 应用权限内运行，工作目录是私有工作区。不要声称你有未提供的工具。"));
+        messages.put(message("system", prompt + "\n你可以使用本机工作区工具。只能访问这个应用的私有工作区；写入文件需要用户批准；命令执行当前不可用。不要声称你有未提供的工具。"));
         for (int i = 0; i < history.length(); i++) messages.put(history.getJSONObject(i));
         for (int turn = 0; turn < 8; turn++) {
             JSONObject body = new JSONObject().put("model", model).put("messages", messages).put("tools", tools()).put("stream", false);

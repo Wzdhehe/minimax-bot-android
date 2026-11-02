@@ -41,7 +41,7 @@ public final class AgentTest {
         scenario(root,"write_file",new JSONObject().put("path","denied.txt").put("content","no"),false,"declined");
         check(!Files.exists(root.resolve("denied.txt")),"denied write happened");
         scenario(root,"read_file",new JSONObject().put("path","../outside"),true,"outside workspace");
-        scenario(root,"run_command",new JSONObject().put("command","echo test"),false,"declined");
+        scenario(root,"run_command",new JSONObject().put("command","echo test"),false,"Unknown tool");
         System.out.println("Agent tests passed");
     }
 }

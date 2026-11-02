@@ -53,10 +53,22 @@ final class AcpClient implements Closeable {
         return request("initialize", new JSONObject().put("protocolVersion", 1).put("clientCapabilities", new JSONObject()), 30);
     }
     String createSession(String cwd) throws Exception {
-        return request("session/new", new JSONObject().put("cwd", cwd).put("mcpServers", new JSONArray()), 60).getString("sessionId");
+        String id = request("session/new", new JSONObject().put("cwd", cwd).put("mcpServers", new JSONArray()), 60).getString("sessionId");
+        requireAskMode(id);
+        return id;
     }
     void loadSession(String id, String cwd) throws Exception {
         request("session/load", new JSONObject().put("sessionId", id).put("cwd", cwd).put("mcpServers", new JSONArray()), 60);
+        requireAskMode(id);
+    }
+    private void requireAskMode(String id) throws Exception {
+        JSONObject response = request("session/set_config_option", new JSONObject().put("sessionId", id).put("configId", "permissionMode").put("value", "default"), 30);
+        JSONArray options = response.optJSONArray("configOptions");
+        if (options != null) for (int i = 0; i < options.length(); i++) {
+            JSONObject option = options.optJSONObject(i);
+            if (option != null && "permissionMode".equals(option.optString("id")) && "default".equals(option.optString("currentValue"))) return;
+        }
+        throw new IllegalStateException("ACP did not confirm interactive permission mode");
     }
     JSONObject prompt(String id, String text) throws Exception {
         JSONArray prompt = new JSONArray().put(new JSONObject().put("type", "text").put("text", text));
