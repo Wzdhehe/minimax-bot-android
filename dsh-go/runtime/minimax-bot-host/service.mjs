@@ -1,11 +1,13 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { start } from '../vendor/minimax-bot/miniapp/node/server.mjs';
+import { createHostWorkspace } from './workspace.mjs';
 
 /** The descriptor belongs on a private Android host channel. This authenticates
  * HTTP requests; it does not isolate Agent code or provide model credentials. */
-export async function startBotService({ port, dataDir, agent, signal, logger }) {
+export async function startBotService({ port, dataDir, filesDir, agent, signal, logger }) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError('A local port is required');
+  const workspace = await createHostWorkspace(filesDir);
   const token = randomBytes(32).toString('hex');
   const credential = Buffer.from(`Bearer ${token}`);
   const host = `127.0.0.1:${port}`;
@@ -13,6 +15,7 @@ export async function startBotService({ port, dataDir, agent, signal, logger }) 
     pluginRoot: fileURLToPath(new URL('../vendor/minimax-bot/', import.meta.url)),
     dataDir, agent, signal, logger, listen: { host: '127.0.0.1', port },
   }, {
+    resolveMediaPath: (path) => workspace.resolve(path),
     authorizeRequest(request) {
       if (request.headers.origin !== undefined || request.headers.host !== host) return false;
       const supplied = request.headers.authorization;
@@ -22,6 +25,7 @@ export async function startBotService({ port, dataDir, agent, signal, logger }) 
     },
   });
   return {
+    workspace,
     descriptor: Object.freeze({ baseUrl: `http://${host}`, headers: Object.freeze({ Authorization: `Bearer ${token}` }) }),
     dispose: lifecycle.dispose,
   };

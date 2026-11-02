@@ -6,6 +6,7 @@ on:
       - 'dsh-go/packages/dsh_client/**'
       - 'dsh-go/runtime/minimax-bot-host/**'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
+      - 'packages/mbot-workspace-guard/**'
       - 'docs/UPSTREAM-RUNTIME.md'
       - '.github/workflows/bot-host.yml'
   pull_request:
@@ -13,6 +14,7 @@ on:
       - 'dsh-go/packages/dsh_client/**'
       - 'dsh-go/runtime/minimax-bot-host/**'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
+      - 'packages/mbot-workspace-guard/**'
       - 'docs/UPSTREAM-RUNTIME.md'
       - '.github/workflows/bot-host.yml'
   workflow_dispatch:
@@ -34,7 +36,10 @@ jobs:
           sdk: stable
       - name: Test Bot runtime adapter
         working-directory: dsh-go
-        run: node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs
+        run: node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs runtime/minimax-bot-host/workspace.test.mjs
+      - name: Test workspace boundary
+        working-directory: packages/mbot-workspace-guard
+        run: npm test
       - name: Resolve client test dependencies
         working-directory: dsh-go/packages/dsh_client
         run: dart pub get

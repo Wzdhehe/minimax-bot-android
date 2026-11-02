@@ -110,7 +110,7 @@ function chatReferences(messages, src) {
 
 /**
  * @param {MiniAppContext} context
- * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean }} [hostOptions]
+ * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean, resolveMediaPath?: (path: string) => Promise<string> }} [hostOptions]
  * @returns {Promise<MiniAppLifecycle>}
  */
 export async function start(context, hostOptions = {}) {
@@ -313,6 +313,7 @@ export async function start(context, hostOptions = {}) {
   /**
    * A local file a Bot delivered in a chat (`<media src>` / `![](path)`). Serves only an absolute
    * path that a Bot message of that chat contains, so the page cannot read arbitrary files.
+   * An Android host resolver replaces this with workspace-relative paths only.
    * @param {import('node:http').IncomingMessage} request
    * @param {import('node:http').ServerResponse} response
    * @param {URL} url
@@ -323,11 +324,11 @@ export async function start(context, hostOptions = {}) {
     const notFound = () => json(response, 404, { error: 'not_found', message: t('err.fileNotFound') });
     if (!/^(?:bot|group):[a-zA-Z0-9_]+$/.test(chatId) || !src || src.length > 4096) return notFound();
     const expanded = src.startsWith('~/') ? join(homedir(), src.slice(2)) : src;
-    if (!isAbsolute(expanded) || !chatReferences(await store.getMessages(chatId), src)) return notFound();
+    if ((!hostOptions.resolveMediaPath && !isAbsolute(expanded)) || !chatReferences(await store.getMessages(chatId), src)) return notFound();
     let file;
     let info;
     try {
-      file = await realpath(expanded);
+      file = hostOptions.resolveMediaPath ? await hostOptions.resolveMediaPath(src) : await realpath(expanded);
       info = await stat(file);
     } catch {
       return notFound();

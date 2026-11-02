@@ -15,9 +15,6 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Composer voice input (voice/VoicePlugin.kt), asked for on the first tap of the mic. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- TODO(targetSdk >= 30): package visibility hides recognition services from
-         SpeechRecognizer.isRecognitionAvailable unless declared; add to <queries>:
-         <intent><action android:name="android.speech.RecognitionService" /></intent> -->
     <!-- This Bot-only variant does not request device-control or broad storage permissions,
          including any introduced by a transitive Android library. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" tools:node="remove" />
@@ -38,10 +35,11 @@
     <uses-permission android:name="android.permission.BLUETOOTH" tools:node="remove" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" tools:node="remove" />
 
-    <!-- The rootfs contains plaintext credentials; exclude it from Android backup.
-         TODO(targetSdk >= 31): also configure dataExtractionRules. -->
+    <!-- Exclude credentials from both cloud backup and device transfer. -->
     <application
         android:allowBackup="false"
+        android:fullBackupContent="@xml/bot_backup_rules"
+        android:dataExtractionRules="@xml/bot_data_extraction_rules"
         android:label="DSH Go"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
@@ -261,6 +259,9 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

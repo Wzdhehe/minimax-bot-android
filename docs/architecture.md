@@ -131,9 +131,11 @@ flowchart TB
 - **触碰**：
   - `packages/mbot-workspace-guard/`（`src/index.js`；`npm test` = `node --test`）
   - `dsh-go/runtime/minimax-bot-host/`（强制调用点）
+  - 必要的上游 Bot 媒体路径 hook（`vendor/minimax-bot/miniapp/node/server.mjs`）与修改记录；守卫必须在实际媒体读取前执行。
   - `dsh-go/app/android/app/src/main/res/xml/dsh_file_paths.xml`：**删除** `<external-path name="storage" path="." />`
   - `dsh-go/app/android/app/build.gradle.kts`：`targetSdk` 现为 **28** → 升到**当前 Play 要求版本**（根 `app/build.gradle` 现为 35，可作参考；升后去掉/调整 `ExpiredTargetSdkVersion` lint 豁免）
   - `dsh-go/app/android/app/src/main/AndroidManifest.xml`：`targetSdk≥31` 时配置 `dataExtractionRules`（及 `fullBackupContent`），排除 `minimax_bot_provider` SharedPreferences 的云备份与设备迁移
+  - 对应的 Android XML/宿主回归测试、仪器测试与 CI 入口；不扩大到执行器或运行时安装链。
 - **接口**：`resolveWorkspacePath(root, userPath)`；拒空/`\0`/绝对/`..`/symlink 逃逸/前缀混淆/`/sdcard`/他 App 目录。根：`context.getFilesDir()/workspace`。
 - **依赖**：守卫模块已在 `feat/mbot-workspace-guard`（`da717eb`，8/8）；本卡负责接入与 Android 侧收紧。
 - **验收**：
@@ -142,6 +144,8 @@ flowchart TB
   cd dsh-go && node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs
   ```
   通过：守卫测试全绿；宿主强制调用可测；`dsh_file_paths.xml` 无 `external-path` storage；`targetSdk` 已升；读 `/sdcard` 失败（真机或仪器测试）；`dataExtractionRules`/`fullBackupContent` 排除 `minimax_bot_provider`；无同 UID shell。
+
+  当前实现与验证边界见 [T-Sandbox handoff](handoff/T-Sandbox.md)：宿主和源码策略检查已通过，Android 仪器验收未运行；在完成该项前不将整张卡标为验收通过。targetSdk 升至 36，依据 Google Play 2026-08-31 起的新应用/更新要求；旧 DSH rootfs 的 target 28 执行豁免不再保留。
 
 ### T-Schedule — 定时任务 + 通知（进程存活档）
 

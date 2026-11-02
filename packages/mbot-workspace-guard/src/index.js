@@ -68,6 +68,15 @@ async function realpathExistingPrefix(absolutePath) {
     } catch (err) {
       const code = /** @type {NodeJS.ErrnoException} */ (err).code;
       if (code !== 'ENOENT' && code !== 'ENOTDIR') throw err;
+      // A dangling link is not a missing path component. Rejoining it would
+      // validate a lexical path whose later open/mkdir follows an outside link.
+      const entry = await lstat(cursor).catch((error) => {
+        if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return undefined;
+        throw error;
+      });
+      if (entry?.isSymbolicLink()) {
+        throw new WorkspacePathError('Cannot resolve symbolic link', { code: 'UNRESOLVABLE' });
+      }
       const parent = dirname(cursor);
       if (parent === cursor) {
         throw new WorkspacePathError(`Cannot resolve path: ${absolutePath}`, {
@@ -145,6 +154,17 @@ export async function assertWithinWorkspace(inputPath, rootReal) {
 export async function resolveWithinWorkspace(inputPath, workspaceRoot) {
   const rootReal = await realpath(workspaceRoot);
   return assertWithinWorkspace(inputPath, rootReal);
+}
+
+/** Strict Agent-facing API. Internal canonical paths must not be submitted as
+ * user paths. This is a path fence, not a TOCTOU-proof filesystem sandbox. */
+export async function resolveWorkspacePath(root, userPath) {
+  if (typeof userPath !== 'string' || userPath.trim().length === 0 ||
+      userPath.includes('\0') || isAbsolute(userPath) || userPath.includes('\\') ||
+      /^[a-zA-Z]:/.test(userPath) || userPath.split('/').includes('..')) {
+    throw new WorkspacePathError('Expected a workspace-relative path without traversal', { code: 'INVALID' });
+  }
+  return resolveWithinWorkspace(userPath, root);
 }
 
 /**
@@ -230,4 +250,5 @@ export default {
   assertWithinWorkspace,
   resolveWithinWorkspace,
   createWorkspaceGuard,
+  resolveWorkspacePath,
 };

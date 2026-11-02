@@ -10,5 +10,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 -m unittest app/test_scope/test_bot_manifest.py
+      - run: python3 -m unittest discover -s app/test_scope -v
         working-directory: dsh-go

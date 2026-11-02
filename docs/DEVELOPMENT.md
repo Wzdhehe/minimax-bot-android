@@ -15,6 +15,8 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 
 ## 当前代码和真实进度
 
+- **T-Sandbox 本轮进展**：在 `feat/t-sandbox`（自 `dev/integration@891aefa`）接入严格工作区守卫到宿主文件接口和真实媒体读取；修复悬空 symlink 漏洞；删除宽外部 FileProvider 映射、升 targetSdk 到 36、配置 Key prefs 的云备份/迁移排除。守卫 10 项、宿主 5 项、钉点 19 项、Android 源码策略 4 项在 Node 24 环境通过；**Android 构建与 `/sdcard` 仪器用例未运行，整张卡尚未完整验收**。详见 [本轮交接](handoff/T-Sandbox.md)。未改动远程 `main`，未创建 PR。
+
 - `dsh-go/` 是产品外壳（AGPL-3.0）；现有界面和引擎仍是上游 DSH Go，核心尚未替换。远控、品牌及受限素材仍在其中，成品发布前须移除。下文 `dsh-go/` 内的宿主/UI/客户端进展可直接沿用。
 - `dsh-go/runtime/vendor/minimax-bot/` 固定官方 Bot 业务源码，MIT 许可。`dsh-go/packages/dsh_client/lib/src/minimax_bot_api.dart` 是对该服务的本机 HTTP 客户端（**不是**根下产品 `packages/`），测试通过官方服务进行 Bot、群组、历史及事件的接口验证；这不意味着已完成 Android UI、模型引擎或插件市场集成。客户端只接受 loopback IP。
 - `dsh-go/runtime/minimax-bot-host/service.mjs` 已实现本机 Bot 服务启动封装：每次启动随机生成 256 bit 凭据，所有路由（含 SSE、静态资源和 MCP）在真实监听端口上认证，拒绝浏览器 Origin 和不匹配 Host，重启后旧凭据失效。Node 服务测试已通过。为此对上游 server.mjs 增加了可选宿主认证参数，修改记录见 vendor/UPSTREAM.md。正式 Android 宿主仍需通过私有通道传递 descriptor，且 Agent 执行隔离尚未解决。
@@ -141,6 +143,8 @@ node --test runtime/minimax-bot-host/upstream-runtime-pin.test.mjs              
 ### 下一位的顺序
 
 按 [architecture.md](architecture.md) 任务卡顺序：**T-Sandbox** → **T-Settings** → **T-Providers** → **T-Usage** → **T-Schedule** → **T-Plugins**。每卡一分支、一 PR。T-Runtime 已完成并通过验收。
+
+更新：T-Sandbox 的宿主实现与 Android 源码收紧已在本轮分支落地，优先补设备验收，具体以 [T-Sandbox handoff](handoff/T-Sandbox.md) 为准；不要把旧 handoff 中尚未实现的状态当作当前源码，也不要把宿主测试当作 Android 沙箱验收。
 
 ### 遗留项与注意事项
 

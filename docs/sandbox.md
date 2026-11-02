@@ -4,6 +4,8 @@
 
 ## 现状
 
+T-Sandbox 已实现工作区路径与宿主媒体读取的强制检查，收紧 FileProvider、targetSdk 和备份规则；验证范围及尚未运行的 Android 仪器用例见 [T-Sandbox handoff](handoff/T-Sandbox.md)。这部分是路径防护，不能等同于以下拟议的独立 UID + broker 执行隔离。
+
 当前 App 是原型：模型交互与文件工具在主应用进程中，文件工具仅允许访问应用私有工作区并要求确认写入；没有实现独立 Agent 沙箱。此前同 UID 的 shell 工具已关闭。Key 在 Android Keystore 保护下存储，但在主应用与引擎没有系统级隔离时，不能把加密存储描述成对同 UID 恶意代码的隔离。
 
 ## DSH Go 的实现

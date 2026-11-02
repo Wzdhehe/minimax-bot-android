@@ -39,9 +39,10 @@ android {
         applicationId = "io.github.ccch1mneyyy.dsh_app"
         // java.nio.file (symlinks while unpacking the rootfs) needs API 26.
         minSdk = 26
-        // Target 28 like Termux, so the API 29+ exec restriction on app-private
-        // files does not apply to binaries inside the rootfs.
-        targetSdk = 28
+        // Bot-only fork: comply with the current Play target API requirement.
+        // Do not bypass Android's exec restrictions with the legacy DSH target.
+        targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = flutter.versionCode.takeIf { it > 1 } ?: buildMinuteVersionCode()
         versionName = flutter.versionName
     }
@@ -77,11 +78,6 @@ android {
             // Keep the Termux binaries byte-identical to runtime/out (their hashes are in the manifest).
             keepDebugSymbols += listOf("**/libproot.so", "**/libproot-loader.so", "**/libtalloc.so", "**/libandroid-shmem.so")
         }
-    }
-
-    lint {
-        // targetSdk 28 is deliberate (see docs/architecture.md); not a Play build.
-        disable += "ExpiredTargetSdkVersion"
     }
 
     androidResources {
@@ -127,6 +123,8 @@ flutter {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 
     // .tar.xz support for the rootfs bundle.
     implementation("org.tukaani:xz:1.10")

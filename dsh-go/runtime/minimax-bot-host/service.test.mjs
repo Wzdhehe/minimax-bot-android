@@ -12,7 +12,7 @@ test('authenticates the actual Bot listener and rotates credentials on restart',
   await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', resolve); });
   const port = probe.address().port;
   await new Promise((resolve, reject) => probe.close((error) => error ? reject(error) : resolve()));
-  const options = { port, dataDir, signal: new AbortController().signal, logger: { info() {}, warn() {}, error() {} } };
+  const options = { port, dataDir, filesDir: dataDir, signal: new AbortController().signal, logger: { info() {}, warn() {}, error() {} } };
   let service = await startBotService(options);
   t.after(async () => { await service.dispose(); await rm(dataDir, { recursive: true, force: true }); });
   const { baseUrl, headers } = service.descriptor;
