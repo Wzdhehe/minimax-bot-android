@@ -27,6 +27,15 @@ python3 -m unittest discover -s app/test_scope -v
 # 4 pass：仅源码策略，非合并后的 manifest 或设备行为
 ```
 
+## 真实 GitHub Actions
+
+提交 `4286799` 推送后，已通过 GitHub API 实查：
+
+- [Bot host and protocol checks](https://github.com/Wzdhehe/minimax-bot-android/actions/runs/41548601872)：`completed / success`，包括 Node 24 守卫/宿主测试、Dart 客户端检查，以及固定上游 checkout 的钉点校验和真实网关 smoke。
+- [Bot fork scope checks](https://github.com/Wzdhehe/minimax-bot-android/actions/runs/41548601901)：`completed / success`，包括四项 Android 源码策略检查。
+
+这补上了旧 handoff 中「没有观察过真实 runner」的验证空白，但依然不是 Android 构建或设备验证。
+
 ## 尚未验证 / 卡片未完整验收
 
 当前环境没有 Android SDK、adb 或连接设备，未进行完整 Android 构建、安装、备份迁移或仪器测试。此前 Gradle/NDK 阻塞记录仍保留，不能宣称已经修复。已提供仪器用例 `ExternalStorageBoundaryTest`：shell 在 `/sdcard/Download` 写入受控的非媒体哨兵文件，App 在无 SAF 授权时读取必须失败，并清理哨兵。需要 Android 11+ 真机/模拟器，命令：
