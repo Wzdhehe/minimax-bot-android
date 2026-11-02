@@ -16,5 +16,14 @@
   "mobileBotSend": "发送",
   "mobileBotStop": "停止回复",
   "mobileBotEmpty": "创建你的第一个 Bot",
-  "mobileBotMembers": "选择群成员"
+  "mobileBotMembers": "选择群成员",
+  "mobileBotSettings": "设置",
+  "mobileBotModel": "模型 ID",
+  "mobileBotSave": "保存",
+  "mobileBotKeySaved": "已保存 Key；留空保留现有 Key",
+  "mobileBotKeyMissing": "请输入你的 MiniMax Key",
+  "mobileBotKeyDelete": "删除已保存的 Key",
+  "mobileBotSettingsInvalid": "请填写 HTTPS Base URL 和模型 ID。",
+  "mobileBotSettingsSaved": "设置已保存",
+  "mobileBotSettingsFailed": "无法读取或保存加密设置，请重试。"
 }

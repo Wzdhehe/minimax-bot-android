@@ -17,6 +17,7 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 - DSH runtime 仍然是当前基线，尚未替换或接入 MiniMax Code/WebUI runtime，故目前不能使用官方插件市场。上游 WebUI 包含 `local-runtime-v2` 的市场、GitHub 插件预览/导入和启停等接口；本项目尚未接入、尚未验证 Android 插件兼容性，不能把 GitHub 下载等同于安全可用。
 - `dsh-go/packages/dsh_client/lib/src/mcode_plugins_api.dart` 已实现 WebUI 插件管理协议客户端：市场、已安装列表、GitHub 预览及固定 commit 导入、安装/卸载/启停。仅连接本机，携带宿主启动凭据，无自动重试。Linux 上已用完整上游 WebUI runtime 验证读取已安装插件；插件变更操作目前只通过协议测试，尚未在 Android 或真实插件上验证。该客户端尚未接入产品 UI。
 - `dsh-go/app/lib/bot/` 已增加 Bot 原生会话界面和状态控制器：创建 Bot/群聊、历史、发送、停止、搜索、事件刷新、390 dp 单列和 1024 dp 双栏布局。3 项 Flutter 测试通过，包含切换会话时旧历史不得覆盖新会话及不重复发送。尚未接入正式 Android 启动器；联调入口为 `lib/dev/minimax_bot_main.dart`，仅用于连接已有本机 Bot 服务；它不是新增的独立应用，也不是已完成的引擎移植。正式默认入口暂时仍为 DSH 基线。
+- Bot 列表的设置入口已增加 Base URL、模型 ID、Key 输入和删除 Key。`BotSettingsPlugin.kt` 在 Android 宿主中用 Keystore AES-GCM 加密 Key，Dart 读取设置时只得到 `hasKey`，不会得到保存的 Key。此设置尚未接入实际 MiniMax Code provider 或原生模型请求 broker；不能声称填写后即可进行模型对话。加解密需要 Android 真机验证，独立 Kotlin 编译与 Dart 检查不能替代它。
 - 没有完成真正的隔离执行环境。PRoot 只提供兼容层，不是独立 Android UID 的安全沙箱；不要启用同 UID 任意代码执行作为替代。隔离和密钥设计见 [sandbox.md](sandbox.md)。
 
 ## 上游及授权
@@ -77,6 +78,14 @@ MCODE_WEBUI_ENTRY=/path/to/minimax-code/dist-webui-npm/bin/mcode-webui.mjs dart 
 2026-11-02 尝试完整 Android fork 调试构建：Flutter 依赖解析通过，Gradle 下载直连失败后改用本地 Gradle 9.3.1；随后因 `org.gradle.kotlin.kotlin-dsl:6.4.2` 无法从 Gradle Plugin Portal 解析而失败。尚未进入 Android 源码编译，未产出 fork APK。需要修复环境的 Maven/Gradle 下载及证书/代理配置后重试；不能将此构建失败归因于已修改的 Kotlin 源码，也不能声称源码编译已通过。
 
 后续构建加入宿主机 Gradle init 镜像配置和系统 Java truststore 后，已通过此前依赖解析并编译了 Flutter Gradle 插件；随后 Gradle daemon 意外退出，原因尚待确认。完整 Android 构建仍未通过。UI 测试可单独运行：`cd dsh-go/app && flutter test test/bots/minimax_bot_home_test.dart`，所需字体目录按 `test/support/test_fonts.dart` 配置。
+
+再次使用单 worker、1 GB Gradle 堆内存和进程内 Kotlin 编译后，构建已进入应用 Gradle 配置并自动安装 NDK `28.2.13676358`，随后 `/tmp` 空间不足导致下载失败。已清理未修改且已保存来源的临时 DSH Go/MiniApps 重复 checkout 及下载压缩包，但尚未完成下一次构建。下一位开发者需为 SDK/NDK 下载与解压预留足够空间；不要把 partial NDK 目录当作已安装工具链。
+
+## 本轮暂停交接（用户要求保存后结束）
+
+已推送的主要进展包括原生 Bot 会话 UI、Bot 监听端口认证、插件协议客户端与宿主联调，以及自动化检查。当前工作不能视为成品：正式入口依旧是 DSH，MiniMax Code runtime 尚未打包进手机，Bot 与完整模型引擎的生产接入、设置到 provider 的联通、真正的执行隔离、插件界面和真机验收均未完成。继续时先阅读本节和功能清单，优先完成生产启动器与运行时连接，再切换正式入口；不要恢复同 UID 命令执行来绕过隔离问题。
+
+最后一批设置修改已通过 Bot 目录与联调入口的 Flutter 静态检查、3 项 Bot 界面/状态测试，以及 `BotSettingsPlugin.kt` 针对 Android 35 API 和 Flutter embedding 的独立 Kotlin 编译。Keystore 实际加解密、完整 MainActivity/Android APK 构建和真实模型调用仍未验证。
 
 当前上游 `dsh_client/pubspec.lock` 与 `dart pub get --enforce-lockfile` 不完全一致，普通 `pub get` 可能修改锁文件；核对依赖变化，避免无关锁文件更新。上述测试使用真实上游 Bot 服务和临时数据目录，未启动模型 runtime，不能替代 Android 真机验证。当前开发环境曾通过 Flutter 自适应布局测试、Kotlin 设备分类单元测试和 vendored Bot 的 Node 测试；没有可用 Android 设备，未完成 fork APK 的完整验证。
 

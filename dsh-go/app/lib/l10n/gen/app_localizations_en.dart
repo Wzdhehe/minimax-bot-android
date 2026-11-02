@@ -8826,6 +8826,33 @@ class L10nEn extends L10n {
   String get mobileBotMembers => 'Choose group members';
 
   @override
+  String get mobileBotSettings => 'Settings';
+
+  @override
+  String get mobileBotModel => 'Model ID';
+
+  @override
+  String get mobileBotSave => 'Save';
+
+  @override
+  String get mobileBotKeySaved => 'Key saved; leave blank to keep it';
+
+  @override
+  String get mobileBotKeyMissing => 'Enter your MiniMax key';
+
+  @override
+  String get mobileBotKeyDelete => 'Delete saved key';
+
+  @override
+  String get mobileBotSettingsInvalid => 'Enter an HTTPS base URL and model ID.';
+
+  @override
+  String get mobileBotSettingsSaved => 'Settings saved';
+
+  @override
+  String get mobileBotSettingsFailed => 'Cannot read or save encrypted settings. Please retry.';
+
+  @override
   String get nearbyThisChat => 'This chat';
 
   @override

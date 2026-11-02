@@ -16,5 +16,14 @@
   "mobileBotSend": "Send",
   "mobileBotStop": "Stop reply",
   "mobileBotEmpty": "Create your first bot",
-  "mobileBotMembers": "Choose group members"
+  "mobileBotMembers": "Choose group members",
+  "mobileBotSettings": "Settings",
+  "mobileBotModel": "Model ID",
+  "mobileBotSave": "Save",
+  "mobileBotKeySaved": "Key saved; leave blank to keep it",
+  "mobileBotKeyMissing": "Enter your MiniMax key",
+  "mobileBotKeyDelete": "Delete saved key",
+  "mobileBotSettingsInvalid": "Enter an HTTPS base URL and model ID.",
+  "mobileBotSettingsSaved": "Settings saved",
+  "mobileBotSettingsFailed": "Cannot read or save encrypted settings. Please retry."
 }

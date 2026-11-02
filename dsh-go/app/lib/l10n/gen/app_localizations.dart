@@ -15374,6 +15374,60 @@ abstract class L10n {
   /// **'选择群成员'**
   String get mobileBotMembers;
 
+  /// No description provided for @mobileBotSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置'**
+  String get mobileBotSettings;
+
+  /// No description provided for @mobileBotModel.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型 ID'**
+  String get mobileBotModel;
+
+  /// No description provided for @mobileBotSave.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存'**
+  String get mobileBotSave;
+
+  /// No description provided for @mobileBotKeySaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存 Key；留空保留现有 Key'**
+  String get mobileBotKeySaved;
+
+  /// No description provided for @mobileBotKeyMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入你的 MiniMax Key'**
+  String get mobileBotKeyMissing;
+
+  /// No description provided for @mobileBotKeyDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除已保存的 Key'**
+  String get mobileBotKeyDelete;
+
+  /// No description provided for @mobileBotSettingsInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请填写 HTTPS Base URL 和模型 ID。'**
+  String get mobileBotSettingsInvalid;
+
+  /// No description provided for @mobileBotSettingsSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置已保存'**
+  String get mobileBotSettingsSaved;
+
+  /// No description provided for @mobileBotSettingsFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法读取或保存加密设置，请重试。'**
+  String get mobileBotSettingsFailed;
+
   /// No description provided for @nearbyThisChat.
   ///
   /// In zh, this message translates to:

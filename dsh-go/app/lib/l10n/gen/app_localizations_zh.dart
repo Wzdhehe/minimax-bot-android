@@ -8372,6 +8372,33 @@ class L10nZh extends L10n {
   String get mobileBotMembers => '选择群成员';
 
   @override
+  String get mobileBotSettings => '设置';
+
+  @override
+  String get mobileBotModel => '模型 ID';
+
+  @override
+  String get mobileBotSave => '保存';
+
+  @override
+  String get mobileBotKeySaved => '已保存 Key；留空保留现有 Key';
+
+  @override
+  String get mobileBotKeyMissing => '请输入你的 MiniMax Key';
+
+  @override
+  String get mobileBotKeyDelete => '删除已保存的 Key';
+
+  @override
+  String get mobileBotSettingsInvalid => '请填写 HTTPS Base URL 和模型 ID。';
+
+  @override
+  String get mobileBotSettingsSaved => '设置已保存';
+
+  @override
+  String get mobileBotSettingsFailed => '无法读取或保存加密设置，请重试。';
+
+  @override
   String get nearbyThisChat => '本对话';
 
   @override

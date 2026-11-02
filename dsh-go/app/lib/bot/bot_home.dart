@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
 import 'bot_controller.dart';
+import 'bot_settings.dart';
 
 class BotHome extends StatefulWidget {
   const BotHome({super.key, required this.controller});
@@ -125,6 +126,12 @@ class _BotHomeState extends State<BotHome> {
             children: [
               Text(context.l10n.mobileBotTitle, style: Theme.of(context).textTheme.headlineSmall),
               const Spacer(),
+              IconButton(
+                tooltip: context.l10n.mobileBotSettings,
+                onPressed: () =>
+                    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BotSettingsPage())),
+                icon: const Icon(Icons.settings_outlined),
+              ),
               PopupMenuButton<bool>(
                 icon: const Icon(Icons.add),
                 onSelected: (group) => _create(group: group),
