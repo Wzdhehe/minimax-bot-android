@@ -24,3 +24,11 @@ PRoot 的主要作用是让 Linux 用户态环境在 Android 上兼容运行。�
 上述是设计目标，不是当前已实现或已验证的安全保证。先做独立 UID + broker 的最小实测，再决定是移植 WebUI 的直接运行时还是采用其他承载方式。若平台限制使完整 Linux 工具链无法满足该隔离模型，应保留受限工具接口，明确报告不支持，不能悄悄退回同 UID 的任意命令执行。
 
 参考：[Android 应用沙箱](https://source.android.com/docs/security/app-sandbox)、[Android 文档选择器](https://developer.android.com/training/data-storage/shared/documents-files)、[Android isolatedProcess](https://developer.android.com/guide/topics/manifest/service-element#isolated)。
+
+## 工作区路径守卫模块（未接入）
+
+仓库根目录独立模块 `packages/mbot-workspace-guard/`（MIT，自研；**不**放在 `dsh-go/`，不链接 AGPL 实现）提供路径边界检查 API（`createWorkspaceGuard` / `resolveWithinWorkspace`，集中在 `src/index.js`）。当前**尚未**接到任何运行时或工具调用点。
+
+Linux 单测覆盖：工作区内读写成功；拒绝 `..`、绝对路径（如 `/sdcard`、其它 App 目录）、symlink 逃逸、以及 `workspace` 与 `workspace-evil` 同前缀混淆。运行：`cd packages/mbot-workspace-guard && npm test`。
+
+路径守卫不是完整沙箱：不替代 `isolatedProcess`/独立 UID；不能单独防 TOCTOU（检查与 open 之间的目录替换）、硬链接内容策略、或 SAF URI。签名语义待与 `docs/architecture.md` 对齐。
