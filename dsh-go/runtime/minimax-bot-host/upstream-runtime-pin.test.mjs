@@ -1,69 +1,102 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Wzdhehe
 //
-// Guards the upstream runtime pin. The pin must stay consistent across the
-// pin file, the pin document and the alias mapping the smoke derives from it.
+// Guards the upstream runtime pin.
+//
+// The positive cases alone would only prove that the pin is self-consistent.
+// The negative cases are the ones that matter: they fail when the checker
+// stops enforcing something, so a broken checker cannot keep the suite green.
 //
 // Run with: node --test runtime/minimax-bot-host/upstream-runtime-pin.test.mjs
 
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 import {
+  UPSTREAM_RUNTIME_BUNDLE_SHA256,
   UPSTREAM_RUNTIME_COMMIT,
   UPSTREAM_RUNTIME_COMMIT_DATE,
+  UPSTREAM_RUNTIME_COMMIT_SUBJECT,
   UPSTREAM_RUNTIME_CONTRACT_ALIASES,
   UPSTREAM_RUNTIME_CONTRACT_FILES,
   UPSTREAM_RUNTIME_LICENSE,
   UPSTREAM_RUNTIME_PIN,
   UPSTREAM_RUNTIME_REPOSITORY,
   UPSTREAM_RUNTIME_REPOSITORY_URL,
+  UPSTREAM_RUNTIME_TREE,
   UPSTREAM_RUNTIME_UPSTREAM,
   UPSTREAM_RUNTIME_UPSTREAM_URL,
   upstreamRuntimeEsbuildAliases,
 } from './upstream-runtime-pin.mjs';
-import { checkUpstreamRuntimePin, pinDocumentPath, readDocumentPin } from './upstream-runtime-pin-check.mjs';
+import {
+  checkUpstreamRuntimePin,
+  contractIntegrityErrors,
+  pinDocumentPath,
+  readDocumentPin,
+} from './upstream-runtime-pin-check.mjs';
 
-test('the pin names one upstream commit with a date and a license', () => {
+const here = dirname(fileURLToPath(import.meta.url));
+
+/** Creates a throwaway git checkout with one commit. */
+function makeGitFixture(t, files = { 'a.txt': 'a' }) {
+  const dir = mkdtempSync(join(tmpdir(), 'pin-fixture-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  execFileSync('git', ['config', 'user.email', 'fixture@example.invalid'], { cwd: dir });
+  execFileSync('git', ['config', 'user.name', 'fixture'], { cwd: dir });
+  for (const [name, content] of Object.entries(files)) {
+    const target = join(dir, name);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, content);
+  }
+  execFileSync('git', ['add', '.'], { cwd: dir });
+  execFileSync('git', ['commit', '-q', '-m', 'fixture'], { cwd: dir });
+  return dir;
+}
+
+/**
+ * Writes a pin document that keeps the real document's structure and replaces
+ * only its json block, so the pin markers stay intact.
+ */
+function makeDocFixture(t, mutate) {
+  const dir = mkdtempSync(join(tmpdir(), 'pin-doc-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, 'UPSTREAM-RUNTIME.md');
+  const real = readFileSync(pinDocumentPath, 'utf8');
+  const block = real.match(/```json\s*([\s\S]*?)```/)[1];
+  writeFileSync(path, real.replace(block, mutate(block)));
+  return path;
+}
+
+test('the pin names one upstream commit with a date, a tree and a license', () => {
   assert.match(UPSTREAM_RUNTIME_COMMIT, /^[0-9a-f]{40}$/);
   assert.match(UPSTREAM_RUNTIME_COMMIT_DATE, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  assert.match(UPSTREAM_RUNTIME_TREE, /^[0-9a-f]{40}$/);
+  assert.ok(UPSTREAM_RUNTIME_COMMIT_SUBJECT.length > 0);
   assert.equal(UPSTREAM_RUNTIME_LICENSE, 'MIT');
   assert.equal(UPSTREAM_RUNTIME_REPOSITORY, 'mcode-webui/minimax-code');
   assert.equal(UPSTREAM_RUNTIME_REPOSITORY_URL, `https://github.com/${UPSTREAM_RUNTIME_REPOSITORY}`);
   assert.equal(UPSTREAM_RUNTIME_UPSTREAM, 'MiniMax-AI/minimax-code');
   assert.equal(UPSTREAM_RUNTIME_UPSTREAM_URL, `https://github.com/${UPSTREAM_RUNTIME_UPSTREAM}`);
-  assert.ok(UPSTREAM_RUNTIME_COMMIT.startsWith(UPSTREAM_RUNTIME_COMMIT.slice(0, 7)));
 });
 
 test('the pin document repeats the pin verbatim', () => {
-  assert.ok(existsSync(pinDocumentPath), `pin document is missing: ${pinDocumentPath}`);
-  const documentPin = readDocumentPin(readFileSync(pinDocumentPath, 'utf8'));
-  assert.ok(documentPin, 'pin document has no readable pin block');
-  for (const [field, expected] of Object.entries({
-    repository: UPSTREAM_RUNTIME_REPOSITORY,
-    repositoryUrl: UPSTREAM_RUNTIME_REPOSITORY_URL,
-    upstream: UPSTREAM_RUNTIME_UPSTREAM,
-    upstreamUrl: UPSTREAM_RUNTIME_UPSTREAM_URL,
-    commit: UPSTREAM_RUNTIME_COMMIT,
-    commitDate: UPSTREAM_RUNTIME_COMMIT_DATE,
-    license: UPSTREAM_RUNTIME_LICENSE,
-  })) {
-    assert.equal(documentPin[field], expected, `pin document '${field}' does not match the pin file`);
-  }
+  const documentText = readFileSync(pinDocumentPath, 'utf8');
+  const result = readDocumentPin(documentText);
+  assert.equal(result.error, undefined, `pin document is not readable: ${result.error}`);
+  assert.deepEqual(result.pin, UPSTREAM_RUNTIME_PIN);
 });
 
-test('the pin document names the pinned commit in prose too', () => {
+test('the pin document names the pinned commit and date in prose too', () => {
   const documentText = readFileSync(pinDocumentPath, 'utf8');
-  assert.ok(
-    documentText.includes(UPSTREAM_RUNTIME_COMMIT),
-    'pin document does not mention the pinned commit',
-  );
-  assert.ok(
-    documentText.includes(UPSTREAM_RUNTIME_COMMIT_DATE),
-    'pin document does not mention the pinned commit date',
-  );
+  assert.ok(documentText.includes(UPSTREAM_RUNTIME_COMMIT), 'the commit is not mentioned in prose');
+  assert.ok(documentText.includes(UPSTREAM_RUNTIME_COMMIT_DATE), 'the commit date is not mentioned in prose');
+  assert.ok(documentText.includes(UPSTREAM_RUNTIME_TREE), 'the tree is not mentioned in prose');
 });
 
 test('the contract aliases and the contract file list agree', () => {
@@ -78,6 +111,32 @@ test('the contract aliases and the contract file list agree', () => {
   }
 });
 
+test('the contract list is non-empty and every contract file has a fingerprint', () => {
+  assert.ok(UPSTREAM_RUNTIME_CONTRACT_FILES.length > 0, 'the contract list must not be empty');
+  for (const path of UPSTREAM_RUNTIME_CONTRACT_FILES) {
+    assert.ok(UPSTREAM_RUNTIME_BUNDLE_SHA256[path], `contract file has no fingerprint: ${path}`);
+  }
+  assert.ok(Object.keys(UPSTREAM_RUNTIME_BUNDLE_SHA256).length >= UPSTREAM_RUNTIME_CONTRACT_FILES.length);
+});
+
+test('an emptied contract list is rejected', () => {
+  const errors = contractIntegrityErrors({
+    contractFiles: [],
+    bundleSha256: UPSTREAM_RUNTIME_BUNDLE_SHA256,
+    aliases: [],
+  });
+  assert.ok(errors.some((error) => error.includes('contract file list is empty')));
+});
+
+test('a contract file without a fingerprint is rejected', () => {
+  const errors = contractIntegrityErrors({
+    contractFiles: [...UPSTREAM_RUNTIME_CONTRACT_FILES, 'packages/shared/src/not-pinned.ts'],
+    bundleSha256: UPSTREAM_RUNTIME_BUNDLE_SHA256,
+    aliases: UPSTREAM_RUNTIME_CONTRACT_ALIASES,
+  });
+  assert.ok(errors.some((error) => error.includes('no pinned fingerprint')));
+});
+
 test('the esbuild alias arguments follow the pin', () => {
   const args = upstreamRuntimeEsbuildAliases('/tmp/webui');
   assert.equal(args.length, UPSTREAM_RUNTIME_CONTRACT_ALIASES.length);
@@ -90,19 +149,109 @@ test('the checker reports a consistent pin when no source is given', () => {
   const result = checkUpstreamRuntimePin();
   assert.deepEqual(result.errors, []);
   assert.equal(result.ok, true);
-  assert.equal(result.pin.commit, UPSTREAM_RUNTIME_COMMIT);
 });
 
-test('the checker rejects a source that is not at the pinned commit', () => {
-  const result = checkUpstreamRuntimePin({ sourceDir: join(import.meta.dirname, 'nonexistent-webui-checkout') });
+test('the checker rejects a missing source', () => {
+  const result = checkUpstreamRuntimePin({ sourceDir: join(here, 'no-such-webui-checkout') });
   assert.equal(result.ok, false);
   assert.ok(result.errors.some((error) => error.includes('does not exist')));
 });
 
-test('the pin object is a frozen summary of the exported constants', () => {
-  assert.equal(UPSTREAM_RUNTIME_PIN.commit, UPSTREAM_RUNTIME_COMMIT);
-  assert.equal(UPSTREAM_RUNTIME_PIN.commitDate, UPSTREAM_RUNTIME_COMMIT_DATE);
-  assert.equal(UPSTREAM_RUNTIME_PIN.license, UPSTREAM_RUNTIME_LICENSE);
-  assert.equal(UPSTREAM_RUNTIME_PIN.repository, UPSTREAM_RUNTIME_REPOSITORY);
-  assert.ok(Object.isFrozen(UPSTREAM_RUNTIME_PIN));
+test('the checker rejects a source that is not at the pinned commit', (t) => {
+  const source = makeGitFixture(t);
+  const result = checkUpstreamRuntimePin({ sourceDir: source });
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => error.includes(`expected ${UPSTREAM_RUNTIME_COMMIT}`)),
+    `expected a commit mismatch, got: ${result.errors.join(' | ')}`,
+  );
+});
+
+test('the checker rejects a source whose working tree was modified', (t) => {
+  const source = makeGitFixture(t);
+  writeFileSync(join(source, 'a.txt'), 'modified after the commit');
+  const result = checkUpstreamRuntimePin({ sourceDir: source });
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => error.includes('local modifications')),
+    `expected a dirty working tree error, got: ${result.errors.join(' | ')}`,
+  );
+});
+
+test('the checker rejects upstream files whose bytes do not match the pin', (t) => {
+  const source = makeGitFixture(t, {
+    'packages/shared/src/miniapp-surface.ts': 'not the pinned upstream file',
+  });
+  const result = checkUpstreamRuntimePin({ sourceDir: source });
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => error.includes('does not match the pinned bytes')),
+    `expected a fingerprint mismatch, got: ${result.errors.join(' | ')}`,
+  );
+});
+
+test('the checker rejects a pin document with a changed field', (t) => {
+  const docPath = makeDocFixture(t, (block) =>
+    block.replace(UPSTREAM_RUNTIME_COMMIT, 'a'.repeat(40)));
+  const result = checkUpstreamRuntimePin({ docPath });
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => error.includes("pin document 'commit'")),
+    `expected a commit field error, got: ${result.errors.join(' | ')}`,
+  );
+});
+
+test('the checker rejects a pin document with an extra field', (t) => {
+  const docPath = makeDocFixture(t, (block) =>
+    block.replace('{\n', '{\n  "sneaky": "value",\n'));
+  const result = checkUpstreamRuntimePin({ docPath });
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => error.includes("extra field 'sneaky'")),
+    `expected an extra field error, got: ${result.errors.join(' | ')}`,
+  );
+});
+
+test('the checker rejects a pin document with a repeated key', (t) => {
+  const docPath = makeDocFixture(t, (block) =>
+    block.replace(`"commit": "${UPSTREAM_RUNTIME_COMMIT}"`, `"commit": "${'b'.repeat(40)}", "commit": "${UPSTREAM_RUNTIME_COMMIT}"`));
+  const result = checkUpstreamRuntimePin({ docPath });
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => error.includes("repeats the key 'commit'")),
+    `expected a repeated key error, got: ${result.errors.join(' | ')}`,
+  );
+});
+
+test('the checker rejects a pin document without a pin block', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'pin-doc-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const docPath = join(dir, 'UPSTREAM-RUNTIME.md');
+  writeFileSync(docPath, '# 上游 Runtime 钉点\n\n这里没有 pin 块。\n');
+  const result = checkUpstreamRuntimePin({ docPath });
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => error.includes('no pin:begin / pin:end block')),
+    `expected a missing block error, got: ${result.errors.join(' | ')}`,
+  );
+});
+
+test('the checker rejects a malformed pin block', (t) => {
+  const docPath = makeDocFixture(t, () => '<!-- pin:begin -->\n```json\n{ not json\n```\n<!-- pin:end -->\n');
+  const result = checkUpstreamRuntimePin({ docPath });
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => error.includes('not valid json')),
+    `expected a malformed block error, got: ${result.errors.join(' | ')}`,
+  );
+});
+
+test('importing the checker instead of running it fails loudly', () => {
+  const result = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', `await import(${JSON.stringify(join(here, 'upstream-runtime-pin-check.mjs'))});`],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(result.status, 0, 'importing the checker must not exit 0 in silence');
+  assert.match(result.stderr, /FAIL/);
 });

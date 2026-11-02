@@ -8,6 +8,13 @@ on:
       - 'dsh-go/runtime/vendor/minimax-bot/**'
       - 'docs/UPSTREAM-RUNTIME.md'
       - '.github/workflows/bot-host.yml'
+  pull_request:
+    paths:
+      - 'dsh-go/packages/dsh_client/**'
+      - 'dsh-go/runtime/minimax-bot-host/**'
+      - 'dsh-go/runtime/vendor/minimax-bot/**'
+      - 'docs/UPSTREAM-RUNTIME.md'
+      - '.github/workflows/bot-host.yml'
   workflow_dispatch:
 
 permissions:

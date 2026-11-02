@@ -1,33 +1,42 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Wzdhehe
 //
-// Verifies that the upstream runtime pin is consistent everywhere it appears:
+// Verifies that the upstream runtime pin is consistent everywhere it appears,
+// and that the code the smoke actually executes is the code that was pinned.
 //
 //   1. upstream-runtime-pin.mjs      - the machine-readable pin
 //   2. docs/UPSTREAM-RUNTIME.md       - the human-readable pin document
 //   3. the WebUI checkout under test  - the tree the host actually binds to
+//   4. the esbuild metafile           - the files that really entered the bundle
 //
 // A mismatch is a hard failure. Bumping the pin without re-running the
 // acceptance commands therefore fails CI and the local smoke alike.
 //
 // Usage:
 //   node upstream-runtime-pin-check.mjs [--source <webui-checkout>]
+//                                       [--doc <pin-document>]
+//                                       [--bundle-metafile <esbuild metafile>]
 //
-// Exit codes: 0 = consistent, 1 = inconsistent (or unreadable pin).
+// Exit codes: 0 = consistent, 1 = inconsistent, 2 = the check itself failed.
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  UPSTREAM_RUNTIME_BUNDLE_SHA256,
   UPSTREAM_RUNTIME_COMMIT,
   UPSTREAM_RUNTIME_COMMIT_DATE,
+  UPSTREAM_RUNTIME_COMMIT_SUBJECT,
+  UPSTREAM_RUNTIME_CONTRACT_ALIASES,
   UPSTREAM_RUNTIME_CONTRACT_FILES,
   UPSTREAM_RUNTIME_LICENSE,
   UPSTREAM_RUNTIME_PIN,
   UPSTREAM_RUNTIME_REPOSITORY,
   UPSTREAM_RUNTIME_REPOSITORY_URL,
+  UPSTREAM_RUNTIME_TREE,
   UPSTREAM_RUNTIME_UPSTREAM,
   UPSTREAM_RUNTIME_UPSTREAM_URL,
 } from './upstream-runtime-pin.mjs';
@@ -40,24 +49,99 @@ export const repoRoot = resolve(scriptDir, '..', '..', '..');
 /** The pin document that must repeat the pin verbatim. */
 export const pinDocumentPath = join(repoRoot, 'docs', 'UPSTREAM-RUNTIME.md');
 
-const PIN_FIELDS = Object.freeze([
-  ['repository', UPSTREAM_RUNTIME_REPOSITORY],
-  ['repositoryUrl', UPSTREAM_RUNTIME_REPOSITORY_URL],
-  ['upstream', UPSTREAM_RUNTIME_UPSTREAM],
-  ['upstreamUrl', UPSTREAM_RUNTIME_UPSTREAM_URL],
-  ['commit', UPSTREAM_RUNTIME_COMMIT],
-  ['commitDate', UPSTREAM_RUNTIME_COMMIT_DATE],
-  ['license', UPSTREAM_RUNTIME_LICENSE],
-]);
+/** Compares two plain JSON-ish values deeply. */
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+  if (a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (typeof a !== 'object') return false;
+  const aKeys = Object.keys(a).sort();
+  const bKeys = Object.keys(b).sort();
+  if (aKeys.length !== bKeys.length) return false;
+  if (aKeys.some((key, index) => key !== bKeys[index])) return false;
+  return aKeys.every((key) => deepEqual(a[key], b[key]));
+}
 
-/** Extracts the machine-readable pin block from the pin document. */
+/**
+ * Extracts the machine-readable pin block from the pin document.
+ *
+ * Returns { pin } on success, or { error } describing why the block is
+ * unusable. "No block" and "a block that cannot be parsed" are different
+ * failures and are reported differently.
+ */
 export function readDocumentPin(documentText) {
   const block = documentText.match(/<!--\s*pin:begin\s*-->[\s\S]*?```json\s*([\s\S]*?)```[\s\S]*?<!--\s*pin:end\s*-->/);
-  if (!block) return null;
+  if (!block) {
+    const hasBegin = /<!--\s*pin:begin\s*-->/.test(documentText);
+    const hasEnd = /<!--\s*pin:end\s*-->/.test(documentText);
+    if (hasBegin || hasEnd) {
+      return { error: 'the pin block markers are present but the fenced json block is missing or malformed' };
+    }
+    return { error: 'no pin:begin / pin:end block found' };
+  }
+  const jsonText = block[1];
+  let parsed;
   try {
-    return JSON.parse(block[1]);
-  } catch {
-    return null;
+    parsed = JSON.parse(jsonText);
+  } catch (error) {
+    return { error: `the pin block is not valid json: ${error.message}` };
+  }
+  // JSON.parse keeps the last of a repeated key, so a duplicated key could
+  // hide a contradicting value in the document text. Refuse duplicated keys.
+  const topLevelKeys = Object.keys(parsed);
+  for (const key of topLevelKeys) {
+    const occurrences = (jsonText.match(new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s*:`, 'g')) || []).length;
+    if (occurrences > 1) {
+      return { error: `the pin block repeats the key '${key}'` };
+    }
+  }
+  return { pin: parsed };
+}
+
+/**
+ * Checks the pin's own internal consistency: the contract list must not be
+ * empty, every contract file must have a pinned fingerprint, and the alias
+ * map must cover exactly the contract list.
+ */
+export function contractIntegrityErrors({
+  contractFiles = UPSTREAM_RUNTIME_CONTRACT_FILES,
+  bundleSha256 = UPSTREAM_RUNTIME_BUNDLE_SHA256,
+  aliases = UPSTREAM_RUNTIME_CONTRACT_ALIASES,
+} = {}) {
+  const errors = [];
+  if (!Array.isArray(contractFiles) || contractFiles.length === 0) {
+    errors.push('the pinned contract file list is empty');
+  }
+  const bundlePaths = Object.keys(bundleSha256 || {});
+  if (bundlePaths.length === 0) {
+    errors.push('the pinned bundle fingerprint list is empty');
+  }
+  for (const path of contractFiles) {
+    if (!bundlePaths.includes(path)) {
+      errors.push(`contract file has no pinned fingerprint: ${path}`);
+    }
+  }
+  const aliasPaths = aliases.map((entry) => entry.path);
+  if (!deepEqual(aliasPaths, [...contractFiles])) {
+    errors.push('the alias map and the contract file list disagree');
+  }
+  return errors;
+}
+
+/** Runs git in a directory and returns { ok, stdout, stderr }. */
+function runGit(sourceDir, args) {
+  try {
+    const stdout = execFileSync('git', ['-C', sourceDir, ...args], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return { ok: true, stdout: stdout.trim(), stderr: '' };
+  } catch (error) {
+    return {
+      ok: false,
+      stdout: '',
+      stderr: (error.stderr || error.message || '').toString().trim(),
+    };
   }
 }
 
@@ -67,51 +151,70 @@ export function readDocumentPin(documentText) {
  * A git checkout is read from HEAD. When HEAD cannot be resolved (an exported
  * archive, or a checkout without commits), the commit must be declared through
  * WEBUI_SOURCE_COMMIT, so the caller cannot silently smoke an arbitrary tree.
+ * The declared value only states identity; the bytes are bound by the
+ * fingerprint check either way.
  */
 export function resolveSourceCommit(sourceDir) {
   if (existsSync(join(sourceDir, '.git'))) {
-    try {
-      const head = execFileSync('git', ['-C', sourceDir, 'rev-parse', 'HEAD'], {
-        encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim();
-      if (head) return head;
-    } catch {
-      // No resolvable HEAD: fall through to the declared commit.
-    }
+    const head = runGit(sourceDir, ['rev-parse', 'HEAD']);
+    if (head.ok && head.stdout) return head.stdout;
   }
   const declared = process.env.WEBUI_SOURCE_COMMIT?.trim();
   return declared ? declared : null;
 }
 
+/** SHA-256 of a file, or null when it cannot be read. */
+function sha256Of(filePath) {
+  try {
+    return createHash('sha256').update(readFileSync(filePath)).digest('hex');
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Checks the pin against the document and, when given, against a checkout.
+ * Checks the pin against the document and, when given, against a checkout and
+ * a bundle metafile.
+ *
  * Returns { ok, errors, notes } instead of throwing, so callers decide how to report.
  */
-export function checkUpstreamRuntimePin({ sourceDir } = {}) {
+export function checkUpstreamRuntimePin({
+  sourceDir,
+  docPath = pinDocumentPath,
+  bundleMetafile,
+} = {}) {
   const errors = [];
   const notes = [];
 
-  let documentPin = null;
-  if (!existsSync(pinDocumentPath)) {
-    errors.push(`pin document is missing: ${pinDocumentPath}`);
+  // 1. The pin's own consistency.
+  for (const error of contractIntegrityErrors()) errors.push(error);
+
+  // 2. The document must repeat the pin exactly.
+  if (!existsSync(docPath)) {
+    errors.push(`pin document is missing: ${docPath}`);
   } else {
-    const documentText = readFileSync(pinDocumentPath, 'utf8');
-    documentPin = readDocumentPin(documentText);
-    if (!documentPin) {
-      errors.push(`pin document has no readable 'pin:begin ... pin:end' JSON block: ${pinDocumentPath}`);
-    } else {
-      for (const [field, expected] of PIN_FIELDS) {
-        if (documentPin[field] !== expected) {
-          errors.push(
-            `pin document '${field}' is ${JSON.stringify(documentPin[field])}, expected ${JSON.stringify(expected)}`,
-          );
+    const documentText = readFileSync(docPath, 'utf8');
+    const result = readDocumentPin(documentText);
+    if (result.error) {
+      errors.push(`pin document ${docPath}: ${result.error}`);
+    } else if (!deepEqual(result.pin, UPSTREAM_RUNTIME_PIN)) {
+      const pinKeys = Object.keys(UPSTREAM_RUNTIME_PIN);
+      const documentKeys = Object.keys(result.pin);
+      for (const key of pinKeys) {
+        if (!documentKeys.includes(key)) {
+          errors.push(`pin document is missing the field '${key}'`);
+        } else if (!deepEqual(result.pin[key], UPSTREAM_RUNTIME_PIN[key])) {
+          errors.push(`pin document '${key}' is ${JSON.stringify(result.pin[key])}, expected ${JSON.stringify(UPSTREAM_RUNTIME_PIN[key])}`);
         }
       }
+      for (const key of documentKeys) {
+        if (!pinKeys.includes(key)) {
+          errors.push(`pin document has the extra field '${key}'`);
+        }
+      }
+    } else {
+      notes.push(`pin document matches the pin file: ${docPath}`);
     }
-  }
-
-  if (!errors.length) {
-    notes.push(`pin document matches the pin file: ${pinDocumentPath}`);
   }
 
   if (sourceDir) {
@@ -119,6 +222,9 @@ export function checkUpstreamRuntimePin({ sourceDir } = {}) {
     if (!existsSync(source)) {
       errors.push(`WebUI source does not exist: ${source}`);
     } else {
+      const isGitCheckout = existsSync(join(source, '.git'));
+
+      // 3. Identity: which commit is this?
       const commit = resolveSourceCommit(source);
       if (!commit) {
         errors.push(
@@ -130,37 +236,113 @@ export function checkUpstreamRuntimePin({ sourceDir } = {}) {
         notes.push(`WebUI source is at the pinned commit ${commit}`);
       }
 
-      for (const contractFile of UPSTREAM_RUNTIME_CONTRACT_FILES) {
-        if (!existsSync(join(source, contractFile))) {
-          errors.push(`contract file is missing from the pinned tree: ${contractFile}`);
+      // 4. Content: the tree object of that commit.
+      if (isGitCheckout) {
+        const tree = runGit(source, ['rev-parse', 'HEAD^{tree}']);
+        if (!tree.ok) {
+          errors.push(`cannot resolve the tree of ${source}: ${tree.stderr || 'git rev-parse HEAD^{tree} failed'}`);
+        } else if (tree.stdout !== UPSTREAM_RUNTIME_TREE) {
+          errors.push(`WebUI source tree is ${tree.stdout}, expected ${UPSTREAM_RUNTIME_TREE}`);
+        } else {
+          notes.push(`WebUI source tree matches the pinned tree ${tree.stdout}`);
+        }
+
+        // 5. The working tree must be the committed tree: no local edits.
+        const status = runGit(source, ['status', '--porcelain']);
+        if (!status.ok) {
+          errors.push(`cannot read the working tree status of ${source}: ${status.stderr || 'git status failed'}`);
+        } else if (status.stdout) {
+          const changed = status.stdout.split('\n').slice(0, 5).join('; ');
+          errors.push(`WebUI source has local modifications, so the smoke would not run the pinned code: ${changed}`);
+        } else {
+          notes.push('WebUI source working tree is clean');
+        }
+      }
+
+      // 6. Content: the bytes of every file that enters the bundle.
+      for (const [path, expected] of Object.entries(UPSTREAM_RUNTIME_BUNDLE_SHA256)) {
+        const filePath = join(source, path);
+        if (!existsSync(filePath)) {
+          errors.push(`pinned upstream file is missing from the source: ${path}`);
+          continue;
+        }
+        const actual = sha256Of(filePath);
+        if (actual !== expected) {
+          errors.push(`pinned upstream file does not match the pinned bytes: ${path} (sha256 ${actual}, expected ${expected})`);
         }
       }
       if (!errors.length) {
-        notes.push(`all ${UPSTREAM_RUNTIME_CONTRACT_FILES.length} contract files are present`);
+        notes.push(`all ${Object.keys(UPSTREAM_RUNTIME_BUNDLE_SHA256).length} pinned upstream files match their fingerprints`);
       }
     }
   }
 
-  return { ok: errors.length === 0, errors, notes, documentPin, pin: UPSTREAM_RUNTIME_PIN };
+  // 7. What the bundle really consumed.
+  if (bundleMetafile) {
+    if (!existsSync(bundleMetafile)) {
+      errors.push(`bundle metafile does not exist: ${bundleMetafile}`);
+    } else {
+      let metafile;
+      try {
+        metafile = JSON.parse(readFileSync(bundleMetafile, 'utf8'));
+      } catch (error) {
+        errors.push(`bundle metafile is not valid json: ${error.message}`);
+      }
+      if (metafile) {
+        const base = process.cwd();
+        const source = sourceDir ? resolve(sourceDir) : null;
+        const upstreamInputs = new Set();
+        for (const inputPath of Object.keys(metafile.inputs || {})) {
+          const absolute = resolve(base, inputPath);
+          if (source && (absolute === source || absolute.startsWith(source + sep))) {
+            upstreamInputs.add(relative(source, absolute));
+          }
+        }
+        const pinnedPaths = Object.keys(UPSTREAM_RUNTIME_BUNDLE_SHA256);
+        for (const path of upstreamInputs) {
+          if (!pinnedPaths.includes(path)) {
+            errors.push(`the bundle consumed an upstream file that is not pinned: ${path}`);
+          }
+        }
+        for (const path of pinnedPaths) {
+          if (!upstreamInputs.has(path)) {
+            errors.push(`a pinned upstream file did not enter the bundle, so the pin is stale: ${path}`);
+          }
+        }
+        if (!errors.length) {
+          notes.push(`the bundle consumed exactly the ${pinnedPaths.length} pinned upstream files`);
+        }
+      }
+    }
+  }
+
+  return { ok: errors.length === 0, errors, notes, pin: UPSTREAM_RUNTIME_PIN };
+}
+
+function parseArgs(argv) {
+  const options = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index];
+    const value = argv[index + 1];
+    if (flag === '--source') { options.sourceDir = value; index += 1; }
+    else if (flag === '--doc') { options.docPath = value; index += 1; }
+    else if (flag === '--bundle-metafile') { options.bundleMetafile = value; index += 1; }
+    else { return { error: `unknown argument ${flag}` }; }
+    if (options.sourceDir === undefined && flag === '--source') return { error: '--source needs a directory' };
+    if (options.docPath === undefined && flag === '--doc') return { error: '--doc needs a file' };
+    if (options.bundleMetafile === undefined && flag === '--bundle-metafile') return { error: '--bundle-metafile needs a file' };
+  }
+  return options;
 }
 
 function main(argv) {
-  let sourceDir;
-  for (let index = 0; index < argv.length; index += 1) {
-    if (argv[index] === '--source') {
-      sourceDir = argv[index + 1];
-      index += 1;
-      if (!sourceDir) {
-        console.error('FAIL: --source needs a directory');
-        return 1;
-      }
-    } else {
-      console.error(`FAIL: unknown argument ${argv[index]}`);
-      return 1;
-    }
+  const parsed = parseArgs(argv);
+  if (parsed.error) {
+    console.error(`FAIL: ${parsed.error}`);
+    return 1;
   }
 
-  const result = checkUpstreamRuntimePin({ sourceDir });
+  const result = checkUpstreamRuntimePin(parsed);
   for (const note of result.notes) console.log(`OK: ${note}`);
   for (const error of result.errors) console.error(`FAIL: ${error}`);
   if (!result.ok) {
@@ -190,4 +372,10 @@ function isEntryPoint() {
 
 if (isEntryPoint()) {
   process.exit(main(process.argv.slice(2)));
+} else if (!process.argv[1]) {
+  // No script argument: the module was pulled in through `node -e` or stdin,
+  // where nobody can read the check's result. Say so instead of exiting 0 in
+  // silence, which would look like a passing check.
+  console.error('FAIL: upstream-runtime-pin-check.mjs must be run as a script; `node -e` cannot carry its result');
+  process.exit(2);
 }
