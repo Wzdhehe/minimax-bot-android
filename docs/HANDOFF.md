@@ -4,7 +4,9 @@
 
 ## 当前状态与证据
 
-- **SDK→模型FD适配已实现（宿主组件）**：新增有界、无网络fallback的 `createNativeModelFetch`，固定provider/model/SDK URL，只传IDs+JSON到native通道工厂，丢弃SDK认证头。流式背压、取消、总截止、晚到FD关闭、协议event恢复已测试；实际OpenAI6.26.0两种协议和Anthropic0.91.1共9项SDK测试通过。完整脚本JUnit32+Node37通过；不是完整pi-ai/mcode，也未实现生产动态Binder/JNI请求桥。Google仍须单独接入。见T-RuntimeBroker和 `dsh-go/tooling/model-sdk-probe/README.md`。
+- **四类真实pi-ai provider组件已过**：不改钉点源码，验证commit/tree/洁净和SDK依赖后打包provider，8项工具翻译/取消测试通过；Google用AsyncLocalStorage model fetch scope解决无fetch注入点的问题。dispatcher仅在测试子进程安装，生产启动器仍未接。实际body快照由Kotlin消费，确认四类请求通过native白名单和认证。最新完整脚本JUnit32+Node41；另SDK9项、pi-ai8项。见T-RuntimeBroker。
+
+- **SDK→模型FD适配已实现（宿主组件）**：新增有界、无网络fallback的 `createNativeModelFetch`，固定provider/model/SDK URL，只传IDs+JSON到native通道工厂，丢弃SDK认证头。流式背压、取消、总截止、晚到FD关闭、协议event恢复已测试；实际OpenAI6.26.0两种协议和Anthropic0.91.1共9项SDK测试通过。完整脚本JUnit32+Node37通过；不是完整pi-ai/mcode，也未实现生产动态Binder/JNI请求桥。Google宿主provider接入已在下一阶段验证，生产装配仍待做。见T-RuntimeBroker和 `dsh-go/tooling/model-sdk-probe/README.md`。
 
 - **native模型broker支持SDK请求体**：兼容原messages路径，新增互斥request路径。四类provider的工具schema、tool call/result、采样/思考/缓存参数保留；模型白名单、HTTPS endpoint、认证头和Key仍由native决定。拒绝未知顶层字段、URL/headers/Key/model覆盖；不是工具执行器，也不是mcode已接通。
 - 恢复环境后实跑 **JUnit32 + Node31 + provider/service10 + scope4** 全过；Android组件 `testDebugUnitTest assembleDebug assembleDebugAndroidTest` **BUILD SUCCESSFUL in 5m 29s**，XML32项零失败/错误/跳过。跨进程工具请求经过真实Kotlin/OkHttp和假上游；假Key在native生成，检查descriptor/env/log/Agent文件不泄露。见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。
@@ -62,7 +64,7 @@ dev/integration 891aefa
 ## 接下来优先做
 
 1. 观察full-ICU源码CI run41630373256，处理真实失败并取得API26/35证据；接着解决better-sqlite3与隔离UID数据持久化。目录FD/cwd不自动授予主App路径下SQLite/WAL创建权限，禁止回退同UID任意shell。
-2. 接钉点mcode SDK到native-only模型FD：请求体已扩展，fetch/SSE adapter及宿主SDK探针已过，下一步是生产native动态通道请求桥、Google provider接入和完整pi-ai验证。**Google的钉点pi-ai实现不使用options.fetch**，不可假定四种SDK都能直接替换fetch。正式runtime、配置同步、工具执行和真实MiniMax未验证。参看T-RuntimeBroker和T-AndroidNode。
+2. 接钉点mcode SDK到native-only模型FD：请求体已扩展，fetch/SSE adapter及宿主SDK探针已过，下一步是生产native动态通道请求桥、生产模型scope装配；四类pi-ai宿主provider现已通过，完整runtime仍待验证。**Google的钉点pi-ai实现不使用options.fetch**，宿主已验证async scope dispatcher，正式隔离进程还须显式安装并绑定生命周期。正式runtime、配置同步、工具执行和真实MiniMax未验证。参看T-RuntimeBroker和T-AndroidNode。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
 5. 总工作区下实现项目管理与 Bot 绑定，遵守路径防护并分开 cwd 和访问许可；补资料库、附件、群聊/记忆/审批等全量 parity 未完成项。

@@ -35,8 +35,32 @@ and cancellation/deadline closes the native FD even while consumers stall.
 Errors before response creation return deterministic HTTP 400 so SDKs cannot
 retry an unknown bridge outcome. Errors after streaming starts fail the body.
 
-Google is intentionally absent: pinned pi-ai `google.ts` does not use
-`options.fetch`. Its wire-format SSE conversion is tested by the core host
-suite, but injecting this adapter into the real Google provider requires a
-separate integration. Anthropic beta/affinity headers are also not forwarded;
-advanced header-dependent provider behavior still needs native policy.
+The unchanged pinned pi-ai providers can also be exercised:
+
+```bash
+node prepare-pi.mjs /path/to/clean/minimax-code-checkout
+npm run test:pi
+```
+
+`prepare-pi.mjs` verifies the authoritative commit/tree/clean checkout and pin
+contract hashes, checks SDK/esbuild versions against upstream manifests, then
+bundles the four provider entry points without rewriting their source. Bundles
+and input SHA256 records stay in ignored `.build/`. No upstream source or
+third-party binary is added to Git. `request-contracts.json` contains only the
+deterministic fake requests captured by `node capture-requests.mjs`; the pi-ai
+tests compare real outgoing bodies to these, and the JVM fixture accepts them
+through the actual native body policy with authentication remaining native.
+
+Pinned Google ignores `options.fetch`. `createModelFetchScope()` supplies an
+AsyncLocalStorage dispatcher for a trusted isolated launcher to install as the
+process global fetch. Provider creation runs in a model-bound scope. Concurrent
+providers inherit separate bindings; unbound calls get a fixed 400, with no
+network fallback. Import/construction does not mutate globals. Only the test
+child currently installs it; the production launcher is still missing. This is
+routing, not authorization: the native bridge must recheck IDs and lifecycle.
+All four real pi-ai providers translate tool calls and cancel a quiet FD in the
+probe. That is host evidence, not an Android/full mcode runtime acceptance.
+
+Anthropic beta/affinity headers are not forwarded; advanced header-dependent
+provider behavior still needs native policy. Physical devices, real provider
+APIs and complete runtime persistence remain unverified.

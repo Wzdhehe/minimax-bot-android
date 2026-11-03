@@ -1,5 +1,27 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+## 当前：四类钉点pi-ai真实provider验证（2026-11-03）
+
+新增 `createModelFetchScope`：显式构建AsyncLocalStorage dispatcher，不在import/构造时改全局；可信启动器须安装global fetch，并在 `scope.run(boundFetch, () => provider(...))` 内创建流。解决Google SDK只用全局fetch且pi-ai忽略options.fetch的问题；并发/嵌套调用不串binding，未绑定请求固定400、没有网络fallback。只是路由，不是安全边界；native仍须授权，生产启动器尚未装配。
+
+独立probe `prepare-pi.mjs` 验证权威commit/tree/clean Git checkout/原contract摘要，核对实际SDK和esbuild版本，再将四类provider原文件打包，未改上游源码；忽略的.build记录所有source input SHA。pi-ai从实际工具事件得到lookup参数/path和toolUse终态，四种协议各含停滞流取消，共 **8 passed**。Google通过真实@google/genai1.52.0；其他依赖与上一阶段一致，补partial-json0.1.7/esbuild0.28.2。source仍钉97818b2，没有升钉。
+
+`request-contracts.json`是这四类真实pi-ai产生的固定假请求体；pi-ai测试与其逐字段比较，native JVM子进程通过生产preparePayload读取四类body并确认native认证/endpoint、tools和Key不进body/url/toString。不是仅两端独立mock后假定兼容。
+
+实际命令与结果：
+
+```bash
+npm ci --ignore-scripts --no-audit --no-fund --prefix dsh-go/tooling/model-sdk-probe
+node dsh-go/tooling/model-sdk-probe/prepare-pi.mjs /tmp/mbot-mcode-reference
+npm test --prefix dsh-go/tooling/model-sdk-probe
+npm run test:pi --prefix dsh-go/tooling/model-sdk-probe
+MBOT_NATIVE_DEPS=/tmp/mbot-native-deps KOTLINC=/workspace/toolchains/kotlinc/bin/kotlinc bash dsh-go/tooling/test-native-model-broker.sh
+```
+
+**SDK9 / pi-ai8 / JUnit32 / Node41**，零失败/跳过。新增的native类只为host测试，没有生产代码或manifest变化；本阶段不重复声称Android执行。上一提交00ce2b5的native（41658367231，含SDK与Android组件编译）、host（41658367202）、scope（41658367234）已实查success。新CI增加钉点provider打包/运行，结果仍须观察。
+
+仍缺：生产动态请求Binder/JNI桥、native授权生命周期、正式model resolver/scope装配、持久化/better-sqlite3及完整runtime；物理真机与真实provider **未验证**。Anthropic header-dependent beta/affinity未开放。full-ICU源构建独立进行中，不因这组host测试通过而算完成。
+
 ## 当前：SDK fetch / SSE / FD adapter（2026-11-03）
 
 新增 `model-sdk-fetch.mjs`：绑定providerId/modelId/apiFormat和精确SDK URL；仅POST/JSON对象，读取期间1MiB限制；SDK headers全部丢弃，不调用网络fetch。只通过 `openChannel({providerId,modelId,request},{signal})` 获取owned FD，复用真实生产FD reader；晚到FD在取消后关闭，不因等待bridge或不合作的request body cancel而阻塞截止。native必须再次授权，**生产动态Binder/JNI callback仍未实现**。

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { createModelFetchScope } from './model-fetch-scope.mjs';
 import { createNativeModelFetch } from './model-sdk-fetch.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
@@ -9,17 +10,45 @@ const url = format === 'openai-completions' ? 'https://model.example/v1/chat/com
   format === 'anthropic-messages' ? 'https://model.example/v1/messages' :
   'https://model.example/v1/models/m1:streamGenerateContent?alt=sse';
 let payload, channelCount = 0;
+let providerAbort, providerTimer;
 const fetchImpl = createNativeModelFetch({ providerId: 'p1', modelId: 'm1', apiFormat: format, requestUrl: url,
   timeoutMs: mode === 'unconsumed' ? 100 : 2500,
   openChannel(value) {
     payload = value; channelCount++;
     if (mode === 'sdk-failure') throw Error('unsafe-diagnostic');
+    if (mode === 'pi-cancel') providerTimer = setTimeout(() => providerAbort.abort(), 80);
     return 3;
   },
 });
 let result;
 try {
-  if (mode.startsWith('sdk')) {
+  if (mode.startsWith('pi')) {
+    const names = { 'openai-completions': ['openai-completions', 'streamOpenAICompletions'],
+      'openai-responses': ['openai-responses', 'streamOpenAIResponses'],
+      'anthropic-messages': ['anthropic', 'streamAnthropic'], 'google-generative-ai': ['google', 'streamGoogle'] };
+    const [name, symbol] = names[format];
+    const scope = createModelFetchScope();
+    globalThis.fetch = scope.fetch;
+    const provider = await import(pathToFileURL(`${sdkRoot}/.build/${name}.mjs`));
+    const controller = new AbortController();
+    providerAbort = controller;
+    const model = { id: 'm1', name: 'Probe', api: format,
+      provider: format === 'google-generative-ai' ? 'google' : format === 'anthropic-messages' ? 'anthropic' : 'openai',
+      baseUrl: format === 'anthropic-messages' ? 'https://model.example' : 'https://model.example/v1',
+      reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 8192, maxTokens: 256 };
+    const context = { messages: [{ role: 'user', content: 'Hello', timestamp: Date.now() }],
+      tools: [{ name: 'lookup', description: 'Lookup a value', parameters: { type: 'object', properties: {} } }] };
+    const options = { apiKey: 'native-broker-placeholder', fetch: fetchImpl, signal: controller.signal,
+      maxTokens: 256, temperature: 0.2, sessionId: 'probe-session', cacheRetention: 'short' };
+    // Google ignores options.fetch, so only the async scope can route it.
+    const stream = scope.run(fetchImpl, () => provider[symbol](model, context, options));
+    const events = [];
+    try { for await (const event of stream) events.push(event.type); }
+    finally { if (providerTimer) clearTimeout(providerTimer); }
+    const message = await stream.result();
+    result = { events, message, payload, channelCount };
+  } else if (mode.startsWith('sdk')) {
     // Exact provider SDK dependencies installed only in the separate probe.
     const packageName = format === 'anthropic-messages' ? '@anthropic-ai/sdk' : 'openai';
     const module = await import(pathToFileURL(`${sdkRoot}/node_modules/${packageName}/index.mjs`));

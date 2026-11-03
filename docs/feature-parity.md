@@ -8,7 +8,7 @@
 
 - [x] 上游 runtime 钉点与升钉流程：钉点文件、`docs/UPSTREAM-RUNTIME.md`、checkout 的 commit/tree/洁净状态、以及实际进入 bundle 的每个上游文件 sha256 四方一致，CI 在 PR 与 push 上强制；宿主测试、上游网关 smoke 与 19 项钉点测试通过。**只覆盖宿主契约层**，不证明完整 runtime、插件市场或 Android 可用。
 - [ ] 本机安装、校验、启动、停止与升级 MiniMax Code 运行时（mcode-webui/minimax-code fork）；处理异常中断和进程清理。
-- [x] SDK→模型FD流式适配（宿主组件）：固定OpenAI两协议/Anthropic SDK、工具事件、背压、取消、错误不重试；动态Android请求桥/Google/完整runtime仍未完成，见T-RuntimeBroker。
+- [x] SDK→模型FD流式适配（宿主组件）：固定OpenAI两协议/Anthropic SDK、工具事件、背压、取消、错误不重试；四类真实pi-ai provider（含Google async scope）组件验证已过，动态Android请求桥/完整runtime仍未完成，见T-RuntimeBroker。
 - [x] native Key broker 的四协议文本流与取消、Key边界测试；API26/35各十项Keystore/隔离UID/Unix FD/IPC仪器用例通过。仅组件基线，不证明真实模型或完整runtime；见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。
 
 - [ ] 将官方 MiniMax Bot 的业务逻辑作为内置 Bot 服务接入上述 runtime：启动、持久化、会话恢复、审批和问答；不实现通用 Mini App 容器。

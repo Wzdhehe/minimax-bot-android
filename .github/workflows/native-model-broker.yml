@@ -49,6 +49,25 @@ jobs:
       - name: Real inherited FD streams through provider SDK parsers
         working-directory: dsh-go/tooling/model-sdk-probe
         run: npm test
+      - name: Read the upstream runtime pin
+        id: model-pin
+        run: |
+          node --input-type=module -e '
+            const pin = await import("./dsh-go/runtime/minimax-bot-host/upstream-runtime-pin.mjs");
+            console.log("repository=" + pin.UPSTREAM_RUNTIME_REPOSITORY);
+            console.log("commit=" + pin.UPSTREAM_RUNTIME_COMMIT);
+          ' >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.model-pin.outputs.repository }}
+          ref: ${{ steps.model-pin.outputs.commit }}
+          path: upstream-model-source
+      - name: Verify and bundle unchanged pinned pi-ai providers
+        working-directory: dsh-go/tooling/model-sdk-probe
+        run: node prepare-pi.mjs "$GITHUB_WORKSPACE/upstream-model-source"
+      - name: Four real pi-ai providers and native FD cancellation
+        working-directory: dsh-go/tooling/model-sdk-probe
+        run: npm run test:pi
   native-boundary:
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -1,0 +1,132 @@
+{
+  "_license": "SPDX-License-Identifier: AGPL-3.0-only",
+  "commit": "97818b2890b4acae1c6bd1200a226ff506680628",
+  "requests": {
+    "openai-completions": {
+      "model": "m1",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello"
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "store": false,
+      "max_completion_tokens": 256,
+      "temperature": 0.2,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "lookup",
+            "description": "Lookup a value",
+            "parameters": {
+              "type": "object",
+              "properties": {}
+            },
+            "strict": false
+          }
+        }
+      ]
+    },
+    "openai-responses": {
+      "model": "m1",
+      "input": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "Hello"
+            }
+          ]
+        }
+      ],
+      "stream": true,
+      "prompt_cache_key": "probe-session",
+      "store": false,
+      "max_output_tokens": 256,
+      "temperature": 0.2,
+      "tools": [
+        {
+          "type": "function",
+          "name": "lookup",
+          "description": "Lookup a value",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          },
+          "strict": false
+        }
+      ]
+    },
+    "anthropic-messages": {
+      "model": "m1",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Hello",
+              "cache_control": {
+                "type": "ephemeral"
+              }
+            }
+          ]
+        }
+      ],
+      "max_tokens": 256,
+      "stream": true,
+      "temperature": 0.2,
+      "tools": [
+        {
+          "name": "lookup",
+          "description": "Lookup a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ]
+    },
+    "google-generative-ai": {
+      "contents": [
+        {
+          "parts": [
+            {
+              "text": "Hello"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "lookup",
+              "description": "Lookup a value",
+              "parametersJsonSchema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ]
+        }
+      ],
+      "generationConfig": {
+        "temperature": 0.2,
+        "maxOutputTokens": 256
+      }
+    }
+  }
+}

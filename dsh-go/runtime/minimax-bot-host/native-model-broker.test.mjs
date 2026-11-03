@@ -8,6 +8,7 @@ import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { BrokerError, createModelBrokerClient, startModelProxy } from './model-broker.mjs';
 import { buildRuntimeEnv, createRuntimeDescriptor, writeRuntimeDescriptor } from './runtime-descriptor.mjs';
@@ -218,4 +219,12 @@ test('native rejects deeply nested request JSON and does not call a truncated pr
     (error) => error instanceof BrokerError && error.code === 'broker_invalid_response');
   assert.deepEqual(events, [{ delta: 'partial' }]);
   await s.client.stream(request()); // The native process remains alive.
+});
+
+test('real pinned pi-ai request contracts pass native body policy with native-only authentication', options, async () => {
+  const contracts = new URL('../../tooling/model-sdk-probe/request-contracts.json', import.meta.url);
+  const { stdout, stderr } = await exec(process.env.MBOT_JAVA ?? 'java', ['-cp', classpath,
+    'io.github.ccch1mneyyy.dsh_app.model.NativePayloadContractFixture', fileURLToPath(contracts)], { timeout: 10_000 });
+  assert.equal(stdout.trim(), 'accepted=4');
+  assert.equal(stderr, '');
 });

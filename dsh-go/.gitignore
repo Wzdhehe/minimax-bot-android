@@ -34,3 +34,6 @@ site/build/
 
 # Release assets (tooling/release_assets.py)
 /dist/
+
+# Pinned provider source bundles are generated for the host probe only.
+tooling/model-sdk-probe/.build/
