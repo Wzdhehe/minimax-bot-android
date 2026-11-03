@@ -64,6 +64,8 @@ class IsolatedNodeModelTest {
             providerId = ((store.catalog()["providers"] as List<*>).single() as Map<*, *>)["providerId"] as String
             val transport = ProviderTransport { prepared ->
                 if (prepared.headers["Authorization"] == "Bearer $secret") headersInjected.incrementAndGet()
+                val content = JSONObject(prepared.body).getJSONArray("messages").getJSONObject(0).getString("content")
+                if (content.startsWith("large-")) check(content == "large-".repeat(14_000)) { "large_body_changed" }
                 val model = JSONObject(prepared.body).getString("model")
                 object : ProviderCall {
                     override fun execute(): ProviderResponse {
@@ -156,7 +158,9 @@ class IsolatedNodeModelTest {
                             assertEquals("done", report.getJSONObject("dynamic").getString("code"))
                             assertEquals("hello", report.getJSONObject("dynamic").getJSONArray("events").getJSONObject(0).getString("delta"))
                             assertTrue(report.getBoolean("dynamicCancelled"))
-                            assertEquals(4, headersInjected.get())
+                            assertEquals("done", report.getJSONObject("dynamicLarge").getString("code"))
+                            assertEquals("hello", report.getJSONObject("dynamicLarge").getJSONArray("events").getJSONObject(0).getString("delta"))
+                            assertEquals(5, headersInjected.get())
                             assertFalse(store.catalog().toString().contains(secret))
                             assertFalse(logs.any { it.contains(secret) })
                             }

@@ -68,6 +68,8 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     const request = JSON.stringify({ providerId, modelId: 'normal', messages: [{ role: 'user', content: 'Hi dynamic' }] });
     const id = require('node:crypto').randomUUID();
     report.dynamic = await consume(await binding.open(id, request), false);
+    const large = JSON.stringify({ providerId, modelId: 'normal', messages: [{ role: 'user', content: 'large-'.repeat(14_000) }] });
+    report.dynamicLarge = await consume(await binding.open(require('node:crypto').randomUUID(), large), false);
     const cancelledId = require('node:crypto').randomUUID();
     binding.cancel(cancelledId);
     try { fs.closeSync(await binding.open(cancelledId, request)); report.dynamicCancelled = false; }

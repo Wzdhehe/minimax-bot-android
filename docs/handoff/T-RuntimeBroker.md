@@ -1,5 +1,26 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+## 当前：大请求pipe协议（2026-11-03，设备待CI）
+
+保留OPEN inline的64KiB上限；增加OPEN_FD，最大1MiB JSON经匿名pipe传送，Binder仅带nonce/id/声明长度/FD，wire144KiB上限不放大。Client全进程最多4个writer，线程可回收；结果/错误/取消都关闭pipe端点。先做字符长度/UTF8字节限制，不因大字符串先分配无界bytes。
+
+Host在UID/nonce/admission后才分配最多1MiB缓冲；只接受FIFO，非阻塞poll，默认绝对5秒读截止、每次最多100ms观察关闭/取消；必须恰好读满声明长度且EOF，超长/截断/非法UTF8拒绝。沿用JSON解析前预算和单provider/model绑定，之后才创建模型FD。取消早于/正在读body均拒绝，opening系统调用的取消仍按晚到FD关闭处理，不宣称立即中断connect。
+
+验收APK新增/扩展实际隔离端84KB内容逐字校验、超1MiB拒绝、取消在先、停滞读取截止和读取中取消；Node JNI上限同步1MiB，固定Node脚本也发84KB请求并检查native注入次数。没有放宽存储/网络/命令权限，Key/endpoint/token接口不变。
+
+最后实际构建：
+
+```text
+BUILD SUCCESSFUL in 2m 53s
+73 actionable tasks: 12 executed, 61 up-to-date
+BUILD SUCCESSFUL in 2m 39s
+69 actionable tasks: 11 executed, 58 up-to-date
+```
+
+分别是broker目标testDebugUnitTest/两个APK和Node目标两个APK。前者XML32项通过；host固定脚本1、input拒绝8通过。**本阶段大请求设备执行待CI**。此前d545dc7的Binder矩阵41665743434、4f92405动态Node矩阵41667564473已API实查success；后者本次日志读取为空，不伪造日志/计数。
+
+## 历史：64KiB Binder与JNI阶段
+
 > 后续：Node Promise/JNI动态调用已在验收target实现并编译，设备待CI，见T-AndroidNode当前节。生产启动器未装配，大请求FD仍未做。SQLite API26/35基线已有run41663798958 success实证，旧“API35运行中”不再代表当前。
 
 ## 当前：动态模型请求Binder组件（2026-11-03，设备待CI）

@@ -68,7 +68,7 @@ void OpenModel(const v8::FunctionCallbackInfo<v8::Value>& args) {
   bool admitted = false;
   while (active < 4) { if (opens.compare_exchange_weak(active, active + 1)) { admitted = true; break; } }
   if (!admitted || args.Length() != 2 || !args[0]->IsString() || !args[1]->IsString() ||
-      args[0].As<v8::String>()->Length() > 128 || args[1].As<v8::String>()->Utf8LengthV2(isolate) > 64 * 1024) {
+      args[0].As<v8::String>()->Length() > 128 || args[1].As<v8::String>()->Utf8LengthV2(isolate) > 1024 * 1024) {
     if (admitted) opens.fetch_sub(1);
     resolver->Reject(context, v8::Exception::Error(v8::String::NewFromUtf8Literal(isolate, "broker_request_invalid"))).FromMaybe(false);
     return;

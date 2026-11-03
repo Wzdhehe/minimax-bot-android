@@ -1,6 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+## 当前补强：1MiB请求pipe（设备待CI）
+
+Native client/host增加有界请求pipe，JNI允许1MiB；固定Node脚本实际发送84KB请求，Main transport逐字校验，native Key注入总计5次（3个prefd + 2个动态请求）。最后JNI/SQLite重编成功，Node两个APK **BUILD SUCCESSFUL in 2m39s**；host1+input8过。相关协议/取消/截止见T-RuntimeBroker当前节。本阶段设备CI待观察，不使用4f92405的64KiB基线代替。
+
+full-ICU重跑run **41680254279** 正在build，源recipe不变；首轮41630373256已超时取消，以下是当轮记录。
+
 ## full-ICU首轮超时，延长后重跑
 
 run41630373256 / build125898095957已cancelled，verify skipped。实读check-run annotation：`The job has exceeded the maximum execution time of 4h0m0s`。job11:47:41开始、15:49:11结束，未生成可用archive。gh run --log本次返回空，**没有声称读到编译器失败或编译进度**。现在只将job上限改360分钟、编译step330分钟，留诊断/收尾余量；recipe/钉点/ICU断言不变，须观察新run。不是full-ICU已构建通过。

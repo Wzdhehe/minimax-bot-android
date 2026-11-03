@@ -58,7 +58,7 @@ combination to verify. See [T-SQLite](../../../docs/handoff/T-SQLite.md).
 
 The verification JNI now registers a fixed linked binding whose open returns a
 Promise. At most four libuv workers call the isolated Kotlin Binder client;
-64 KiB bodies and 128-character request IDs are bounded before copying.
+1 MiB bodies and 128-character request IDs are bounded before copying.
 The owner binds the actual UID, selected provider/model, session and peer
 lifetime. Node only receives provider metadata and an owned result FD; the
 native session and Key stay outside JS. The fixed script checks a dynamic
@@ -67,4 +67,6 @@ JNI/platform exceptions become a stable error without diagnostics.
 
 The host script test skips JNI because it runs normal desktop Node. Only the
 API26/35 device job can validate this branch. Production launch/model SDK
-wiring, larger request FD transport and persistent storage are still missing.
+wiring, persistent storage are still missing. Requests above 64 KiB now use a bounded
+pipe (exact length/EOF/UTF8, read deadline and cancellation), keeping large
+strings out of Binder. The fixed script additionally sends an 84 KiB request.

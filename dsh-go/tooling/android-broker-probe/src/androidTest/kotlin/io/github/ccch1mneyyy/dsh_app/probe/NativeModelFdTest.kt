@@ -179,6 +179,8 @@ class NativeModelFdTest {
         val calls = java.util.concurrent.atomic.AtomicInteger()
         val transport = ProviderTransport { prepared ->
             check(prepared.headers["Authorization"] == "Bearer $secret") { "native_auth_missing" }
+            val content = org.json.JSONObject(prepared.body).getJSONArray("messages").getJSONObject(0).getString("content")
+            if (content.startsWith("large-")) check(content == "large-".repeat(14_000)) { "large_body_changed" }
             calls.incrementAndGet()
             object : ProviderCall {
                 override fun execute() = ProviderResponse(200, "text/event-stream",
@@ -192,11 +194,14 @@ class NativeModelFdTest {
                 ProbeConnection(context).use { probe ->
                     val identity = probe.request(IsolationBoundaryProbeService.IDENTITY, Bundle()).get(10, TimeUnit.SECONDS)
                     assertNotEquals(Process.myUid(), identity.uid)
-                    NativeModelRequestHost(identity.uid, "p1", "m1", probe.peerBinder(), channels::open, channels::close).use { host ->
-                        fun invoke(body: String = request, session: String = host.session, cancel: Boolean = false): Reply =
+                    NativeModelRequestHost(identity.uid, "p1", "m1", probe.peerBinder(), channels::open, channels::close, readTimeoutMs = 2_000).use { host ->
+                        fun invoke(body: String = request, session: String = host.session, cancel: Boolean = false,
+                            large: Boolean = false, oversize: Boolean = false, stall: Boolean = false, cancelDuring: Boolean = false): Reply =
                             probe.request(IsolationBoundaryProbeService.REQUEST_MODEL, Bundle().apply {
                                 putBinder("model_host", host); putString("model_session", session)
                                 putString("model_body", body); putBoolean("cancel_before_open", cancel)
+                                putBoolean("large_body", large); putBoolean("oversize_body", oversize)
+                                putBoolean("stall_body", stall); putBoolean("cancel_during_body", cancelDuring)
                             }).get(10, TimeUnit.SECONDS)
                         val response = invoke()
                         assertEquals(identity.uid, response.uid)
@@ -205,15 +210,19 @@ class NativeModelFdTest {
                         assertTrue(text.contains("dynamic") && text.contains("data: [DONE]"))
                         assertFalse(text.contains(secret) || text.contains(broker.session.token) || text.contains(host.session))
                         assertFalse(host.toString().contains(secret) || host.toString().contains(host.session))
+                        assertTrue(invoke(large = true).data.getBoolean("ok"))
                         assertEquals(ModelBrokerCode.INVALID_PROVIDER.wire,
                             invoke(request.replace("\"m1\"", "\"other\"")).data.getString("code"))
                         assertEquals(ModelBrokerCode.UNAVAILABLE.wire, invoke(session = "0".repeat(64)).data.getString("code"))
                         assertEquals(ModelBrokerCode.CANCELLED.wire, invoke(cancel = true).data.getString("code"))
-                        assertEquals(ModelBrokerCode.INVALID_REQUEST.wire, invoke(body = "x".repeat(64 * 1024 + 1)).data.getString("code"))
+                        assertEquals(ModelBrokerCode.INVALID_REQUEST.wire, invoke(oversize = true).data.getString("code"))
+                        assertEquals(ModelBrokerCode.CANCELLED.wire, invoke(large = true, cancel = true).data.getString("code"))
+                        assertEquals(ModelBrokerCode.UNAVAILABLE.wire, invoke(stall = true).data.getString("code"))
+                        assertEquals(ModelBrokerCode.CANCELLED.wire, invoke(stall = true, cancelDuring = true).data.getString("code"))
                         // Even the owner UID cannot bypass this capability's observed isolated-UID binding.
                         try { ModelRequestClient(host, host.session).open(UUID.randomUUID().toString(), request).close(); fail("owner UID bypassed binding") }
                         catch (error: ModelBrokerFailure) { assertEquals(ModelBrokerCode.UNAVAILABLE, error.code) }
-                        assertEquals(1, calls.get())
+                        assertEquals(2, calls.get())
                         host.close()
                         assertEquals(ModelBrokerCode.UNAVAILABLE.wire, invoke().data.getString("code"))
                     }

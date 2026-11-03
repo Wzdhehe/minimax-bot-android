@@ -12,6 +12,10 @@ import android.os.Looper
 import android.os.Message
 import android.os.Messenger
 import android.os.ParcelFileDescriptor
+import android.os.Parcel
+import io.github.ccch1mneyyy.dsh_app.isolation.ModelRequestWire
+import org.json.JSONObject
+import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.InetSocketAddress
@@ -82,14 +86,35 @@ class IsolationBoundaryProbeService : Service() {
     private fun requestModel(data: Bundle, id: String): Bundle {
         val host = data.getBinder("model_host") ?: return Bundle()
         val session = data.getString("model_session") ?: return Bundle()
-        val body = data.getString("model_body") ?: return Bundle()
+        var body = data.getString("model_body") ?: return Bundle()
+        if (data.getBoolean("large_body")) body = JSONObject(body).put("messages", JSONArray().put(
+            JSONObject().put("role", "user").put("content", "large-".repeat(14_000)))).toString()
+        if (data.getBoolean("oversize_body")) body = "x".repeat(ModelRequestWire.MAX_BODY_BYTES + 1)
         val client = ModelRequestClient(host, session)
         return try {
+            if (data.getBoolean("stall_body")) return stalledBody(host, session, id, data.getBoolean("cancel_during_body"))
             if (data.getBoolean("cancel_before_open")) client.cancel(id)
             client.open(id, body).use { fd -> readChannel(Bundle(), fd) }
         } catch (error: ModelBrokerFailure) {
             Bundle().apply { putBoolean("ok", false); putString("code", error.code.wire) }
         }
+    }
+    private fun stalledBody(host: IBinder, session: String, id: String, cancel: Boolean): Bundle {
+        val pipe = ParcelFileDescriptor.createPipe()
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(ModelRequestWire.DESCRIPTOR)
+            data.writeString(session); data.writeString(id); data.writeInt(10)
+            pipe[0].writeToParcel(data, 0)
+            val cancellation = if (cancel) Thread {
+                Thread.sleep(100)
+                try { ModelRequestClient(host, session).cancel(id) } catch (_: Exception) { }
+            }.apply { isDaemon = true; start() } else null
+            host.transact(ModelRequestWire.OPEN_FD, data, reply, 0)
+            cancellation?.join(2_000)
+            return Bundle().apply { putBoolean("ok", false); putString("code", reply.readString()) }
+        } finally { pipe.forEach { it.close() }; data.recycle(); reply.recycle() }
     }
     private fun boundary(data: Bundle): Bundle {
         val path = data.getString("path") ?: return Bundle()
