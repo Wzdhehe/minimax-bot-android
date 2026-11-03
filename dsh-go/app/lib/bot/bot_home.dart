@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
 import 'bot_controller.dart';
-import 'bot_settings.dart';
+import 'bot_settings_hub.dart';
 
 class BotHome extends StatefulWidget {
   const BotHome({super.key, required this.controller});
@@ -129,7 +129,7 @@ class _BotHomeState extends State<BotHome> {
               IconButton(
                 tooltip: context.l10n.mobileBotSettings,
                 onPressed: () =>
-                    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BotSettingsPage())),
+                    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BotSettingsHub())),
                 icon: const Icon(Icons.settings_outlined),
               ),
               PopupMenuButton<bool>(

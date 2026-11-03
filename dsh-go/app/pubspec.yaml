@@ -55,6 +55,8 @@ dependencies:
   url_launcher: ^6.3.3
   dsh_client:
     path: ../packages/dsh_client
+  mbot_settings:
+    path: ../../packages/mbot_settings
   dsh_remote:
     path: ../packages/dsh_remote
   scrollable_positioned_list: ^0.3.8

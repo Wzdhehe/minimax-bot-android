@@ -15,6 +15,8 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 
 ## 当前代码和真实进度
 
+- **T-Settings 本轮进展**：`feat/t-settings` 基于已推送的 T-Sandbox 分支，`mbot_settings` 已接入 Bot 和旧外壳的设置入口；新 hub 有全部八组，通知/后台为可用页面，账号模型暂接既有加密配置页。独立 Android 通道负责通知渠道、状态检测及用户点击后的系统跳转。包测试 12 项、App 测试 4 项、静态检查及独立 Kotlin 编译通过；原生系统跳转/权限表现未做真机验收，运行时也没有因此完成接入。详见 [T-Settings handoff](handoff/T-Settings.md)。
+
 - **T-Sandbox 本轮进展**：在 `feat/t-sandbox`（自 `dev/integration@891aefa`）接入严格工作区守卫到宿主文件接口和真实媒体读取；修复悬空 symlink 漏洞；删除宽外部 FileProvider 映射、升 targetSdk 到 36、配置 Key prefs 的云备份/迁移排除。守卫 10 项、宿主 5 项、钉点 19 项、Android 源码策略 4 项在 Node 24 环境通过；**Android 构建与 `/sdcard` 仪器用例未运行，整张卡尚未完整验收**。详见 [本轮交接](handoff/T-Sandbox.md)。未改动远程 `main`，未创建 PR。
 
 - `dsh-go/` 是产品外壳（AGPL-3.0）；现有界面和引擎仍是上游 DSH Go，核心尚未替换。远控、品牌及受限素材仍在其中，成品发布前须移除。下文 `dsh-go/` 内的宿主/UI/客户端进展可直接沿用。

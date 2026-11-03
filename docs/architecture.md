@@ -64,6 +64,7 @@ flowchart TB
 
 - **目标**：把 `packages/mbot_settings/`（通知页、后台运行页、6 组占位）接入 DSH 设置入口；分组与 `lib/src/ia/settings_groups.dart` 一致：账号与模型 · 插件 · 通知 · 定时任务 · 后台运行 · 工作区 · 外观 · 关于。总开关关则子项灰显；后台页只跳系统设置，文案写明进程被杀后定时不跑。
 - **触碰**：`packages/mbot_settings/`；`dsh-go/app/lib/` 设置路由/入口；必要时 `dsh-go/app/pubspec.yaml`。
+- **必要平台接入**：自写 `MbotSystemSettingsPlugin.kt` 与注册点，仅检测通知/电池状态、建立本产品通知渠道和响应用户点击跳系统设置；不调用 DSH 平台通道，不自动索要权限或后台拉活。对应锁文件与设置 CI 一并维护。
 - **依赖**：无（可先于沙箱）。
 - **验收**：
   ```bash

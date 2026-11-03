@@ -23,7 +23,7 @@ void main() {
     expect(find.textContaining('未授予'), findsOneWidget);
     expect(find.textContaining('未忽略'), findsOneWidget);
     expect(find.textContaining('关掉通知权限'), findsOneWidget);
-    expect(find.textContaining('定时任务不会执行'), findsOneWidget);
+    expect(find.textContaining('定时任务不会执行'), findsWidgets);
     expect(find.textContaining('不会承诺'), findsOneWidget);
     expect(find.textContaining('小米 / HyperOS'), findsOneWidget);
     expect(find.byKey(const Key('mbot.settings.background.vendor.step.0')), findsOneWidget);

@@ -42,6 +42,7 @@ class MainActivity : FlutterActivity() {
         cache.get(ENGINE_ID)?.let { return it }
         return FlutterEngine(applicationContext).also { engine ->
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.bot.BotSettingsPlugin())
+            engine.plugins.add(io.github.ccch1mneyyy.dsh_app.bot.MbotSystemSettingsPlugin())
             engine.plugins.add(RuntimePlugin())
             engine.plugins.add(PhonePlugin())
             engine.plugins.add(NotifyPlugin())

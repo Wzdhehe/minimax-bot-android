@@ -8,7 +8,8 @@ abstract class PrefsStore {
 
 /// In-memory store for tests and hosts that inject their own persistence.
 class MemoryPrefsStore implements PrefsStore {
-  MemoryPrefsStore([Map<String, bool>? seed]) : _bools = Map<String, bool>.from(seed ?? const {});
+  MemoryPrefsStore([Map<String, bool>? seed])
+      : _bools = Map<String, bool>.from(seed ?? const {});
 
   final Map<String, bool> _bools;
 
@@ -37,6 +38,8 @@ class SharedPreferencesPrefsStore implements PrefsStore {
 
   @override
   Future<void> setBool(String key, bool value) async {
-    await _prefs.setBool(key, value);
+    if (!await _prefs.setBool(key, value)) {
+      throw StateError('Cannot persist notification preference');
+    }
   }
 }

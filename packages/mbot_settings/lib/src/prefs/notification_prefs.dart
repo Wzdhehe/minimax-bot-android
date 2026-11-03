@@ -28,7 +28,8 @@ class MbotNotificationPrefs {
       };
 
   /// Effective gate used by a future notifier: master off ⇒ nothing fires.
-  bool allows(MbotNotifyCategory category) => enabled && categoryEnabled(category);
+  bool allows(MbotNotifyCategory category) =>
+      enabled && categoryEnabled(category);
 
   MbotNotificationPrefs copyWith({
     bool? enabled,
@@ -58,7 +59,8 @@ class MbotNotificationPrefs {
       other.question == question;
 
   @override
-  int get hashCode => Object.hash(enabled, scheduleDue, turnDone, failed, approval, question);
+  int get hashCode =>
+      Object.hash(enabled, scheduleDue, turnDone, failed, approval, question);
 }
 
 /// Loads/saves [MbotNotificationPrefs] through a [PrefsStore].
@@ -81,12 +83,15 @@ class MbotNotificationPrefsController {
 
   MbotNotificationPrefs get value => _prefs;
 
-  void addListener(void Function(MbotNotificationPrefs) listener) => _listeners.add(listener);
+  void addListener(void Function(MbotNotificationPrefs) listener) =>
+      _listeners.add(listener);
 
-  void removeListener(void Function(MbotNotificationPrefs) listener) => _listeners.remove(listener);
+  void removeListener(void Function(MbotNotificationPrefs) listener) =>
+      _listeners.remove(listener);
 
   void _emit() {
-    for (final listener in List<void Function(MbotNotificationPrefs)>.from(_listeners)) {
+    for (final listener
+        in List<void Function(MbotNotificationPrefs)>.from(_listeners)) {
       listener(_prefs);
     }
   }
@@ -103,14 +108,21 @@ class MbotNotificationPrefsController {
     _emit();
   }
 
-  Future<void> setEnabled(bool value) => _save(_keys.enabled, value, (p) => p.copyWith(enabled: value));
+  Future<void> setEnabled(bool value) =>
+      _save(_keys.enabled, value, (p) => p.copyWith(enabled: value));
 
-  Future<void> setCategory(MbotNotifyCategory category, bool value) => switch (category) {
-        MbotNotifyCategory.scheduleDue => _save(_keys.scheduleDue, value, (p) => p.copyWith(scheduleDue: value)),
-        MbotNotifyCategory.turnDone => _save(_keys.turnDone, value, (p) => p.copyWith(turnDone: value)),
-        MbotNotifyCategory.failed => _save(_keys.failed, value, (p) => p.copyWith(failed: value)),
-        MbotNotifyCategory.approval => _save(_keys.approval, value, (p) => p.copyWith(approval: value)),
-        MbotNotifyCategory.question => _save(_keys.question, value, (p) => p.copyWith(question: value)),
+  Future<void> setCategory(MbotNotifyCategory category, bool value) =>
+      switch (category) {
+        MbotNotifyCategory.scheduleDue => _save(
+            _keys.scheduleDue, value, (p) => p.copyWith(scheduleDue: value)),
+        MbotNotifyCategory.turnDone =>
+          _save(_keys.turnDone, value, (p) => p.copyWith(turnDone: value)),
+        MbotNotifyCategory.failed =>
+          _save(_keys.failed, value, (p) => p.copyWith(failed: value)),
+        MbotNotifyCategory.approval =>
+          _save(_keys.approval, value, (p) => p.copyWith(approval: value)),
+        MbotNotifyCategory.question =>
+          _save(_keys.question, value, (p) => p.copyWith(question: value)),
       };
 
   Future<void> _save(
@@ -118,8 +130,8 @@ class MbotNotificationPrefsController {
     bool value,
     MbotNotificationPrefs Function(MbotNotificationPrefs) apply,
   ) async {
+    await _store.setBool(key, value);
     _prefs = apply(_prefs);
     _emit();
-    await _store.setBool(key, value);
   }
 }

@@ -13,11 +13,15 @@ class MbotSettingsHubPage extends StatelessWidget {
     required this.platform,
     required this.notificationPrefs,
     this.groups = MbotSettingsIa.groups,
+    this.pages = const {},
   });
 
   final MbotPlatform platform;
   final MbotNotificationPrefsController notificationPrefs;
   final List<MbotSettingsGroup> groups;
+
+  /// Product-owned pages, such as the encrypted provider settings screen.
+  final Map<MbotSettingsGroupId, WidgetBuilder> pages;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +36,8 @@ class MbotSettingsHubPage extends StatelessWidget {
                 key: Key('mbot.settings.hub.${group.id.name}'),
                 title: Text(group.title),
                 subtitle: Text(group.subtitle),
-                trailing: group.kind == MbotSettingsEntryKind.implemented
+                trailing: pages.containsKey(group.id) ||
+                        group.kind == MbotSettingsEntryKind.implemented
                     ? const Icon(Icons.chevron_right)
                     : Text(
                         '即将实现',
@@ -49,6 +54,11 @@ class MbotSettingsHubPage extends StatelessWidget {
   }
 
   void _open(BuildContext context, MbotSettingsGroup group) {
+    final page = pages[group.id];
+    if (page != null) {
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: page));
+      return;
+    }
     switch (group.id) {
       case MbotSettingsGroupId.notifications:
         Navigator.of(context).push(

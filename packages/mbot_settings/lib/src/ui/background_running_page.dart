@@ -14,7 +14,8 @@ class MbotBackgroundRunningPage extends StatefulWidget {
   final MbotPlatform platform;
 
   @override
-  State<MbotBackgroundRunningPage> createState() => _MbotBackgroundRunningPageState();
+  State<MbotBackgroundRunningPage> createState() =>
+      _MbotBackgroundRunningPageState();
 }
 
 class _MbotBackgroundRunningPageState extends State<MbotBackgroundRunningPage> {
@@ -72,7 +73,7 @@ class _MbotBackgroundRunningPageState extends State<MbotBackgroundRunningPage> {
                     child: Text(
                       key: Key('mbot.settings.background.disclaimer'),
                       '保活由你在系统设置里完成。本页只检测状态并提供跳转，不会偷偷拉活、不会多进程守护、不会自动反复弹出系统权限框。\n\n'
-                      '关掉通知权限，或进程被系统杀掉之后，定时任务不会执行。'
+                      '关掉通知权限只会关闭提醒；进程被系统杀掉之后，定时任务不会执行。'
                       '本应用不会承诺「被杀后仍能到点执行」。',
                     ),
                   ),
@@ -88,7 +89,8 @@ class _MbotBackgroundRunningPageState extends State<MbotBackgroundRunningPage> {
                               : '未授予 — 到点通知无法弹出，定时任务也不会在后台提醒你'),
                     ),
                     trailing: TextButton(
-                      key: const Key('mbot.settings.background.notifications.open'),
+                      key: const Key(
+                          'mbot.settings.background.notifications.open'),
                       onPressed: () => unawaited(_openNotifications()),
                       child: const Text('去系统设置'),
                     ),
@@ -96,7 +98,8 @@ class _MbotBackgroundRunningPageState extends State<MbotBackgroundRunningPage> {
                   ListTile(
                     key: const Key('mbot.settings.background.battery'),
                     title: const Text('忽略电池优化'),
-                    subtitle: Text(_batteryLabel(status?.batteryOptimizationIgnored)),
+                    subtitle:
+                        Text(_batteryLabel(status?.batteryOptimizationIgnored)),
                     trailing: TextButton(
                       key: const Key('mbot.settings.background.battery.open'),
                       onPressed: () => unawaited(_openBattery()),
@@ -106,12 +109,13 @@ class _MbotBackgroundRunningPageState extends State<MbotBackgroundRunningPage> {
                   const Divider(),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                    child: Text('建议步骤', style: Theme.of(context).textTheme.titleSmall),
+                    child: Text('建议步骤',
+                        style: Theme.of(context).textTheme.titleSmall),
                   ),
                   const ListTile(
                     leading: CircleAvatar(radius: 12, child: Text('1')),
                     title: Text('保持通知权限开启'),
-                    subtitle: Text('否则到点无法提醒；关闭后定时任务在你划掉应用后也不会跑。'),
+                    subtitle: Text('关闭通知只会关闭提醒；进程不在时定时任务不会执行。'),
                   ),
                   const ListTile(
                     leading: CircleAvatar(radius: 12, child: Text('2')),
@@ -123,7 +127,8 @@ class _MbotBackgroundRunningPageState extends State<MbotBackgroundRunningPage> {
                     title: Text('在最近任务中锁定本应用（可选）'),
                     subtitle: Text('减少被系统顺手清掉的概率；仍不保证进程永存。'),
                   ),
-                  if (status?.vendor != null) ..._vendorSection(context, status!.vendor!),
+                  if (status?.vendor != null)
+                    ..._vendorSection(context, status!.vendor!),
                   if (status?.vendor == null) ..._genericVendorSection(context),
                 ],
               ),
@@ -131,7 +136,8 @@ class _MbotBackgroundRunningPageState extends State<MbotBackgroundRunningPage> {
     );
   }
 
-  List<Widget> _vendorSection(BuildContext context, VendorBackgroundInfo vendor) {
+  List<Widget> _vendorSection(
+      BuildContext context, VendorBackgroundInfo vendor) {
     return [
       const Divider(),
       Padding(

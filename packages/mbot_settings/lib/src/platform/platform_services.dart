@@ -67,6 +67,8 @@ class BackgroundSystemStatus {
 /// sibling package). Until then, inject [FakeMbotPlatform] in tests and a
 /// no-op [UnsupportedMbotPlatform] in pure-Flutter shells.
 abstract class MbotPlatform {
+  const MbotPlatform();
+
   /// App-level notification permission / areNotificationsEnabled.
   Future<bool> areNotificationsEnabled();
 
@@ -78,7 +80,8 @@ abstract class MbotPlatform {
   Future<bool> openChannelSettings(String channelId);
 
   /// Ensures M Bot channels exist. May be a no-op until native code lands.
-  Future<void> ensureNotificationChannels(List<NotificationChannelSpec> channels);
+  Future<void> ensureNotificationChannels(
+      List<NotificationChannelSpec> channels);
 
   /// Whether the app is on the battery-optimization ignore list; null if unknown.
   Future<bool?> isBatteryOptimizationIgnored();
@@ -119,7 +122,8 @@ class UnsupportedMbotPlatform implements MbotPlatform {
   Future<bool> openChannelSettings(String channelId) async => false;
 
   @override
-  Future<void> ensureNotificationChannels(List<NotificationChannelSpec> channels) async {}
+  Future<void> ensureNotificationChannels(
+      List<NotificationChannelSpec> channels) async {}
 
   @override
   Future<bool?> isBatteryOptimizationIgnored() async => null;

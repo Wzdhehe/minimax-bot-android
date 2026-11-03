@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../bot/bot_settings_hub.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
@@ -129,6 +130,11 @@ class SettingsScreen extends ConsumerWidget {
     final page = AppPage.list(
       title: l10n.commonSettings,
       children: [
+        ListTile(
+          leading: const Icon(Icons.smart_toy_outlined),
+          title: Text('${l10n.mobileBotTitle} ${l10n.mobileBotSettings}'),
+          onTap: () => _push(context, const BotSettingsHub()),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           child: SearchCapsuleButton(
