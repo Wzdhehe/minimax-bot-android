@@ -1,5 +1,22 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+## 当前：动态模型请求Binder组件（2026-11-03，设备待CI）
+
+`bot/NativeModelRequestHost.kt` 与 `isolation/ModelRequestClient.kt` 新增隔离端按请求申请模型FD的同步Binder协议。仅可信启动器创建host并传capability；host固定**实测隔离UID + native选择的provider/model +随机会话 + peer Binder生命周期**，调用者不能更换路由/Key/URL/headers。native仍复查provider enabled/model白名单，返回的仍是原生产Unix relay FD，原native端点/token不发送。
+
+Binder先检查UID、wire大小、nonce、request ID、原生JSON预算和路由。最多4个正在open的调用；取消早于open会记录有界30秒tombstone（最多32），open途中取消则关闭晚到FD；FD返回后由接收端close来取消流。owner关闭/peer死亡会关闭该runtime所有channels。closeChannels必须只属于该runtime，不能误传全局共享资源清理。
+
+**首版body上限64KiB**（wire144KiB），超过明确拒绝。此限制小于broker HTTP/SDK的1MiB：大请求FD传输仍待开发，不往Binder塞近1MiB字符串。调用必须离开UI线程；opening期间取消只是标记/晚到FD关闭，不能宣称已中断NativeModelChannels内部正在连接的系统调用。**JNI异步open/cancel→Node Promise仍未实现，正式启动器未接。**
+
+新增仅验收APK的反向调用用例：隔离端实际请求main Binder，读取native模型FD；检查路由/nonce/UID拒绝、取消在先、超限、close、native Key/会话不出现在响应。现有所有Key与FD用例保留。真实Gradle命令沿用下文，`testDebugUnitTest assembleDebug assembleDebugAndroidTest`原始结尾：
+
+```text
+BUILD SUCCESSFUL in 2m 31s
+73 actionable tasks: 18 executed, 55 up-to-date
+```
+
+XML32 JVM项全过，仪器用例编译通过；**新增Binder设备执行待API26/35 CI，本地无设备**。SQLite阶段bc07b1c的API26已成功，API35仍在运行，不能提前写全部通过。full-ICU run41630373256仍build。
+
 ## 当前：四类钉点pi-ai真实provider验证（2026-11-03）
 
 新增 `createModelFetchScope`：显式构建AsyncLocalStorage dispatcher，不在import/构造时改全局；可信启动器须安装global fetch，并在 `scope.run(boundFetch, () => provider(...))` 内创建流。解决Google SDK只用全局fetch且pi-ai忽略options.fetch的问题；并发/嵌套调用不串binding，未绑定请求固定400、没有网络fallback。只是路由，不是安全边界；native仍须授权，生产启动器尚未装配。

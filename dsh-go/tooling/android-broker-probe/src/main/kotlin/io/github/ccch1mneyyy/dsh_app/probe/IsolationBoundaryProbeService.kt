@@ -20,6 +20,8 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import io.github.ccch1mneyyy.dsh_app.isolation.ModelRequestClient
+import io.github.ccch1mneyyy.dsh_app.model.ModelBrokerFailure
 
 /** Test-target-only OS probe. Never included in the product app. No shell,
  * arbitrary network address, file contents or credentials are returned by the
@@ -28,6 +30,8 @@ class IsolationBoundaryProbeService : Service() {
     companion object {
         const val CHECK_BOUNDARY = 1
         const val READ_CHANNEL = 2
+        const val IDENTITY = 3
+        const val REQUEST_MODEL = 4
     }
     private val channels = ConcurrentHashMap.newKeySet<ParcelFileDescriptor>()
     private val workers = ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS, ArrayBlockingQueue(4))
@@ -59,6 +63,8 @@ class IsolationBoundaryProbeService : Service() {
                     when (what) {
                         CHECK_BOUNDARY -> boundary(data)
                         READ_CHANNEL -> readChannel(data, channel)
+                        IDENTITY -> Bundle().apply { putBoolean("ok", true) }
+                        REQUEST_MODEL -> requestModel(data, id)
                         else -> Bundle().apply { putBoolean("ok", false) }
                     }
                 } catch (_: Exception) { Bundle().apply { putBoolean("ok", false) } }
@@ -71,6 +77,18 @@ class IsolationBoundaryProbeService : Service() {
             }
         } catch (_: RuntimeException) {
             channel?.let { channels.remove(it); try { it.close() } catch (_: Exception) { } }
+        }
+    }
+    private fun requestModel(data: Bundle, id: String): Bundle {
+        val host = data.getBinder("model_host") ?: return Bundle()
+        val session = data.getString("model_session") ?: return Bundle()
+        val body = data.getString("model_body") ?: return Bundle()
+        val client = ModelRequestClient(host, session)
+        return try {
+            if (data.getBoolean("cancel_before_open")) client.cancel(id)
+            client.open(id, body).use { fd -> readChannel(Bundle(), fd) }
+        } catch (error: ModelBrokerFailure) {
+            Bundle().apply { putBoolean("ok", false); putString("code", error.code.wire) }
         }
     }
     private fun boundary(data: Bundle): Bundle {

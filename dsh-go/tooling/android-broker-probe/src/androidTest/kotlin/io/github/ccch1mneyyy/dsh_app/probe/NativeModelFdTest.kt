@@ -15,6 +15,8 @@ import android.os.Process
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.ccch1mneyyy.dsh_app.bot.NativeModelChannels
+import io.github.ccch1mneyyy.dsh_app.bot.NativeModelRequestHost
+import io.github.ccch1mneyyy.dsh_app.isolation.ModelRequestClient
 import io.github.ccch1mneyyy.dsh_app.model.NativeModelBroker
 import io.github.ccch1mneyyy.dsh_app.model.NativeProvider
 import io.github.ccch1mneyyy.dsh_app.model.ModelBrokerCode
@@ -172,10 +174,59 @@ class NativeModelFdTest {
         }
     }
 
+    @Test fun isolatedRuntimeDynamicallyOpensModelFdWithUidRouteSessionAndCancellationChecks() {
+        val secret = "request-test-only-${UUID.randomUUID()}"
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val transport = ProviderTransport { prepared ->
+            check(prepared.headers["Authorization"] == "Bearer $secret") { "native_auth_missing" }
+            calls.incrementAndGet()
+            object : ProviderCall {
+                override fun execute() = ProviderResponse(200, "text/event-stream",
+                    "data: {\"delta\":\"dynamic\"}\n\ndata: [DONE]\n\n".byteInputStream())
+                override fun cancel() { }
+                override fun close() { }
+            }
+        }
+        NativeModelBroker({ _, _ -> NativeProvider("openai-completions", "https://example.invalid/v1", secret) }, transport).use { broker ->
+            NativeModelChannels(broker.session).use { channels ->
+                ProbeConnection(context).use { probe ->
+                    val identity = probe.request(IsolationBoundaryProbeService.IDENTITY, Bundle()).get(10, TimeUnit.SECONDS)
+                    assertNotEquals(Process.myUid(), identity.uid)
+                    NativeModelRequestHost(identity.uid, "p1", "m1", probe.peerBinder(), channels::open, channels::close).use { host ->
+                        fun invoke(body: String = request, session: String = host.session, cancel: Boolean = false): Reply =
+                            probe.request(IsolationBoundaryProbeService.REQUEST_MODEL, Bundle().apply {
+                                putBinder("model_host", host); putString("model_session", session)
+                                putString("model_body", body); putBoolean("cancel_before_open", cancel)
+                            }).get(10, TimeUnit.SECONDS)
+                        val response = invoke()
+                        assertEquals(identity.uid, response.uid)
+                        assertTrue(response.data.getBoolean("ok"))
+                        val text = response.data.getString("text")!!
+                        assertTrue(text.contains("dynamic") && text.contains("data: [DONE]"))
+                        assertFalse(text.contains(secret) || text.contains(broker.session.token) || text.contains(host.session))
+                        assertFalse(host.toString().contains(secret) || host.toString().contains(host.session))
+                        assertEquals(ModelBrokerCode.INVALID_PROVIDER.wire,
+                            invoke(request.replace("\"m1\"", "\"other\"")).data.getString("code"))
+                        assertEquals(ModelBrokerCode.UNAVAILABLE.wire, invoke(session = "0".repeat(64)).data.getString("code"))
+                        assertEquals(ModelBrokerCode.CANCELLED.wire, invoke(cancel = true).data.getString("code"))
+                        assertEquals(ModelBrokerCode.INVALID_REQUEST.wire, invoke(body = "x".repeat(64 * 1024 + 1)).data.getString("code"))
+                        // Even the owner UID cannot bypass this capability's observed isolated-UID binding.
+                        try { ModelRequestClient(host, host.session).open(UUID.randomUUID().toString(), request).close(); fail("owner UID bypassed binding") }
+                        catch (error: ModelBrokerFailure) { assertEquals(ModelBrokerCode.UNAVAILABLE, error.code) }
+                        assertEquals(1, calls.get())
+                        host.close()
+                        assertEquals(ModelBrokerCode.UNAVAILABLE.wire, invoke().data.getString("code"))
+                    }
+                }
+            }
+        }
+    }
+
     private data class Reply(val uid: Int, val data: Bundle)
     private class ProbeConnection(private val context: Context) : Closeable {
         private val thread = HandlerThread("mbot-fd-test-client").apply { start() }
         private val connected = CompletableFuture<Messenger>()
+        fun peerBinder(): IBinder = connected.get(5, TimeUnit.SECONDS).binder
         private val pending = ConcurrentHashMap<String, CompletableFuture<Reply>>()
         private val receiver = Messenger(Handler(thread.looper, Handler.Callback { message ->
             message.data.getString("id")?.let { pending.remove(it)?.complete(Reply(message.sendingUid, message.data)) }

@@ -1,0 +1,108 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+package io.github.ccch1mneyyy.dsh_app.bot
+
+import android.os.Binder
+import android.os.IBinder
+import android.os.Parcel
+import android.os.ParcelFileDescriptor
+import android.os.Process
+import io.github.ccch1mneyyy.dsh_app.isolation.ModelRequestWire
+import io.github.ccch1mneyyy.dsh_app.model.ModelBrokerCode
+import io.github.ccch1mneyyy.dsh_app.model.ModelBrokerFailure
+import io.github.ccch1mneyyy.dsh_app.model.requireNativeJsonBudget
+import java.io.Closeable
+import java.security.SecureRandom
+import java.util.concurrent.atomic.AtomicBoolean
+import org.json.JSONObject
+
+/** Native-only per-runtime model capability. Bound to an observed isolated UID,
+ * one trusted provider/model and a peer Binder lifetime. No Key/URL/header API.
+ * Synchronous Binder work runs off the UI thread; at most four opens in flight.
+ * This first transport rejects bodies over 64KiB. Large bodies need a future
+ * bounded request-FD protocol, never a near-1MiB Binder string.
+ */
+internal class NativeModelRequestHost(
+    private val isolatedUid: Int,
+    private val providerId: String,
+    private val modelId: String,
+    private val peer: IBinder,
+    private val openChannel: (String) -> ParcelFileDescriptor,
+    private val closeChannels: () -> Unit,
+) : Binder(), Closeable {
+    val session = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+    private val closed = AtomicBoolean()
+    private val lock = Any()
+    private val pending = mutableMapOf<String, AtomicBoolean>()
+    private val cancelled = mutableMapOf<String, Long>()
+    private val death = IBinder.DeathRecipient { close() }
+    init {
+        require(isolatedUid > 0 && isolatedUid != Process.myUid())
+        require(providerId.isNotBlank() && providerId.length <= 200 && modelId.isNotBlank() && modelId.length <= 256)
+        peer.linkToDeath(death, 0)
+    }
+    override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+        if (code != ModelRequestWire.OPEN && code != ModelRequestWire.CANCEL) return super.onTransact(code, data, reply, flags)
+        if (reply == null) return true
+        try {
+            if (closed.get() || getCallingUid() != isolatedUid || data.dataSize() > ModelRequestWire.MAX_WIRE_BYTES) {
+                throw ModelBrokerFailure(ModelBrokerCode.UNAVAILABLE)
+            }
+            data.enforceInterface(ModelRequestWire.DESCRIPTOR)
+            if (data.readString() != session) throw ModelBrokerFailure(ModelBrokerCode.UNAVAILABLE)
+            val id = data.readString() ?: throw ModelBrokerFailure(ModelBrokerCode.INVALID_REQUEST)
+            if (!id.matches(Regex("[A-Za-z0-9_-]{1,128}"))) throw ModelBrokerFailure(ModelBrokerCode.INVALID_REQUEST)
+            if (code == ModelRequestWire.CANCEL) {
+                if (data.dataAvail() != 0) throw ModelBrokerFailure(ModelBrokerCode.INVALID_REQUEST)
+                synchronized(lock) {
+                    prune()
+                    pending[id]?.set(true) ?: run {
+                        if (cancelled.size >= 32) throw ModelBrokerFailure(ModelBrokerCode.UNAVAILABLE)
+                        cancelled[id] = System.nanoTime()
+                    }
+                }
+                reply.writeString(ModelBrokerCode.CANCELLED.wire)
+            } else {
+                val body = data.readString() ?: throw ModelBrokerFailure(ModelBrokerCode.INVALID_REQUEST)
+                if (data.dataAvail() != 0 || body.toByteArray(Charsets.UTF_8).size !in 1..ModelRequestWire.MAX_BODY_BYTES) {
+                    throw ModelBrokerFailure(ModelBrokerCode.INVALID_REQUEST)
+                }
+                requireNativeJsonBudget(body, ModelBrokerCode.INVALID_REQUEST)
+                val request = JSONObject(body)
+                if (request.get("providerId") != providerId || request.get("modelId") != modelId) {
+                    throw ModelBrokerFailure(ModelBrokerCode.INVALID_PROVIDER)
+                }
+                val revoked = AtomicBoolean()
+                synchronized(lock) {
+                    prune()
+                    if (closed.get()) throw ModelBrokerFailure(ModelBrokerCode.UNAVAILABLE)
+                    if (cancelled.remove(id) != null) throw ModelBrokerFailure(ModelBrokerCode.CANCELLED)
+                    if (pending.size >= 4 || pending.containsKey(id)) throw ModelBrokerFailure(ModelBrokerCode.UNAVAILABLE)
+                    pending[id] = revoked
+                }
+                try {
+                    openChannel(body).use { fd ->
+                        if (closed.get() || revoked.get()) throw ModelBrokerFailure(ModelBrokerCode.CANCELLED)
+                        reply.writeString("ok")
+                        fd.writeToParcel(reply, 0) // Parcel owns a dup before the sender closes.
+                    }
+                } finally { synchronized(lock) { pending.remove(id) } }
+            }
+        } catch (error: Exception) {
+            // No exception, request text, native capability or platform text crosses.
+            reply.setDataSize(0); reply.setDataPosition(0)
+            reply.writeString(if (error is ModelBrokerFailure) error.code.wire else ModelBrokerCode.UNAVAILABLE.wire)
+        }
+        return true
+    }
+    private fun prune() {
+        val cutoff = System.nanoTime() - java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
+        cancelled.entries.removeAll { it.value < cutoff }
+    }
+    override fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        synchronized(lock) { pending.values.forEach { it.set(true) }; cancelled.clear() }
+        try { peer.unlinkToDeath(death, 0) } catch (_: Exception) { }
+        try { closeChannels() } catch (_: Exception) { }
+    }
+    override fun toString() = "NativeModelRequestHost(REDACTED)"
+}

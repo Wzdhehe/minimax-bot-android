@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+> 2026-11-03新增：模型动态请求Binder组件已实现/编译，绑定观测UID、单路由、会话和peer死亡；设备待CI，Node JNI仍未接。见T-RuntimeBroker当前节。原文件占位服务及其历史不等于正式runtime。
+
 # T-Isolation 交接（独立 UID + broker 最小实证）
 
 **已验证的当前基线**：`a094a85` 的 Android矩阵 run **41622547971 success**。API26 job125871636255、API35 job125871636043均成功；runner解析XML输出每台 **10 tests / 0 failures / 0 errors / 0 skipped**。实际覆盖Keystore/nativeHTTP、独立UID直接文件/网络拒绝、Unix FD流/取消/容量/截止、IPC启动取消解绑与竞争租约/并发关联。物理真机/硬件Keystore/Android Node/完整runtime仍未验证。后文“待观察”和旧失败是演进记录，以此项覆盖。
