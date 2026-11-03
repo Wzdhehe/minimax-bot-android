@@ -41,13 +41,14 @@ dev/integration 891aefa
 4. [T-Usage](handoff/T-Usage.md)：只读额度白名单投影、页面和 API provider 不冒充账号登录；真实 OAuth/UsageQuotaClient 未装配。
 5. [T-Schedule](handoff/T-Schedule.md)：Bot 资料/任务管理、同源 MCP 宿主测试、进程内 SSE→native 通知桥。调用者身份可信绑定、真机通知、断线/页面外通知尚未完成。
 6. [UI-Motion](handoff/UI-Motion.md)：DSH 路由过渡、轻量骨架、会话入场、lazy lists、SSE 直接合并/32ms 通知与晚到历史竞态保护。
+8. [T-Isolation](handoff/T-Isolation.md)：独立 UID + broker 代码层最小实证（isolatedProcess 占位服务、主进程 broker、纯 JVM 路径守卫与单测）。**没有真机验证，没有完整 Gradle 构建，Key 边界只在协议层成立。**
 7. [T-Plugins](handoff/T-Plugins.md)：插件页和只读 mcode adapter、GitHub 固定版本预览、协议字段/installed cursor 差异。**生产变更入口强制关闭，当前无正式运行时 descriptor，非已完成安装市场。**
 
 关键现实：默认正式启动器仍是 DSH 基线。`lib/dev/minimax_bot_main.dart` 只是 UI 联调入口。没有成功构建完整 fork APK，没有真实 Android 设备，不能说 App 已写完/模型已跑通/完整沙箱可用。
 
 ## 接下来优先做
 
-1. 阅读 `docs/architecture.md` 卡与 `docs/sandbox.md`，先落实独立 UID + broker 的 Android 最小实证、Node/runtime 原生依赖与宿主生命周期；禁止回退同 UID 任意 shell。
+1. 阅读 `docs/architecture.md` 卡与 `docs/sandbox.md`，先落实独立 UID + broker 的 Android 最小实证、Node/runtime 原生依赖与宿主生命周期；禁止回退同 UID 任意 shell。**独立 UID + broker 的代码层最小实证见 [T-Isolation](handoff/T-Isolation.md)**：`isolatedProcess` 服务 + 主进程 broker + 纯 JVM 路径守卫单测已落地；真机行为、Node 原生依赖与宿主生命周期仍未验证。
 2. 打包/启动钉点 runtime，可信 descriptor 私有传递；接 provider native broker、配置/模型同步，真实模型流和取消。API Key 不传入 Agent/插件环境。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。

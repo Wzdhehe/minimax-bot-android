@@ -222,6 +222,20 @@
                 android:value="Runs the user's local DeepSeek Harness agent server" />
         </service>
 
+        <!-- Agent execution placeholder in an ISOLATED process: its own UID, no app
+             permissions, no network, no access to filesDir. It can only ask the
+             main-process broker (isolation/AgentBrokerService.kt) for workspace files. -->
+        <service
+            android:name=".isolation.AgentIsolationService"
+            android:exported="false"
+            android:isolatedProcess="true" />
+
+        <!-- Main-process broker: the only path from the isolated UID to filesDir/workspace.
+             Path-guarded; no shell, no credential operation. -->
+        <service
+            android:name=".isolation.AgentBrokerService"
+            android:exported="false" />
+
         <!-- Keeps the floating pet's process up when only remote hosts are used (pet/PetOverlayService.kt). -->
         <service
             android:name=".pet.PetOverlayService"
