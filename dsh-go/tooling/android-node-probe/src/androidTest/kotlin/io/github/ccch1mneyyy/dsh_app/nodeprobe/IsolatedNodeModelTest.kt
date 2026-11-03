@@ -125,7 +125,6 @@ class IsolatedNodeModelTest {
                             resultPair[1].close()
                             val reply = completion.get(35, TimeUnit.SECONDS)
                             assertNotEquals(Process.myUid(), reply.uid)
-                            assertEquals("ok", reply.data.getString("code"))
                             val bytes = ByteArrayOutputStream()
                             ParcelFileDescriptor.AutoCloseInputStream(resultPair[0]).use { input ->
                                 val chunk = ByteArray(4096)
@@ -142,7 +141,16 @@ class IsolatedNodeModelTest {
                             assertFalse(text.contains(secret))
                             assertFalse(text.contains(broker.session.token))
                             assertFalse(text.contains(host.session))
-                            val report = JSONObject(text)
+                            val report = if (text.isBlank()) JSONObject() else JSONObject(text)
+                            if (reply.data.getString("code") != "ok") {
+                                val phases = setOf("bootstrap", "sqlite_load", "sqlite_memory", "vfs_register", "vfs_open", "vfs_wal",
+                                    "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "model_dynamic", "sdk_route")
+                                val codes = setOf("SQLITE_CANTOPEN", "SQLITE_IOERR", "SQLITE_IOERR_SHMOPEN", "SQLITE_BUSY", "SQLITE_READONLY",
+                                    "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid")
+                                val phase = report.optString("failedPhase").takeIf { it in phases } ?: "unknown"
+                                val code = report.optString("failureCode").takeIf { it in codes } ?: "unknown"
+                                fail("node_probe_failed_at_${phase}_code_${code}")
+                            }
                             assertEquals("24.22.2", report.getString("version"))
                             val expected = base.assets.open("node-validation.json").bufferedReader().use { JSONObject(it.readText()) }
                             if (expected.getBoolean("requiresIntl")) {

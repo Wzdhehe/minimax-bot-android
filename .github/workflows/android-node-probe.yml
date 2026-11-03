@@ -99,6 +99,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
+          import re
           totals = dict.fromkeys(('tests', 'failures', 'errors', 'skipped'), 0)
           root = Path('dsh-go/tooling/android-node-probe/build/outputs/androidTest-results/connected')
           for path in root.rglob('*.xml'):
@@ -107,6 +108,11 @@ jobs:
                   totals[key] += int(suite.get(key, '0'))
               for case in suite.findall('testcase'):
                   print(case.get('classname') + '.' + case.get('name'))
+                  for failure in case.findall('failure'):
+                      # Only fixed phase/code identifiers; never XML body/env/response diagnostics.
+                      match = re.search(r'node_probe_failed_at_(bootstrap|sqlite_load|sqlite_memory|vfs_register|vfs_open|vfs_wal|vfs_verify|vfs_write|vfs_reopen|model_streams|model_dynamic|sdk_route|unknown)_code_(SQLITE_CANTOPEN|SQLITE_IOERR_SHMOPEN|SQLITE_IOERR|SQLITE_BUSY|SQLITE_READONLY|SQLITE_ERROR|SQLITE_PERM|SQLITE_MISUSE|SQLITE_NOTFOUND|fd_vfs_unavailable|fd_vfs_input_invalid|unknown)(?:\b|$)', failure.get('message', ''))
+                      if match:
+                          print('::error::Node probe phase=' + match[1] + ' code=' + match[2])
           print(totals)
           assert totals['tests'] >= 1
           assert totals['failures'] == totals['errors'] == totals['skipped'] == 0

@@ -2,6 +2,21 @@
 
 **最新接手入口：[HANDOFF.md](HANDOFF.md)**。从 `feat/t-plugins` 继续；下文保留历史分轮记录，最新状态和未完成装配以总交接和专题 handoff 为准。
 
+## 当前验证入口（2026-11-03）
+
+当前运行时工作在 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)、[T-AndroidNode](handoff/T-AndroidNode.md)、[T-SQLite](handoff/T-SQLite.md)、[T-Persistence](handoff/T-Persistence.md)。仍是组件/模拟器，不是完整产品APK；默认入口仍DSH。
+
+```bash
+MBOT_NATIVE_DEPS=/path/to/pinned-jars KOTLINC=/path/to/kotlinc bash dsh-go/tooling/test-native-model-broker.sh
+npm ci --ignore-scripts --no-audit --no-fund --prefix dsh-go/tooling/model-sdk-probe
+node dsh-go/tooling/model-sdk-probe/prepare-pi.mjs /path/to/clean/pinned/minimax-code
+npm test --prefix dsh-go/tooling/model-sdk-probe
+npm run test:pi --prefix dsh-go/tooling/model-sdk-probe
+python3 dsh-go/tooling/android-node-probe/test-fd-vfs.py --ndk /path/to/ndk27d
+```
+
+Android工具与实际命令见专题卡；`tooling/android-broker-probe`编译真实native源码/测试，`tooling/android-node-probe`另需先prepare-probe、prepare-sqlite（Node archive/NDK/esbuild均钉版本）。后者默认候选无Intl，full-ICU从源码独立CI构建。实际API26/35结果以HANDOFF中的run ID为准；宿主测试和编译不能代替设备执行，物理真机/ARM64未验证。
+
 ## 产品边界
 
 Android 本机多 Bot，参考 Grok Bot 布局及官方 MiniMax Bot 功能。用户在设置中输入 MiniMax 的 API Key、Base URL 和模型；模型服务需要联网，无需自建云或远控。手机固定竖屏，平板允许旋转并根据窗口宽度展开。不要加入手机 UI 操控或通用 Agent 工作台。
@@ -11,7 +26,7 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 ## 许可证与代码落点（已拍板）
 
 - **接受 AGPL 开源**：产品基于 [DSH Go](https://github.com/ccch1mneyyy/dsh-Go)（AGPL-3.0，导入为 `dsh-go/`，钉 `c1c0abb00907efdf48dcb443581686b67597c5a2`）外壳，核心换为官方 MiniMax Bot + mcode-webui/minimax-code runtime；新代码可直接在 `dsh-go/` 内改，根下 `packages/` 已有独立模块可继续使用；分发 APK 须遵守 AGPL-3.0 源码提供义务。
-- 考前任务卡与验收命令见 [architecture.md](architecture.md)（T-Runtime → T-Sandbox → T-Settings → T-Usage → T-Schedule → T-Plugins）。外部用 MiniMax Code 按卡开发，本团队验收。
+- 考前任务卡与验收命令见 [architecture.md](architecture.md)（T-Runtime → T-Sandbox → T-Settings → T-Providers → T-Usage → T-Schedule → T-Plugins）。外部用 MiniMax Code 按卡开发，本团队验收。
 - **Runtime 跟 [mcode-webui/minimax-code](https://github.com/mcode-webui/minimax-code) fork**（MIT，`97818b2`）；官方 [MiniMax-AI/minimax-code](https://github.com/MiniMax-AI/minimax-code) 作上游，更新由我们自行合并进 fork。
 - 考前节奏：小步继续开发。插件在 Android 上的安装策略、以及定时验收档位（报告 F.7）**仍未定**。
 

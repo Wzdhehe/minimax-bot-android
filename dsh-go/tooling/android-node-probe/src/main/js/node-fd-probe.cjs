@@ -4,6 +4,7 @@
 const modelModuleUrl = "__MBOT_FD_MODULE_URL__";
 const nativeRouteModuleUrl = "__MBOT_NATIVE_ROUTE_MODULE_URL__";
 const fs = require('node:fs');
+let probePhase = 'bootstrap';
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
 
 (async () => {
@@ -33,9 +34,11 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     const wrapper = { exports: {} };
     new Function('require', 'module', 'exports', sqliteWrapper)(require, wrapper, wrapper.exports);
     const addon = { exports: {} };
+    probePhase = 'sqlite_load';
     process.dlopen(addon, nativeLibraryDir + '/libmbot_sqlite_probe.so');
     const Database = wrapper.exports;
     const options = { nativeBinding: addon.exports };
+    probePhase = 'sqlite_memory';
     const db = new Database(':memory:', options);
     try {
       db.exec('CREATE TABLE notes(id INTEGER PRIMARY KEY, text TEXT)');
@@ -53,21 +56,27 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       } finally { restored.close(); }
     } finally { db.close(); }
     if (dataFds.length === 5) {
+      probePhase = 'vfs_register';
       addon.exports.setFdVfs(...dataFds);
       // Remove input aliases before SQLite creates locks; registry owns dup FDs.
       dataFds.forEach((fd) => fs.closeSync(fd)); dataFds.length = 0;
+      probePhase = 'vfs_open';
       const disk = new Database('state.db', options);
       let verify;
       try {
+        probePhase = 'vfs_wal';
         const mode = disk.pragma('journal_mode=WAL', { simple: true });
         disk.pragma('temp_store=MEMORY');
         disk.exec('CREATE TABLE durable(text TEXT); INSERT INTO durable VALUES (\'你好\')');
+        probePhase = 'vfs_verify';
         verify = new Database('state.db', { ...options, readonly: true, fileMustExist: true });
         const parallelRows = verify.prepare('SELECT text FROM durable').all();
         verify.close(); verify = null;
+        probePhase = 'vfs_write';
         disk.transaction(() => { disk.prepare('INSERT INTO durable VALUES (?)').run('second'); })();
         persistent = { mode, parallelRows: parallelRows.map((row) => row.text), count: disk.prepare('SELECT count(*) AS n FROM durable').get().n };
       } finally { verify?.close(); disk.close(); }
+      probePhase = 'vfs_reopen';
       const reopened = new Database('state.db', options);
       try {
         persistent.reopened = reopened.prepare('SELECT text FROM durable').all().map((row) => row.text);
@@ -76,6 +85,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     }
   }
   dataFds.forEach((fd) => fs.closeSync(fd));
+  probePhase = 'model_streams';
   const report = { sqlite, persistent,
     version: process.versions.node, modules: process.versions.modules,
     uid: process.getuid(), privateDenied, intlAvailable: typeof Intl !== 'undefined',
@@ -90,12 +100,14 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     echoed: await consume(echo, false),
   };
   if (providerId) {
+    probePhase = 'model_dynamic';
     const binding = process._linkedBinding('mbot_model_bridge');
     const request = JSON.stringify({ providerId, modelId: 'normal', messages: [{ role: 'user', content: 'Hi dynamic' }] });
     const id = require('node:crypto').randomUUID();
     report.dynamic = await consume(await binding.open(id, request), false);
     const large = JSON.stringify({ providerId, modelId: 'normal', messages: [{ role: 'user', content: 'large-'.repeat(14_000) }] });
     report.dynamicLarge = await consume(await binding.open(require('node:crypto').randomUUID(), large), false);
+    probePhase = 'sdk_route';
     const { createNativeModelRoute } = await import(nativeRouteModuleUrl);
     const route = createNativeModelRoute({ providerId, modelId: 'normal', apiFormat: 'openai-completions', binding });
     const sdkResponse = await route.fetch(route.requestUrl, { method: 'POST', body: JSON.stringify({ model: 'normal', stream: true,
@@ -110,4 +122,14 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
   // Owner inspects the bounded result privately. No console/log response dump.
   fs.writeSync(Number(result), JSON.stringify(report));
   fs.closeSync(Number(result));
-})().catch(() => { process.exitCode = 1; });
+})().catch((error) => {
+  const codes = new Set(['SQLITE_CANTOPEN', 'SQLITE_IOERR', 'SQLITE_IOERR_SHMOPEN', 'SQLITE_BUSY', 'SQLITE_READONLY',
+    'SQLITE_ERROR', 'SQLITE_PERM', 'SQLITE_MISUSE', 'SQLITE_NOTFOUND', 'fd_vfs_unavailable', 'fd_vfs_input_invalid']);
+  const code = codes.has(error?.code) ? error.code : codes.has(error?.message) ? error.message : 'unknown';
+  try {
+    const resultFd = Number(process.argv.slice(1)[3]);
+    fs.writeSync(resultFd, JSON.stringify({ failedPhase: probePhase, failureCode: code }));
+    fs.closeSync(resultFd);
+  } catch {}
+  process.exitCode = 1;
+});
