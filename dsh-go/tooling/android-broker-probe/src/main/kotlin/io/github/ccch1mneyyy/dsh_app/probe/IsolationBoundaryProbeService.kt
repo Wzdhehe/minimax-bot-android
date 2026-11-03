@@ -12,9 +12,6 @@ import android.os.Looper
 import android.os.Message
 import android.os.Messenger
 import android.os.ParcelFileDescriptor
-import android.system.Os
-import android.system.OsConstants
-import android.system.StructTimeval
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.InetSocketAddress
@@ -93,8 +90,8 @@ class IsolationBoundaryProbeService : Service() {
     }
     private fun readChannel(data: Bundle, channel: ParcelFileDescriptor?): Bundle {
         if (channel == null) return Bundle()
-        Os.setsockoptTimeval(channel.fileDescriptor, OsConstants.SOL_SOCKET, OsConstants.SO_RCVTIMEO,
-            StructTimeval.fromMillis(5000))
+        // Socket options belong to the native owner. SELinux may permit read
+        // on a transferred Unix FD while refusing setopt on that same FD.
         val prefixOnly = data.getBoolean("prefix_only")
         val output = ByteArrayOutputStream()
         ParcelFileDescriptor.AutoCloseInputStream(channel).use { input ->

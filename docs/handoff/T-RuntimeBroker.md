@@ -1,6 +1,12 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
-## 最新诊断：API26 确认为 TCP socket 权限拒绝
+## 最新修正：Unix FD 的 socket 选项只能由 owner 设置
+
+`17e7629` run **41604321437 failure**：API26/35均运行八项、各两项隔离读FD用例失败。API26过滤日志进一步确认 `unix_stream_socket setopt` 被拒；FD发送已成功，失败在测试探针对接收FD调用 setsockopt，而不是可以据此宣布Unix传输不可用。API35未收集到相同AVC行，不对其内核原因作超出日志的断言。
+
+已将接收端 timeout option 在**主进程创建socketpair时**设置为60秒，隔离端只读/关闭FD，不再自行setopt。所有正向SSE、Key/token不回显、取消断言保留，未修改SELinux或增加权限。另增加IPC启动取消自动解绑、closeAsync本地清理future与真实竞争租约/并发请求测试；设备测试共十项。本地当前源码 `testDebugUnitTest assembleDebug assembleDebugAndroidTest`：`BUILD SUCCESSFUL in 1m 11s`，JVM27项通过、十项仪器测试编译。新的设备结果待观察。
+
+## 诊断：API26 确认为 TCP socket 权限拒绝
 
 `09faafd` run **41603434315**：API26 job **125807373482 failure**、API35 job **125807374027 success**。失败点仍是两次 TCP FD 发送，`probe_transfer_failed_alive=true`，不是服务真的死亡。runner端过滤后的原始系统证据：
 

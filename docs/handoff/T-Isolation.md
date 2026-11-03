@@ -1,5 +1,11 @@
 # T-Isolation 交接（独立 UID + broker 最小实证）
 
+## 最新：启动取消、可等待的本地关闭与并发仪器用例
+
+`AgentIsolationClient.connect` future 被取消时自动close；bind前和每次bind前检查closed，已经建立的绑定会解绑，不继续第二个bind。增加 `closeAsync()`：只等待本owner pending清理、revoke发送、unbind与worker退出请求，不代表远端退出ACK或文件写回滚。revoke/unbind的运行时异常不会中断剩余清理。
+
+仪器测试新增两项：用真实Context绑定在首个bind后取消，观测准确unbind且不再bind；活跃客户端拒绝竞争租约后继续8路文件写/反向并发读，确认结果ID没有串线。原fileIPC用例改为等待本地close再清理文件。组件 Gradle `testDebugUnitTest assembleDebug assembleDebugAndroidTest`：`BUILD SUCCESSFUL in 1m 11s`，JVM27项通过，测试已编译；设备执行待观察。它没有增加任意执行、Key或新存储权限；请求已入队的写仍不能承诺取消/回滚。
+
 ## 最新：Android35 模拟器已执行基础三项
 
 `2d7367b` 的 GitHub run **41600336727 success**，日志 `Finished 3 tests on emulator-5554 - 15` / `BUILD SUCCESSFUL in 5m 20s`。其中生产 `AgentIsolationClientTest` 真实 bind/握手，观测 sendingUid 与主进程不同，经 broker 读写并拒绝穿越，close 后拒绝请求；另两项为 Keystore/native HTTP。XML下载403，未检查 XML。

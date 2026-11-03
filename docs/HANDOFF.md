@@ -1,5 +1,7 @@
 # 最新接手入口（2026-11-03）
 
+**最新待验修正**：17e7629的Unix矩阵两版本各有两项失败；26日志定位为接收端setopt被拒。现把socket option设置留在主进程，隔离端只读/关闭，并保留完整SSE/Key/cancel断言。另补IPC启动取消解绑、可等待本地close、竞争租约/并发关联用例，总计十项设备用例待新CI；本地组件 Gradle **BUILD SUCCESSFUL in 1m 11s**，JVM27项/仪器编译通过。此前的八项矩阵不能写成通过。
+
 **诊断已定位**：`09faafd`/run41603434315 的26失败有 `binderAlive=true` 和 isolated→app `tcp_socket read write` SELinux拒绝证据。新版17e7629只传Unix socketpair，run41604321437待观察。Android Node源码候选现找到Termux24.22.2（已钉recipe提交、未采用/构建），详见 [runtime计划](ANDROID-RUNTIME-INTEGRATION.md)。数据路径/SQLite/WAL仍是独立关口。
 
 **当前候选传输**：native 主进程保留 TCP，向隔离端只传 Unix socketpair 端点；`NativeModelChannels` 最多4通道，每通道单 poll worker/32KiB缓冲，支持容量拒绝、取消、截止与owner关闭。新增仪器用例共八项已编译，API26/35新矩阵待观察。宿主 **JVM27 + Node30 全过**（含真实 Unix FD），组件 Gradle **BUILD SUCCESSFUL in 1m 24s**。不能提前说26兼容已解决。

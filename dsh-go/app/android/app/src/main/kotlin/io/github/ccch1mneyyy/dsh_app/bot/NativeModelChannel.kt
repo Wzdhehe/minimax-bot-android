@@ -54,6 +54,10 @@ internal class NativeModelChannels(
         try {
             tcp = connectAuthenticatedModelRequest(session, request)
             pair = ParcelFileDescriptor.createSocketPair()
+            // Set options while both endpoints still belong to the owner.
+            // Isolated receivers can read this FD but may not set socket opts.
+            Os.setsockoptTimeval(pair[1].fileDescriptor, OsConstants.SOL_SOCKET, OsConstants.SO_RCVTIMEO,
+                StructTimeval.fromMillis(60_000))
             bridge = Bridge(tcp, pair[0], timeoutMs)
             active.add(bridge)
             if (closed.get()) throw ModelBrokerFailure(ModelBrokerCode.UNAVAILABLE)

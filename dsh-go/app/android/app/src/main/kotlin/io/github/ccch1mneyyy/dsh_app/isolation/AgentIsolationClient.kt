@@ -37,6 +37,7 @@ class AgentIsolationClient private constructor(
     private val session = ByteArray(32).also { SecureRandom().nextBytes(it) }
         .joinToString("") { "%02x".format(it) }
     private val completion = CompletableFuture<AgentIsolationClient>()
+    private val disposal = CompletableFuture<Unit>()
     private val pending = mutableMapOf<String, Pending>()
     private class Pending(val op: BrokerOp, val future: CompletableFuture<BrokerResponse>, val timeout: Runnable)
     private val bound = mutableListOf<ServiceConnection>()
@@ -56,6 +57,7 @@ class AgentIsolationClient private constructor(
         fun connect(context: Context, timeoutMs: Long = 10_000): CompletableFuture<AgentIsolationClient> {
             require(timeoutMs in 100..60_000)
             val client = AgentIsolationClient(context.applicationContext, timeoutMs)
+            client.completion.whenComplete { _, _ -> if (client.completion.isCancelled) client.close() }
             client.handler.post { client.bind() }
             return client.completion
         }
@@ -75,8 +77,10 @@ class AgentIsolationClient private constructor(
     }
 
     private fun bind() {
+        if (closed.get()) { cleanup(BrokerResponse.BROKER_UNAVAILABLE); return }
         handler.postDelayed(startupTimeout, timeoutMs)
         for ((service, isolated) in listOf(AgentBrokerService::class.java to false, AgentIsolationService::class.java to true)) {
+            if (closed.get()) { cleanup(BrokerResponse.BROKER_UNAVAILABLE); return }
             val connection = Connection(isolated)
             try {
                 if (!context.bindService(Intent(context, service), connection, Context.BIND_AUTO_CREATE)) {
@@ -165,6 +169,11 @@ class AgentIsolationClient private constructor(
         if (closed.compareAndSet(false, true)) handler.post { cleanup(BrokerResponse.BROKER_UNAVAILABLE) }
     }
 
+    /** Waits for this owner's pending-future cleanup, revoke sends and unbinds.
+     * It is not an acknowledgement that the remote process has exited or a
+     * queued file write has rolled back. Do not block the Android UI thread. */
+    fun closeAsync(): CompletableFuture<Unit> { close(); return disposal }
+
     private fun cleanup(code: String) {
         if (cleaned) return
         cleaned = true
@@ -174,6 +183,7 @@ class AgentIsolationClient private constructor(
             val revoke = Message.obtain(null, IsolationWire.MSG_REVOKE)
             revoke.data = Bundle().apply { putString(IsolationWire.KEY_SESSION, session) }
             try { channel?.send(revoke) } catch (_: android.os.RemoteException) { }
+            catch (_: RuntimeException) { }
         }
         pending.values.forEach {
             handler.removeCallbacks(it.timeout)
@@ -181,9 +191,10 @@ class AgentIsolationClient private constructor(
         }
         pending.clear()
         completion.completeExceptionally(IllegalStateException(code))
-        bound.forEach { try { context.unbindService(it) } catch (_: IllegalArgumentException) { } }
+        bound.forEach { try { context.unbindService(it) } catch (_: RuntimeException) { } }
         bound.clear()
         broker = null; agent = null
         worker.quitSafely()
+        disposal.complete(Unit)
     }
 }
