@@ -27,7 +27,7 @@ BUILD SUCCESSFUL in 2m 28s
 
 XML 实查：`NativeModelBrokerTest 6`、`WorkspacePathPolicyTest 5`、`WorkspaceBrokerTest 5`、`IsolationSessionGateTest 4`，共 **20 tests / 0 failures / 0 errors / 0 skipped**。`ProviderStorageTest` 与 `AgentIsolationClientTest` 仪器 APK **编译/打包通过，但未执行**。aapt2 实查验收 APK：独立 `.brokerprobe` applicationId，min26/target36，仅 INTERNET；服务 exported=false，isolatedProcess=true，allowBackup=false。没有将 APK、debug signing key、缓存或本机 SDK 路径提交仓库，也没有发布 APK。
 
-SDK 因缺 platform-tools 提示许可未接受；没有执行连接设备任务、没有伪造许可文件，compile/assemble 在该提示下正常完成。组件构建不需要 NDK；**完整 Flutter Bot APK/Node/.node Android 构建仍未完成，真机 Keystore/UID/Binder/流式取消仍未验证**。CI 新增同款 Android 组件编译 job，推送后需观察真实结果。
+SDK 因缺 platform-tools 提示许可未接受；没有执行连接设备任务、没有伪造许可文件，compile/assemble 在该提示下正常完成。组件构建不需要 NDK；**完整 Flutter Bot APK/Node/.node Android 构建仍未完成，真机 Keystore/UID/Binder/流式取消仍未验证**。CI 新增同款 Android 组件编译 job；`cc6647b` 首轮 run **41591133622** 在 setup-android 默认安装已移除的 `tools` 包时失败，未进入 Android 代码编译。工作流改为只安装 platform-tools，随后显式安装 API36/build-tools36；须观察新 run，不把本地通过等同于 CI 成功。
 
 runtime 具体依赖与安全装配关口已按钉点源码核对，见 [ANDROID-RUNTIME-INTEGRATION.md](../ANDROID-RUNTIME-INTEGRATION.md)。Node18 mobile 包不满足该钉点 engines；不能把桌面 better-sqlite3/node-pty 拷入 APK 当作完成移植。
 
