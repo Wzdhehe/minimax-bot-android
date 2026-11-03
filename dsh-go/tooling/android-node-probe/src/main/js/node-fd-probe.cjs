@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
 
 (async () => {
-  const [normal, stalled, echo, result, privatePath, nativeLibraryDir] = process.argv.slice(1);
+  const [normal, stalled, echo, result, privatePath, nativeLibraryDir, providerId] = process.argv.slice(1);
   const { streamNativeModelFd } = await import(modelModuleUrl);
   async function consume(fd, cancel) {
     const controller = new AbortController();
@@ -57,12 +57,22 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       locale: new Intl.DateTimeFormat('zh-CN').resolvedOptions().locale,
       timeZone: new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai' }).resolvedOptions().timeZone,
     },
-    descriptor: { normal: Number(normal), stalled: Number(stalled), echo: Number(echo) },
+    descriptor: { normal: Number(normal), stalled: Number(stalled), echo: Number(echo), providerId },
     environment: process.env,
     normal: await consume(normal, false),
     cancelled: await consume(stalled, true),
     echoed: await consume(echo, false),
   };
+  if (providerId) {
+    const binding = process._linkedBinding('mbot_model_bridge');
+    const request = JSON.stringify({ providerId, modelId: 'normal', messages: [{ role: 'user', content: 'Hi dynamic' }] });
+    const id = require('node:crypto').randomUUID();
+    report.dynamic = await consume(await binding.open(id, request), false);
+    const cancelledId = require('node:crypto').randomUUID();
+    binding.cancel(cancelledId);
+    try { fs.closeSync(await binding.open(cancelledId, request)); report.dynamicCancelled = false; }
+    catch (error) { report.dynamicCancelled = error.message === 'broker_unavailable'; }
+  }
   // Owner inspects the bounded result privately. No console/log response dump.
   fs.writeSync(Number(result), JSON.stringify(report));
   fs.closeSync(Number(result));

@@ -1,5 +1,7 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+> 后续：Node Promise/JNI动态调用已在验收target实现并编译，设备待CI，见T-AndroidNode当前节。生产启动器未装配，大请求FD仍未做。SQLite API26/35基线已有run41663798958 success实证，旧“API35运行中”不再代表当前。
+
 ## 当前：动态模型请求Binder组件（2026-11-03，设备待CI）
 
 `bot/NativeModelRequestHost.kt` 与 `isolation/ModelRequestClient.kt` 新增隔离端按请求申请模型FD的同步Binder协议。仅可信启动器创建host并传capability；host固定**实测隔离UID + native选择的provider/model +随机会话 + peer Binder生命周期**，调用者不能更换路由/Key/URL/headers。native仍复查provider enabled/model白名单，返回的仍是原生产Unix relay FD，原native端点/token不发送。

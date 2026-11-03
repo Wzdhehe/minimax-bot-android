@@ -4,9 +4,12 @@
 
 ## 当前状态与证据
 
-- **动态模型Binder组件已编译**：隔离端ModelRequestClient→NativeModelRequestHost→native Unix FD，绑定实测UID/单路由/会话/peer生命周期；64KiB首版body限制、取消在先/晚到FD、关闭与路由检查。Gradle组件 **BUILD SUCCESSFUL in 2m 31s**，JVM32项通过；新增设备用例待CI。**Node JNI async binding和生产启动器仍未接；大请求FD协议未做**。见T-RuntimeBroker首节。
+- **Node动态请求JNI已编译（设备待CI）**：linked binding返回Promise，libuv worker→隔离Kotlin→固定UID/路由native Binder→Unix模型FD；带取消在先检查。Key/endpoint/native token/RPC session不进入Node；64KiB上限，大请求FD待做。JNI/SQLite重编成功，两个APK **BUILD SUCCESSFUL in 1m46s**，host1+输入拒绝8过。新增设备断言待CI，正式启动器仍未装配，见T-AndroidNode。
+- **SQLite设备基线已过**：bc07b1c/run41663798958的API26/35各1项用例通过（0失败/错误/跳过），实读日志确认SQLite源码构建和隔离内存数据库检查均执行。不是持久化/WAL/真机，见T-SQLite。
 
-- **SQLite Android验收候选已编译**：钉点better-sqlite3 12.11.1源码→NDK27d→x86_64 addon；固定隔离Node脚本加内存事务/回滚/中文/JSON/序列化恢复，两个仪器APK最后 **BUILD SUCCESSFUL in 43s**，host1项+输入拒绝8项过。**Android SQLite执行待新CI；持久化/WAL/ARM64/真机未验证**。见 [T-SQLite](handoff/T-SQLite.md)。
+- **动态模型Binder组件已编译**：隔离端ModelRequestClient→NativeModelRequestHost→native Unix FD，绑定实测UID/单路由/会话/peer生命周期；64KiB首版body限制、取消在先/晚到FD、关闭与路由检查。Gradle组件 **BUILD SUCCESSFUL in 2m 31s**，JVM32项通过；新增设备用例待CI。**Node JNI async binding后续已编译待设备CI，生产启动器仍未接；大请求FD协议未做**。见T-RuntimeBroker首节。
+
+- **SQLite Android验收候选已编译**：钉点better-sqlite3 12.11.1源码→NDK27d→x86_64 addon；固定隔离Node脚本加内存事务/回滚/中文/JSON/序列化恢复，两个仪器APK最后 **BUILD SUCCESSFUL in 43s**，host1项+输入拒绝8项过。**SQLite设备结果见上方最新基线；持久化/WAL/ARM64/真机未验证**。见 [T-SQLite](handoff/T-SQLite.md)。
 
 - **四类真实pi-ai provider组件与CI已过**：不改钉点源码，验证commit/tree/洁净和SDK依赖后打包provider，8项工具翻译/取消测试通过；Google用AsyncLocalStorage model fetch scope解决无fetch注入点的问题。dispatcher仅在测试子进程安装，生产启动器仍未接。实际body快照由Kotlin消费，确认四类请求通过native白名单和认证。最新完整脚本JUnit32+Node41；另SDK9项、pi-ai8项；7ce84ec的native41659981145/host41659981258/scope41659981166全部success。见T-RuntimeBroker。
 

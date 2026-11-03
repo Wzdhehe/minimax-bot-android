@@ -12,12 +12,17 @@ import android.os.Message
 import android.os.Messenger
 import android.os.ParcelFileDescriptor
 import android.os.Process
+import io.github.ccch1mneyyy.dsh_app.isolation.ModelRequestClient
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal object NodeProbeRuntime {
+    @Volatile private var modelClient: ModelRequestClient? = null
+    fun configureModelBroker(host: IBinder, session: String) { modelClient = ModelRequestClient(host, session) }
+    fun openModelFd(id: String, body: String): Int = try { modelClient?.open(id, body)?.detachFd() ?: -1 } catch (_: Exception) { -1 }
+    fun cancelModelFd(id: String) { try { modelClient?.cancel(id) } catch (_: Exception) { } }
     fun load() { System.loadLibrary("mbot_node_probe") }
-    external fun start(script: String, normal: Int, stalled: Int, echo: Int, result: Int, privatePath: String, nativeLibraryDir: String): Int
+    external fun start(script: String, normal: Int, stalled: Int, echo: Int, result: Int, privatePath: String, nativeLibraryDir: String, providerId: String): Int
 }
 
 /** Verification APK only. One fixed APK script per isolated process; no JS,
@@ -27,7 +32,14 @@ class NodeIsolationProbeService : Service() {
     private val worker = Executors.newSingleThreadExecutor()
     private val messenger by lazy {
         Messenger(Handler(Looper.getMainLooper(), Handler.Callback { message ->
-            if (message.sendingUid == applicationInfo.uid && message.what == 1) runProbe(message)
+            if (message.sendingUid == applicationInfo.uid) {
+                if (message.what == 1) runProbe(message)
+                else if (message.what == 3) {
+                    val response = Message.obtain(null, 3)
+                    response.data = Bundle().apply { putString("code", "ready") }
+                    try { message.replyTo?.send(response) } catch (_: Exception) { }
+                }
+            }
             true
         }))
     }
@@ -49,8 +61,12 @@ class NodeIsolationProbeService : Service() {
         val id = data.getString("id") ?: return
         val fds = listOf("normal", "stalled", "echo", "result").map { descriptor(data, it) }
         val privatePath = data.getString("privatePath")
+        val host = data.getBinder("model_host")
+        val session = data.getString("model_session")
+        val providerId = data.getString("providerId")
         if (!id.matches(Regex("[a-zA-Z0-9_-]{1,128}")) || fds.any { it == null } ||
-            privatePath == null || privatePath.length > 4096 || !started.compareAndSet(false, true)) {
+            privatePath == null || privatePath.length > 4096 || host == null || session == null ||
+            !session.matches(Regex("[0-9a-f]{64}")) || providerId == null || providerId.length !in 1..200 || !started.compareAndSet(false, true)) {
             fds.forEach { try { it?.close() } catch (_: Exception) { } }
             return
         }
@@ -58,11 +74,12 @@ class NodeIsolationProbeService : Service() {
             var code = "node_start_failed"
             try {
                 val script = assets.open("node-fd-probe.cjs").bufferedReader(Charsets.UTF_8).use { it.readText() }
+                NodeProbeRuntime.configureModelBroker(host, session)
                 NodeProbeRuntime.load()
                 // Ownership goes to the fixed Node script. It closes model
                 // FDs on every stream path and the result FD after writing.
                 val raw = fds.map { it!!.detachFd() }
-                val exit = NodeProbeRuntime.start(script, raw[0], raw[1], raw[2], raw[3], privatePath, applicationInfo.nativeLibraryDir)
+                val exit = NodeProbeRuntime.start(script, raw[0], raw[1], raw[2], raw[3], privatePath, applicationInfo.nativeLibraryDir, providerId)
                 code = if (exit == 0) "ok" else "node_nonzero_exit"
             } catch (_: UnsatisfiedLinkError) { code = "node_library_unavailable" }
             catch (_: Throwable) { code = "node_start_failed" }

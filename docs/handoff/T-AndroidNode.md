@@ -1,6 +1,23 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+## 当前：Node Promise → JNI → Binder动态申请（设备待CI）
+
+验收JNI新增linked binding `mbot_model_bridge`，open返回Promise，最多四个libuv worker请求，64KiB body/128字ID上限。worker附加JavaVM并调用隔离侧ModelRequestClient；native主进程按观测UID/单provider/model/会话再授权，返回owned Unix FD，Node现有reader消费。cancel调用有界Binder控制协议，取消早于open被拒；JNI不把Java异常/平台文本发给JS，只用broker_unavailable。Java会话capability留在隔离Kotlin侧，Node只拿providerId和结果FD。
+
+固定APK脚本保留原prefd/取消/Key回显用例，再实际调用open Promise和取消在先。Main先用私有IDENTITY握手观察UID，创建NativeModelRequestHost并绑定peer死亡；报告增加dynamic流，仪器测试断言4次native Key注入、Key/native token/RPC session不在Node报告里。SQLite内存断言仍保留。仍是独立验收APK，不是正式启动器/完整SDK/runtime装配。
+
+实际准备：NDK27d重编JNI和固定SQLiteaddon成功。最初C++结果局部变量与FD参数同名导致编译拒绝，改局部名后成功，没有放宽检查。
+
+```text
+BUILD SUCCESSFUL in 1m 46s
+69 actionable tasks: 20 executed, 49 up-to-date
+```
+
+host固定脚本1 passed（不执行JNI动态分支）/输入拒绝8 passed；新的Android动态Node执行**待API26/35 CI**。64KiB以上request-FD协议、正式model resolver/scope与生命周期仍待做。
+
+SQLite基线已有实际设备证据：bc07b1c/run41663798958 success，API26/35均1 test/0 failures/errors/skipped，且两job的固定SQLite源码编译步骤成功；这是隔离Node内存数据库断言，不是WAL/持久化。full-ICU run41630373256截至推送仍build，尚未通过。
+
 **真实执行已通过**：`04d7e97` 的run **41627233229 success**，API26 job125887515761和API35 job125887516140均通过仪器用例。真实隔离进程加载Node24.22.2，版本/UID、私有文件拒绝、Keystore→native broker→Unix FD→Node SSE、取消、Key回显拒绝及descriptor/env/log不含Key检查均已执行。仍是固定脚本/假provider；未启动完整mcode/官方Bot，ICU、better-sqlite3、持久化、物理真机和ARM64待做。后文“设备待CI”是本次实现前的记录，以此覆盖。
 
 当前默认产品仍为 DSH，尚未在 Android 启动 mcode。上一关口：`a094a85` 的 API26/35模拟器各十项通过（run41622547971），native Key/Unix模型FD/IPC已取得组件证据。物理真机、better-sqlite3和完整runtime仍未验证。

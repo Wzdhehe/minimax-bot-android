@@ -20,6 +20,7 @@ import android.system.StructTimeval
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.ccch1mneyyy.dsh_app.bot.BotProviderStore
+import io.github.ccch1mneyyy.dsh_app.bot.NativeModelRequestHost
 import io.github.ccch1mneyyy.dsh_app.bot.NativeModelChannels
 import io.github.ccch1mneyyy.dsh_app.model.NativeModelBroker
 import io.github.ccch1mneyyy.dsh_app.model.ProviderCall
@@ -93,10 +94,14 @@ class IsolatedNodeModelTest {
                         Os.setsockoptTimeval(resultPair[1].fileDescriptor, OsConstants.SOL_SOCKET, OsConstants.SO_SNDTIMEO,
                             StructTimeval.fromMillis(10_000))
                         ProbeConnection(base).use { probe ->
+                            val identity = probe.identity().get(10, TimeUnit.SECONDS)
+                            assertNotEquals(Process.myUid(), identity.uid)
+                            NativeModelRequestHost(identity.uid, providerId!!, "normal", probe.peerBinder(), channels::open, channels::close).use { host ->
                             val id = UUID.randomUUID().toString()
                             val data = Bundle().apply {
                                 putString("id", id)
                                 putString("privatePath", marker.absolutePath)
+                                putBinder("model_host", host); putString("model_session", host.session); putString("providerId", providerId)
                                 putParcelable("normal", modelFds[0]); putParcelable("stalled", modelFds[1])
                                 putParcelable("echo", modelFds[2]); putParcelable("result", resultPair[1])
                             }
@@ -122,6 +127,7 @@ class IsolatedNodeModelTest {
                             // report/env/body as a JUnit failure message.
                             assertFalse(text.contains(secret))
                             assertFalse(text.contains(broker.session.token))
+                            assertFalse(text.contains(host.session))
                             val report = JSONObject(text)
                             assertEquals("24.22.2", report.getString("version"))
                             val expected = base.assets.open("node-validation.json").bufferedReader().use { JSONObject(it.readText()) }
@@ -147,9 +153,13 @@ class IsolatedNodeModelTest {
                             assertEquals("broker_cancelled", report.getJSONObject("cancelled").getString("code"))
                             assertEquals("provider_sensitive_response", report.getJSONObject("echoed").getString("code"))
                             assertTrue(cancelled.await(3, TimeUnit.SECONDS))
-                            assertEquals(3, headersInjected.get())
+                            assertEquals("done", report.getJSONObject("dynamic").getString("code"))
+                            assertEquals("hello", report.getJSONObject("dynamic").getJSONArray("events").getJSONObject(0).getString("delta"))
+                            assertTrue(report.getBoolean("dynamicCancelled"))
+                            assertEquals(4, headersInjected.get())
                             assertFalse(store.catalog().toString().contains(secret))
                             assertFalse(logs.any { it.contains(secret) })
+                            }
                         }
                     } finally {
                         modelFds.forEach { try { it.close() } catch (_: Exception) { } }
@@ -168,9 +178,16 @@ class IsolatedNodeModelTest {
     private class ProbeConnection(private val context: Context) : java.io.Closeable {
         private val connected = CompletableFuture<Messenger>()
         private val result = CompletableFuture<Reply>()
+        private val identityResult = CompletableFuture<Reply>()
+        fun peerBinder(): IBinder = connected.get(10, TimeUnit.SECONDS).binder
+        fun identity(): CompletableFuture<Reply> {
+            connected.get(10, TimeUnit.SECONDS).send(Message.obtain(null, 3).apply { replyTo = receiver })
+            return identityResult
+        }
         private val thread = HandlerThread("mbot-node-probe-client").apply { start() }
         @Volatile private var expectedId: String? = null
         private val receiver = Messenger(Handler(thread.looper, Handler.Callback { message ->
+            if (message.what == 3 && message.data.getString("code") == "ready") identityResult.complete(Reply(message.sendingUid, message.data))
             if (message.what == 2 && message.data.getString("id") == expectedId) result.complete(Reply(message.sendingUid, message.data))
             true
         }))
@@ -188,7 +205,7 @@ class IsolatedNodeModelTest {
         }
         private fun fail() {
             val error = IllegalStateException("node_probe_disconnected")
-            connected.completeExceptionally(error); result.completeExceptionally(error)
+            connected.completeExceptionally(error); result.completeExceptionally(error); identityResult.completeExceptionally(error)
         }
         override fun close() { context.unbindService(connection); fail(); thread.quitSafely() }
     }

@@ -3,6 +3,10 @@
 
 当前是**隔离Node的内存数据库验收候选**，没有选择持久化方案，不是完整mcode/runtime已运行。默认产品仍DSH。必须继续在feat/t-plugins，不动main/dev/integration。
 
+## 最新设备证据
+
+bc07b1c / run **41663798958 success**。实读Actions执行日志，两版本均有固定better-sqlite3编译成功；API26：Finished 1 tests on emulator-5554 - 8.0.0；API35：Finished 1 tests on emulator-5554 - 15。每台XML汇总均 `{'tests': 1, 'failures': 0, 'errors': 0, 'skipped': 0}`。用例包含真正隔离Node内的SQLite事务/回滚/中文/JSON/serialize恢复与既有Key边界。下文“待新CI”是实现当时记录，以此覆盖；物理真机/ARM64/WAL/持久化/full-ICU组合仍未验证。
+
 ## 已实现与来源
 
 - `tooling/android-node-probe/sqlite-runtime-pin.json` 固定better-sqlite3 **12.11.1**（与钉点local-runtime-v2一致）、npm源码tar SHA256 **ebf0ed75a7a59dbcb3b24bbd014ef49d9f15bc328e4adcbf516f2a8fadfa2835**、NDK27d/Node24.22.2/x86_64/API26/esbuild0.28.2。没有下载或采用Linux预编译addon。

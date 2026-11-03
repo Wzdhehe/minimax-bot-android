@@ -53,3 +53,18 @@ UID storage, WAL, restart durability or the complete mcode runtime. Only the
 API26/35 instrumentation result can establish Android execution; host tests
 and successful native compilation cannot. Full ICU + SQLite is a separate
 combination to verify. See [T-SQLite](../../../docs/handoff/T-SQLite.md).
+
+## Dynamic model request check
+
+The verification JNI now registers a fixed linked binding whose open returns a
+Promise. At most four libuv workers call the isolated Kotlin Binder client;
+64 KiB bodies and 128-character request IDs are bounded before copying.
+The owner binds the actual UID, selected provider/model, session and peer
+lifetime. Node only receives provider metadata and an owned result FD; the
+native session and Key stay outside JS. The fixed script checks a dynamic
+request and cancel-before-open alongside the existing prefetched FD tests.
+JNI/platform exceptions become a stable error without diagnostics.
+
+The host script test skips JNI because it runs normal desktop Node. Only the
+API26/35 device job can validate this branch. Production launch/model SDK
+wiring, larger request FD transport and persistent storage are still missing.
