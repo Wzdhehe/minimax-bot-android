@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'package:flutter/material.dart';
+import 'loading_surface.dart';
 import '../providers/provider_contract.dart';
 
 class MbotProviderSettingsPage extends StatefulWidget {
@@ -237,61 +238,71 @@ class _MbotProviderSettingsPageState extends State<MbotProviderSettingsPage> {
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 760),
-                child: ListView(children: [
-                  if (_busy) const LinearProgressIndicator(),
-                  if (_failed)
-                    ListTile(
-                        title: const Text('供应商设置失败，请检查输入或重试'),
-                        trailing: TextButton(
-                            onPressed: _busy ? null : _refresh,
-                            child: const Text('重试'))),
-                  if (_catalog?.providers.isEmpty == true)
-                    const Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text('添加供应商，配置 API 协议、地址、Key 和模型。')),
-                  for (final provider
-                      in _catalog?.providers ?? <MbotProvider>[])
-                    ListTile(
-                      key: Key('mbot.provider.${provider.id}'),
-                      title: Text(provider.name),
-                      subtitle: Text(
-                          '${provider.apiFormat}\n${provider.baseUrl}\n${provider.hasApiKey ? 'Key 已保存' : '未保存 Key'}${provider.enabled ? '' : ' · 已停用'}${_catalog?.defaultProviderId == provider.id ? '\n默认模型：${_catalog?.defaultModelId}' : ''}'),
-                      onTap: _busy ? null : () => _edit(provider),
-                      trailing: PopupMenuButton<int>(
-                          enabled: !_busy,
-                          onSelected: (value) {
-                            if (value == -1) {
-                              _delete(provider);
-                            } else if (value >= provider.models.length) {
-                              _probe(
-                                  provider,
-                                  provider
-                                      .models[value - provider.models.length]);
-                            } else {
-                              _run(() => widget.port.selectDefault(
-                                  provider.id, provider.models[value]));
-                            }
-                          },
-                          itemBuilder: (context) => [
-                                for (var i = 0; i < provider.models.length; i++)
-                                  PopupMenuItem(
-                                      value: i,
-                                      enabled: provider.enabled,
-                                      child:
-                                          Text('设为默认：${provider.models[i]}')),
-                                if (widget.testProvider != null)
-                                  for (var i = 0;
-                                      i < provider.models.length;
-                                      i++)
-                                    PopupMenuItem(
-                                        value: provider.models.length + i,
-                                        enabled: provider.enabled,
-                                        child:
-                                            Text('测试：${provider.models[i]}')),
-                                const PopupMenuItem(
-                                    value: -1, child: Text('删除供应商')),
-                              ]),
-                    ),
-                ]))),
+                child: MbotLoadTransition(
+                    loading: _catalog == null && _busy,
+                    child: ListView.builder(
+                      itemCount: (_catalog?.providers.length ?? 0) + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return Column(children: [
+                            if (_busy) const LinearProgressIndicator(),
+                            if (_failed)
+                              ListTile(
+                                  title: const Text('供应商设置失败，请检查输入或重试'),
+                                  trailing: TextButton(
+                                      onPressed: _busy ? null : _refresh,
+                                      child: const Text('重试'))),
+                            if (_catalog?.providers.isEmpty == true)
+                              const Padding(
+                                  padding: EdgeInsets.all(24),
+                                  child: Text('添加供应商，配置 API 协议、地址、Key 和模型。')),
+                          ]);
+                        }
+                        final provider = _catalog!.providers[index - 1];
+                        return ListTile(
+                          key: Key('mbot.provider.${provider.id}'),
+                          title: Text(provider.name),
+                          subtitle: Text(
+                              '${provider.apiFormat}\n${provider.baseUrl}\n${provider.hasApiKey ? 'Key 已保存' : '未保存 Key'}${provider.enabled ? '' : ' · 已停用'}${_catalog?.defaultProviderId == provider.id ? '\n默认模型：${_catalog?.defaultModelId}' : ''}'),
+                          onTap: _busy ? null : () => _edit(provider),
+                          trailing: PopupMenuButton<int>(
+                              enabled: !_busy,
+                              onSelected: (value) {
+                                if (value == -1) {
+                                  _delete(provider);
+                                } else if (value >= provider.models.length) {
+                                  _probe(
+                                      provider,
+                                      provider.models[
+                                          value - provider.models.length]);
+                                } else {
+                                  _run(() => widget.port.selectDefault(
+                                      provider.id, provider.models[value]));
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                    for (var i = 0;
+                                        i < provider.models.length;
+                                        i++)
+                                      PopupMenuItem(
+                                          value: i,
+                                          enabled: provider.enabled,
+                                          child: Text(
+                                              '设为默认：${provider.models[i]}')),
+                                    if (widget.testProvider != null)
+                                      for (var i = 0;
+                                          i < provider.models.length;
+                                          i++)
+                                        PopupMenuItem(
+                                            value: provider.models.length + i,
+                                            enabled: provider.enabled,
+                                            child: Text(
+                                                '测试：${provider.models[i]}')),
+                                    const PopupMenuItem(
+                                        value: -1, child: Text('删除供应商')),
+                                  ]),
+                        );
+                      },
+                    )))),
       );
 }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'package:flutter/material.dart';
+import 'loading_surface.dart';
 import '../usage/usage_quota.dart';
 
 class MbotUsageQuotaPage extends StatefulWidget {
@@ -64,28 +65,29 @@ class _MbotUsageQuotaPageState extends State<MbotUsageQuotaPage> {
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 680),
-              child: ListView(padding: const EdgeInsets.all(24), children: [
-                if (_loading) const LinearProgressIndicator(),
-                if (_failed) const Text('无法读取账号用量，请检查本机服务后刷新'),
-                if (!_loading && !_failed && value?.supported == false)
-                  const Text('当前供应商不支持此用量查询'),
-                if (!_loading &&
-                    !_failed &&
-                    value?.supported == true &&
-                    value?.signedIn == false)
-                  const Text('未登录 MiniMax 账号；API Key 不作为账号登录态'),
-                if (!_failed &&
-                    value?.supported == true &&
-                    value?.signedIn == true) ...[
-                  if (value?.planName != null)
-                    Text(value!.planName!,
-                        style: Theme.of(context).textTheme.headlineSmall),
-                  if (value?.creditBalance != null)
-                    Text('积分余额：${value!.creditBalance}'),
-                  _window('5 小时限额', value?.fiveHour),
-                  _window('周限额', value?.weekly),
-                ],
-              ]))),
+              child: MbotLoadTransition(
+                  loading: _value == null && _loading,
+                  child: ListView(padding: const EdgeInsets.all(24), children: [
+                    if (_loading) const LinearProgressIndicator(),
+                    if (_failed) const Text('无法读取账号用量，请检查本机服务后刷新'),
+                    if (!_failed && value?.supported == false)
+                      const Text('当前供应商不支持此用量查询'),
+                    if (!_failed &&
+                        value?.supported == true &&
+                        value?.signedIn == false)
+                      const Text('未登录 MiniMax 账号；API Key 不作为账号登录态'),
+                    if (!_failed &&
+                        value?.supported == true &&
+                        value?.signedIn == true) ...[
+                      if (value?.planName != null)
+                        Text(value!.planName!,
+                            style: Theme.of(context).textTheme.headlineSmall),
+                      if (value?.creditBalance != null)
+                        Text('积分余额：${value!.creditBalance}'),
+                      _window('5 小时限额', value?.fiveHour),
+                      _window('周限额', value?.weekly),
+                    ],
+                  ])))),
     );
   }
 }

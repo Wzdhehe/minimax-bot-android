@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'package:flutter/material.dart';
+import 'loading_surface.dart';
 import '../schedules/schedule_port.dart';
 
 class MbotScheduleSettingsPage extends StatefulWidget {
@@ -220,52 +221,64 @@ class _MbotScheduleSettingsPageState extends State<MbotScheduleSettingsPage> {
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 760),
-              child: ListView(children: [
-                const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('定时任务只在 Bot 服务进程存活时执行。进程被杀后不会执行，当前不提供补跑。')),
-                if (_busy) const LinearProgressIndicator(),
-                if (_failed)
-                  const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text('操作未确认，请检查本机服务并刷新列表后再决定是否重试。')),
-                if (_data?.schedules.isEmpty == true)
-                  const Padding(
-                      padding: EdgeInsets.all(20), child: Text('暂无定时任务')),
-                for (final row in _data?.schedules ?? <Map<String, Object?>>[])
-                  ListTile(
-                      key: Key('mbot.schedule.${row['id']}'),
-                      title: Text(row['name']?.toString() ?? '',
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(row['kind'] == 'daily'
-                          ? '每天 ${row['time']}'
-                          : row['kind'] == 'interval'
-                              ? '每 ${row['everyMinutes']} 分钟'
-                              : '一次性任务'),
-                      onTap: _busy ? null : () => _edit(row),
-                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Switch(
-                            value: row['enabled'] != false,
-                            onChanged: _busy
-                                ? null
-                                : (v) => _mutate(() =>
-                                    widget.port.save({...row, 'enabled': v}))),
-                        PopupMenuButton<String>(
-                            enabled: !_busy,
-                            onSelected: (v) {
-                              if (v == 'delete') {
-                                _delete(row);
-                              } else {
-                                _mutate(
-                                    () => widget.port.run(row['id'] as String));
-                              }
-                            },
-                            itemBuilder: (_) => const [
-                                  PopupMenuItem(
-                                      value: 'run', child: Text('立即执行')),
-                                  PopupMenuItem(
-                                      value: 'delete', child: Text('删除'))
-                                ]),
-                      ])),
-              ]))));
+              child: MbotLoadTransition(
+                  loading: _data == null && _busy,
+                  child: ListView.builder(
+                    itemCount: (_data?.schedules.length ?? 0) + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Column(children: [
+                          const Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Text(
+                                  '定时任务只在 Bot 服务进程存活时执行。进程被杀后不会执行，当前不提供补跑。')),
+                          if (_busy) const LinearProgressIndicator(),
+                          if (_failed)
+                            const Padding(
+                                padding: EdgeInsets.all(20),
+                                child: Text('操作未确认，请检查本机服务并刷新列表后再决定是否重试。')),
+                          if (_data?.schedules.isEmpty == true)
+                            const Padding(
+                                padding: EdgeInsets.all(20),
+                                child: Text('暂无定时任务')),
+                        ]);
+                      }
+                      final row = _data!.schedules[index - 1];
+                      return ListTile(
+                          key: Key('mbot.schedule.${row['id']}'),
+                          title: Text(row['name']?.toString() ?? '',
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          subtitle: Text(row['kind'] == 'daily'
+                              ? '每天 ${row['time']}'
+                              : row['kind'] == 'interval'
+                                  ? '每 ${row['everyMinutes']} 分钟'
+                                  : '一次性任务'),
+                          onTap: _busy ? null : () => _edit(row),
+                          trailing:
+                              Row(mainAxisSize: MainAxisSize.min, children: [
+                            Switch(
+                                value: row['enabled'] != false,
+                                onChanged: _busy
+                                    ? null
+                                    : (v) => _mutate(() => widget.port
+                                        .save({...row, 'enabled': v}))),
+                            PopupMenuButton<String>(
+                                enabled: !_busy,
+                                onSelected: (v) {
+                                  if (v == 'delete') {
+                                    _delete(row);
+                                  } else {
+                                    _mutate(() =>
+                                        widget.port.run(row['id'] as String));
+                                  }
+                                },
+                                itemBuilder: (_) => const [
+                                      PopupMenuItem(
+                                          value: 'run', child: Text('立即执行')),
+                                      PopupMenuItem(
+                                          value: 'delete', child: Text('删除'))
+                                    ]),
+                          ]));
+                    },
+                  )))));
 }

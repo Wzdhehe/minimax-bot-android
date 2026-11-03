@@ -15,6 +15,8 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 
 ## 当前代码和真实进度
 
+- **UI 动画与性能**（`feat/ui-motion`，基于 `feat/t-schedule@5e1860e`）：沿用 DSH 页面过渡/预测返回与低性能减少动态效果机制；主要初次加载入口加入单 ticker 骨架，页面内会话切换短过渡，供应商/任务按需构建。消息流直接合并 SSE，合并 UI 通知并处理晚到历史/摘要竞态。相关 widget/状态测试和分析通过；**未做 Android profile 帧率实测**。最新续写分支为此分支，详见 [handoff](handoff/UI-Motion.md)。
+
 - **T-Schedule 进行中**：按用户最新参考图增加 Bot 资料页；自动任务入口下沉到该 Bot 设置，支持同源列表/创建/编辑/开关/删除/立即执行，以及每 Bot 通知开关。全局设置不再显示任务组。Bot 自建任务复用 mbot MCP 并通过真实宿主 HTTP 测试验证，不另做系统 scheduler。新增进程内到点事件通知桥；**真实 runtime 的 MCP 注册、Android 通知实测及断线场景仍未完成**。详见 [handoff](handoff/T-Schedule.md)。
 
 - **T-Usage 契约/界面阶段**（`feat/t-usage`）：账号与模型内增加用量入口，区分无登录租约、自定义 API 供应商不支持、真实查询失败与夹具账号额度；只经本机宿主读取白名单计划/积分/5h/周字段，不读取 Key。已准备 WebUI `getUsageQuota` 注入槽，**尚未装配真实 OAuth 租约和 UsageQuotaClient，不能宣称已查到真实账号额度**。详见 [handoff](handoff/T-Usage.md)。

@@ -12,6 +12,7 @@ class BotController extends ChangeNotifier {
   String? selectedChat;
   Object? error;
   bool loading = true;
+  bool messagesLoading = false;
   bool sending = false;
   bool connected = false;
   bool _disposed = false;
@@ -21,6 +22,12 @@ class BotController extends ChangeNotifier {
   final _eventBus = StreamController<Map<String, Object?>>.broadcast();
   Stream<Map<String, Object?>> get events => _eventBus.stream;
   Timer? _refreshTimer;
+  Timer? _paintTimer;
+  int _historyRequest = 0;
+  bool _readingHistory = false;
+  bool _readingState = false;
+  final _liveHistory = <String, Map<String, Object?>>{};
+  final _liveSummaries = <String, Object?>{};
   Future<void>? _refreshing;
   bool _refreshAgain = false;
 
@@ -38,12 +45,13 @@ class BotController extends ChangeNotifier {
     if (_disposed) return;
     _events = api.events().listen(
       (event) {
-        if (!_disposed) _eventBus.add(event);
-        connected = true;
-        _changed();
-        if (_refreshTimer?.isActive != true) {
-          _refreshTimer = Timer(const Duration(milliseconds: 100), refresh);
+        if (_disposed) return;
+        _eventBus.add(event);
+        if (!connected) {
+          connected = true;
+          _changed();
         }
+        _applyEvent(event);
       },
       onError: (Object failure) {
         connected = false;
@@ -56,6 +64,61 @@ class BotController extends ChangeNotifier {
       },
     );
     await refresh();
+  }
+
+  void _paintSoon() {
+    if (_paintTimer?.isActive == true) return;
+    _paintTimer = Timer(const Duration(milliseconds: 32), _changed);
+  }
+
+  void _applyEvent(Map<String, Object?> event) {
+    final chat = event['chatId'];
+    final message = event['message'];
+    if (event['type'] == 'message.upsert' &&
+        chat is String &&
+        message is Map &&
+        message['id'] is String &&
+        (message['id'] as String).isNotEmpty) {
+      if (chat == selectedChat) {
+        final row = Map<String, Object?>.from(message);
+        final id = row['id'] as String;
+        if (_readingHistory) {
+          _liveHistory[id] = row;
+          if (_liveHistory.length > 500) _liveHistory.remove(_liveHistory.keys.first);
+        }
+        final index = messages.indexWhere((item) => item['id'] == id);
+        if (index < 0) {
+          messages = [...messages, row];
+          if (messages.length > 500) messages = messages.sublist(messages.length - 500);
+        } else {
+          messages[index] = row;
+        }
+        _paintSoon();
+      }
+      return;
+    }
+    if (event['type'] == 'chat.summary' && chat is String && event['summary'] is Map) {
+      final chats = snapshot['chats'];
+      snapshot = {
+        ...snapshot,
+        'chats': {if (chats is Map) ...Map<String, Object?>.from(chats), chat: event['summary']},
+      };
+      if (_readingState) _liveSummaries[chat] = event['summary'];
+      _paintSoon();
+      return;
+    }
+    if (event['type'] == 'chat.reset' && chat == selectedChat) {
+      // Invalidate a history read started before the reset.
+      _historyRequest++;
+      _liveHistory.clear();
+      messages = [];
+      _paintSoon();
+    }
+    // Metadata/reconnect events still reconcile with the authoritative service.
+    // Streaming token events above cause no HTTP reads.
+    if (_refreshTimer?.isActive != true) {
+      _refreshTimer = Timer(const Duration(milliseconds: 200), refresh);
+    }
   }
 
   Future<void> refresh() {
@@ -71,15 +134,25 @@ class BotController extends ChangeNotifier {
   }
 
   Future<void> _refresh() async {
+    _readingState = true;
+    _liveSummaries.clear();
     try {
       final state = await api.state();
       if (_disposed) return;
-      snapshot = state;
+      final chats = state['chats'];
+      snapshot = {
+        ...state,
+        'chats': {if (chats is Map) ...Map<String, Object?>.from(chats), ..._liveSummaries},
+      };
+      _readingState = false;
+      _liveSummaries.clear();
       error = null;
       if (selectedChat != null) await _loadMessages(selectedChat!, _selection);
     } catch (failure) {
       if (!_disposed) error = failure;
     } finally {
+      _readingState = false;
+      _liveSummaries.clear();
       loading = false;
       _changed();
     }
@@ -87,7 +160,11 @@ class BotController extends ChangeNotifier {
 
   Future<void> select(String? chat) async {
     selectedChat = chat;
+    _historyRequest++;
+    _readingHistory = false;
     messages = [];
+    _liveHistory.clear();
+    messagesLoading = chat != null;
     error = null;
     final generation = ++_selection;
     _changed();
@@ -97,13 +174,31 @@ class BotController extends ChangeNotifier {
     } catch (failure) {
       if (generation == _selection) error = failure;
     }
+    if (generation == _selection) messagesLoading = false;
     _changed();
   }
 
   Future<void> _loadMessages(String chat, int generation) async {
-    final page = await api.messages(chat);
-    if (_disposed || generation != _selection || selectedChat != chat) return;
-    messages = _rows(page['messages']);
+    final request = ++_historyRequest;
+    _readingHistory = true;
+    _liveHistory.clear();
+    try {
+      final page = await api.messages(chat);
+      if (_disposed || request != _historyRequest || generation != _selection || selectedChat != chat) return;
+      final rows = _rows(page['messages']);
+      final ids = rows.map((row) => row['id']).toSet();
+      messages = [
+        for (final row in rows) _liveHistory[row['id']] ?? row,
+        for (final row in _liveHistory.values)
+          if (!ids.contains(row['id'])) row,
+      ];
+      if (messages.length > 500) messages = messages.sublist(messages.length - 500);
+    } finally {
+      if (request == _historyRequest) {
+        _readingHistory = false;
+        _liveHistory.clear();
+      }
+    }
   }
 
   Future<bool> send(String text) async {
@@ -152,6 +247,7 @@ class BotController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _refreshTimer?.cancel();
+    _paintTimer?.cancel();
     unawaited(_events?.cancel());
     unawaited(_eventBus.close());
     super.dispose();

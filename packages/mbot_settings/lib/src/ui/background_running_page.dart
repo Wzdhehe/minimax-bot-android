@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'loading_surface.dart';
 
 import '../platform/platform_services.dart';
 
@@ -62,7 +63,7 @@ class _MbotBackgroundRunningPageState extends State<MbotBackgroundRunningPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('后台运行')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const SingleChildScrollView(child: MbotSkeleton())
           : SingleChildScrollView(
               key: const Key('mbot.settings.background.list'),
               child: Column(

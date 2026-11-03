@@ -130,66 +130,69 @@ class _BotProfilePageState extends State<BotProfilePage> {
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 680),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              if (_busy) const LinearProgressIndicator(),
-              if (_failed) TextButton(onPressed: _reload, child: Text(context.l10n.mobileBotRetry)),
-              Center(
-                child: CircleAvatar(
-                  radius: 52,
-                  child: Text(
-                    name.isEmpty ? 'B' : name.characters.first,
-                    style: Theme.of(context).textTheme.headlineLarge,
+          child: MbotLoadTransition(
+            loading: _bot == null && _busy,
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                if (_busy) const LinearProgressIndicator(),
+                if (_failed) TextButton(onPressed: _reload, child: Text(context.l10n.mobileBotRetry)),
+                Center(
+                  child: CircleAvatar(
+                    radius: 52,
+                    child: Text(
+                      name.isEmpty ? 'B' : name.characters.first,
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Center(child: Text(name, style: Theme.of(context).textTheme.headlineMedium)),
-              Center(
-                child: TextButton(
-                  onPressed: _busy || _bot == null ? null : _edit,
-                  child: Text(context.l10n.mobileBotEdit),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Card(
-                child: ListTile(
-                  key: const Key('mbot.bot.automations'),
-                  leading: const Icon(Icons.schedule),
-                  title: Text(context.l10n.mobileBotScheduledTasks),
-                  subtitle: Text(context.l10n.mobileBotScheduleSelfHint),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(context.l10n.mobileBotScheduleEnabledCount(_enabledSchedules)),
-                      const Icon(Icons.chevron_right),
-                    ],
+                const SizedBox(height: 16),
+                Center(child: Text(name, style: Theme.of(context).textTheme.headlineMedium)),
+                Center(
+                  child: TextButton(
+                    onPressed: _busy || _bot == null ? null : _edit,
+                    child: Text(context.l10n.mobileBotEdit),
                   ),
-                  onTap: _bot == null
-                      ? null
-                      : () async {
-                          await Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  MbotScheduleSettingsPage(port: BotSchedulesPort(widget.api, widget.botId)),
-                            ),
-                          );
-                          if (mounted) await _reload();
-                        },
                 ),
-              ),
-              const SizedBox(height: 24),
-              Card(
-                child: SwitchListTile(
-                  key: const Key('mbot.bot.notifications'),
-                  title: Text(context.l10n.mobileBotNotifications),
-                  subtitle: Text(context.l10n.mobileBotNotifyHint),
-                  value: _notifications,
-                  onChanged: _busy || _store == null ? null : _notify,
+                const SizedBox(height: 24),
+                Card(
+                  child: ListTile(
+                    key: const Key('mbot.bot.automations'),
+                    leading: const Icon(Icons.schedule),
+                    title: Text(context.l10n.mobileBotScheduledTasks),
+                    subtitle: Text(context.l10n.mobileBotScheduleSelfHint),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(context.l10n.mobileBotScheduleEnabledCount(_enabledSchedules)),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
+                    onTap: _bot == null
+                        ? null
+                        : () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    MbotScheduleSettingsPage(port: BotSchedulesPort(widget.api, widget.botId)),
+                              ),
+                            );
+                            if (mounted) await _reload();
+                          },
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+                Card(
+                  child: SwitchListTile(
+                    key: const Key('mbot.bot.notifications'),
+                    title: Text(context.l10n.mobileBotNotifications),
+                    subtitle: Text(context.l10n.mobileBotNotifyHint),
+                    value: _notifications,
+                    onChanged: _busy || _store == null ? null : _notify,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -59,7 +59,7 @@ class _BotSettingsHubState extends State<BotSettingsHub> {
       body: Center(
         child: _failed
             ? TextButton(onPressed: _load, child: Text(context.l10n.mobileBotRetry))
-            : const CircularProgressIndicator(),
+            : const SingleChildScrollView(child: MbotSkeleton()),
       ),
     );
   }

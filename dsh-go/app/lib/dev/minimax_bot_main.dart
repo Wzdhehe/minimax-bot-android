@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../bot/bot_controller.dart';
 import '../bot/bot_home.dart';
 import '../l10n/l10n.dart';
+import '../ui/theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +17,7 @@ void main() {
     MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Bot',
-      theme: ThemeData.dark(useMaterial3: true),
+      theme: buildDarkTheme(glassBlur: false),
       localizationsDelegates: L10n.localizationsDelegates,
       supportedLocales: AppLocale.supported,
       home: BotHome(controller: BotController(api)),

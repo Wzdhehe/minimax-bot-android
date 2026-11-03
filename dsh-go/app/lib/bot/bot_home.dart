@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:mbot_settings/mbot_settings.dart';
 
 import '../l10n/l10n.dart';
 import 'bot_controller.dart';
@@ -166,35 +167,37 @@ class _BotHomeState extends State<BotHome> {
           ),
         ),
         const SizedBox(height: 12),
-        if (bot.loading) const LinearProgressIndicator(),
         if (rows.isEmpty && !bot.loading && bot.error == null)
           Padding(padding: const EdgeInsets.all(24), child: Text(context.l10n.mobileBotEmpty)),
         Expanded(
-          child: ListView.builder(
-            itemCount: rows.length,
-            itemBuilder: (context, index) {
-              final row = rows[index];
-              final chat = row['chat'] as String;
-              final name = row['name']?.toString() ?? '';
-              final chats = bot.snapshot['chats'];
-              final summary = chats is Map ? chats[chat] : null;
-              return ListTile(
-                selected: bot.selectedChat == chat,
-                leading: _avatar(name, group: chat.startsWith('group:')),
-                title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text(
-                  summary is Map
-                      ? (summary['preview'] ?? row['role'] ?? '').toString()
-                      : (row['role'] ?? '').toString(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onTap: () {
-                  _composer.clear();
-                  unawaited(bot.select(chat));
-                },
-              );
-            },
+          child: MbotLoadTransition(
+            loading: bot.loading && rows.isEmpty,
+            child: ListView.builder(
+              itemCount: rows.length,
+              itemBuilder: (context, index) {
+                final row = rows[index];
+                final chat = row['chat'] as String;
+                final name = row['name']?.toString() ?? '';
+                final chats = bot.snapshot['chats'];
+                final summary = chats is Map ? chats[chat] : null;
+                return ListTile(
+                  selected: bot.selectedChat == chat,
+                  leading: _avatar(name, group: chat.startsWith('group:')),
+                  title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    summary is Map
+                        ? (summary['preview'] ?? row['role'] ?? '').toString()
+                        : (row['role'] ?? '').toString(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () {
+                    _composer.clear();
+                    unawaited(bot.select(chat));
+                  },
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -261,39 +264,44 @@ class _BotHomeState extends State<BotHome> {
           ),
         ),
         Expanded(
-          child: ListView.builder(
-            reverse: true,
-            padding: const EdgeInsets.all(18),
-            itemCount: bot.messages.length,
-            itemBuilder: (context, index) {
-              final message = bot.messages[bot.messages.length - index - 1];
-              final mine = message['role'] == 'user';
-              return Align(
-                alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 680),
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: mine ? const Color(0xff3b3b3e) : const Color(0xff232325),
-                    borderRadius: BorderRadius.circular(22),
+          child: MbotLoadTransition(
+            loading: bot.messagesLoading && bot.messages.isEmpty,
+            child: ListView.builder(
+              reverse: true,
+              padding: const EdgeInsets.all(18),
+              itemCount: bot.messages.length,
+              itemBuilder: (context, index) {
+                final message = bot.messages[bot.messages.length - index - 1];
+                final mine = message['role'] == 'user';
+                return Align(
+                  alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 680),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: mine
+                          ? Theme.of(context).colorScheme.surfaceContainerHighest
+                          : Theme.of(context).colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (isGroup && !mine)
+                          Text(
+                            bot.bots.where((b) => b['id'] == message['botId']).firstOrNull?['name']?.toString() ?? '',
+                            style: const TextStyle(color: Color(0xff81c7b7)),
+                          ),
+                        SelectableText(message['text']?.toString() ?? ''),
+                        if (message['status'] == 'streaming')
+                          const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (isGroup && !mine)
-                        Text(
-                          bot.bots.where((b) => b['id'] == message['botId']).firstOrNull?['name']?.toString() ?? '',
-                          style: const TextStyle(color: Color(0xff81c7b7)),
-                        ),
-                      SelectableText(message['text']?.toString() ?? ''),
-                      if (message['status'] == 'streaming')
-                        const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
-                    ],
-                  ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
         Padding(
@@ -331,7 +339,7 @@ class _BotHomeState extends State<BotHome> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: bot,
     builder: (context, _) => Scaffold(
-      backgroundColor: const Color(0xff131314),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: SafeArea(
         child: Column(
           children: [
@@ -357,7 +365,9 @@ class _BotHomeState extends State<BotHome> {
                       children: [
                         SizedBox(width: 320, child: _list()),
                         const VerticalDivider(width: 1),
-                        Expanded(child: _chat(true)),
+                        Expanded(
+                          child: MbotPaneTransition(identity: bot.selectedChat ?? 'empty', child: _chat(true)),
+                        ),
                       ],
                     );
                   }
@@ -366,7 +376,10 @@ class _BotHomeState extends State<BotHome> {
                     onPopInvokedWithResult: (didPop, result) {
                       if (!didPop) unawaited(bot.select(null));
                     },
-                    child: bot.selectedChat == null ? _list() : _chat(false),
+                    child: MbotPaneTransition(
+                      identity: bot.selectedChat ?? 'list',
+                      child: bot.selectedChat == null ? _list() : _chat(false),
+                    ),
                   );
                 },
               ),
