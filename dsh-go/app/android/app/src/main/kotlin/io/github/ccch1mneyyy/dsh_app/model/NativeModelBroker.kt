@@ -129,7 +129,8 @@ internal class NativeModelBroker(
             }, "mbot-native-model-peer").apply { isDaemon = true; start() }
             if (cancellation.cancelled.get()) return
             val provider = resolveProvider(request.providerId, request.modelId)
-            val upstream = provider.prepare(request.modelId, request.messages)
+            val upstream = if (request.payload != null) provider.preparePayload(request.modelId, request.payload)
+                else provider.prepare(request.modelId, request.messages!!)
             val call = transport.open(upstream)
             cancellation.attach(call)
             if (cancellation.cancelled.get()) return
@@ -199,18 +200,22 @@ internal class NativeModelBroker(
         fun cancel() { cancelled.set(true); call?.cancel() }
     }
 
-    private class Input(val providerId: String, val modelId: String, val messages: JSONArray)
+    private class Input(val providerId: String, val modelId: String, val messages: JSONArray?, val payload: JSONObject?)
     private fun parseRequest(raw: String): Input {
         try {
             requireNativeJsonBudget(raw, ModelBrokerCode.INVALID_REQUEST)
             val tokener = JSONTokener(raw)
             val value = tokener.nextValue() as? JSONObject ?: throw IllegalArgumentException()
-            if (tokener.nextClean().code != 0 || value.keys().asSequence().toSet() != setOf("providerId", "modelId", "messages")) {
+            val keys = value.keys().asSequence().toSet()
+            val text = keys == setOf("providerId", "modelId", "messages")
+            val payload = keys == setOf("providerId", "modelId", "request")
+            if (tokener.nextClean().code != 0 || (!text && !payload)) {
                 throw IllegalArgumentException()
             }
             val provider = value.get("providerId") as? String ?: throw IllegalArgumentException()
             val model = value.get("modelId") as? String ?: throw IllegalArgumentException()
             if (provider.isBlank() || provider.length > 200 || model.isBlank() || model.length > 256) throw IllegalArgumentException()
+            if (payload) return Input(provider, model, null, value.getJSONObject("request"))
             val messages = value.getJSONArray("messages")
             for (index in 0 until messages.length()) {
                 val message = messages.getJSONObject(index)
@@ -219,7 +224,7 @@ internal class NativeModelBroker(
                     throw IllegalArgumentException()
                 }
             }
-            return Input(provider, model, messages)
+            return Input(provider, model, messages, null)
         } catch (_: Exception) { throw ModelBrokerFailure(ModelBrokerCode.INVALID_REQUEST) }
     }
 

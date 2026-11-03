@@ -66,6 +66,29 @@ async function stack(t) {
 const request = (modelId = 'stream') => ({ providerId: 'native-provider', modelId,
   messages: [{ role: 'user', content: 'Hi' }] });
 
+test('tool-shaped SDK requests cross the real native boundary with native authentication and no config overrides', options, async (t) => {
+  const s = await stack(t);
+  const payload = { providerId: 'native-provider', modelId: 'tools', request: {
+    model: 'tools', stream: true,
+    messages: [{ role: 'tool', tool_call_id: 'c1', content: 'found' }],
+    tools: [{ type: 'function', function: { name: 'lookup', parameters: { type: 'object' } } }],
+    tool_choice: 'auto', temperature: 0.2,
+  } };
+  const events = [];
+  await s.client.stream({ ...payload, onEvent: (event) => events.push(event) });
+  const tool = events[0].choices[0].delta.tool_calls[0];
+  assert.equal(tool.function.name, 'lookup');
+  assert.deepEqual(JSON.parse(tool.function.arguments), { path: 'notes/b' });
+  assert.equal(events[1].choices[0].finish_reason, 'tool_calls');
+  await assert.rejects(s.client.stream({ ...payload, request: { ...payload.request, headers: { Authorization: 'caller-override' } } }),
+    { code: 'broker_rejected' });
+  await writeFile(join(s.workspace, 'tool-result.json'), JSON.stringify(events));
+  const report = await s.report();
+  assert.equal(report.keyInjected, true);
+  assert.equal(report.artifactsSafe, true);
+  assert.equal(report.logsSafe, true);
+});
+
 test('real Kotlin broker streams through the Node proxy and blocks runtime credential/config overrides', options, async (t) => {
   const s = await stack(t);
   const events = [];

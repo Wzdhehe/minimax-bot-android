@@ -34,9 +34,16 @@ object NativeBrokerFixture {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 check(request.getHeader("Authorization") == "Bearer $key") { "native_auth_missing" }
                 injected.incrementAndGet()
-                val model = JSONObject(request.body.readUtf8()).getString("model")
+                val body = JSONObject(request.body.readUtf8())
+                val model = body.getString("model")
                 val response = MockResponse().setHeader("Content-Type", "text/event-stream")
                 return when (model) {
+                    "tools" -> {
+                        check(body.getBoolean("stream") && body.getJSONArray("messages").getJSONObject(0).getString("role") == "tool" &&
+                            body.getJSONArray("tools").getJSONObject(0).getJSONObject("function").getString("name") == "lookup") { "tool_contract_missing" }
+                        val event = JSONObject("""{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c2","type":"function","function":{"name":"lookup","arguments":"{\"path\":\"notes/b\"}"}}]}}]}""")
+                        response.setChunkedBody("data: $event\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n", 3)
+                    }
                     "error" -> response.setResponseCode(401).setBody("provider denied $key")
                     "redirect" -> response.setResponseCode(302).setHeader("Location", "https://elsewhere.invalid/?key=$key")
                     "echo" -> response.setChunkedBody("data: {\"delta\":\"$key\"}\n\n", 3)
@@ -63,7 +70,7 @@ object NativeBrokerFixture {
                 override fun close() { call.close(); if (model == "cancel") cancelClosed.set(true) }
             }
         }
-        val allowed = setOf("stream", "cancel", "error", "echo", "escaped", "throw", "redirect", "truncated")
+        val allowed = setOf("stream", "cancel", "error", "echo", "escaped", "throw", "redirect", "truncated", "tools")
         val provider = NativeProvider("openai-completions", "https://fixture-provider.invalid/v1", key)
         val broker = NativeModelBroker({ id, model ->
             if (id != "native-provider" || model !in allowed) throw ModelBrokerFailure(ModelBrokerCode.INVALID_PROVIDER)

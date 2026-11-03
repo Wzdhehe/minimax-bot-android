@@ -1,5 +1,39 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+## 当前：SDK请求体与工具协议（2026-11-03）
+
+native与Node proxy接受且只接受两个互斥body：`{providerId, modelId, messages}` 或 `{providerId, modelId, request}`。后者是provider实际HTTP JSON，不是SDK内部config。NativeModelPayload按四种格式检查顶层字段、model/stream和必要类型；保留tool schema/call/result和钉点SDK缓存、思考、采样字段。复用原endpoint/auth逻辑；native复查enabled/model白名单，不允许调用者覆盖Key/headers/URL。嵌套工具数据中名为headers的字段只是数据。不是完整provider schema校验，未知vendor字段拒绝，未接工具执行器。
+
+恢复执行环境后实际验证：
+
+```bash
+MBOT_NATIVE_DEPS=/tmp/mbot-native-deps KOTLINC=/workspace/toolchains/kotlinc/bin/kotlinc bash dsh-go/tooling/test-native-model-broker.sh
+node --test dsh-go/runtime/minimax-bot-host/provider-broker.test.mjs dsh-go/runtime/minimax-bot-host/service.test.mjs
+(cd dsh-go && python3 -m unittest discover -s app/test_scope -v)
+```
+
+原始测试结尾：
+
+```text
+OK (32 tests)
+# tests 31
+# pass 31
+# fail 0
+ℹ tests 10
+ℹ pass 10
+ℹ fail 0
+Ran 4 tests in 0.012s
+OK
+```
+
+Android组件沿用下文JDK21/SDK36/Gradle9.3.1命令，重建后 **BUILD SUCCESSFUL in 5m 29s**；XML32 tests/0 failures/0 errors/0 skipped，两个仪器APK编译通过。新增工具请求经Node代理→真实Kotlin→OkHttp→MockWebServer，验证tool_calls JSON和终态、拒绝headers覆盖，并重复检查Key不进descriptor/env/log/Agent文件。**本阶段无本地设备、完整runtime或真实provider运行。**
+
+既有Android基线见下文a094a85十项矩阵；另04d7e97/run41627233229在API26/35运行真实Node/JNI固定脚本，见T-AndroidNode。旧“Node未验证”是当时记录，不再代表当前。正式启动器仍未接。
+
+下一步：SDK fetch/SSE adapter与动态FD桥；Google钉点忽略options.fetch须另解决。隔离持久化/better-sqlite3和完整runtime仍阻塞。
+
+## 历史阶段（以下按当轮状态记录）
+
 **已验证的当前基线**：`a094a85` 的 Android矩阵 run **41622547971 success**。API26 job125871636255、API35 job125871636043均成功；runner解析XML输出每台 **10 tests / 0 failures / 0 errors / 0 skipped**。实际覆盖Keystore/nativeHTTP、独立UID直接文件/网络拒绝、Unix FD流/取消/容量/截止、IPC启动取消解绑与竞争租约/并发关联。物理真机/硬件Keystore/Android Node/完整runtime仍未验证。后文“待观察”和旧失败是演进记录，以此项覆盖。
 
 

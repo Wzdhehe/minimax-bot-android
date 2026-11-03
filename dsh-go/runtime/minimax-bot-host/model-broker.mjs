@@ -65,6 +65,21 @@ function parseSseFrames(buffer) {
   return { events, rest: buffer };
 }
 
+function modelPayload(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new BrokerError('broker_request_invalid');
+  const { providerId, modelId, messages, request } = input;
+  if (typeof providerId !== 'string' || !providerId.trim() || providerId.length > 200 ||
+      typeof modelId !== 'string' || !modelId.trim() || modelId.length > 256) {
+    throw new BrokerError('broker_request_invalid');
+  }
+  const text = Array.isArray(messages);
+  const payload = request && typeof request === 'object' && !Array.isArray(request);
+  if (Boolean(text) === Boolean(payload) || (messages !== undefined && request !== undefined)) {
+    throw new BrokerError('broker_request_invalid');
+  }
+  return text ? { providerId, modelId, messages } : { providerId, modelId, request };
+}
+
 /**
  * Client for the native broker. Holds only a loopback endpoint and a session
  * token; the provider key is not part of this interface.
@@ -80,18 +95,15 @@ export function createModelBrokerClient({ baseUrl, token, fetchImpl = fetch }) {
 
   return Object.freeze({
     endpoint: endpoint.toString(),
-    async stream({ providerId, modelId, messages, signal, onEvent }) {
-      if (typeof providerId !== 'string' || !providerId ||
-          typeof modelId !== 'string' || !modelId ||
-          !Array.isArray(messages)) {
-        throw new BrokerError('broker_request_invalid');
-      }
+    async stream(input) {
+      const payload = modelPayload(input);
+      const { signal, onEvent } = input;
       let response;
       try {
         response = await fetchImpl(endpoint, {
           method: 'POST',
           headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-          body: JSON.stringify({ providerId, modelId, messages }),
+          body: JSON.stringify(payload),
           signal,
           redirect: 'error',
         });
@@ -232,6 +244,12 @@ export function startModelProxy({ broker, host = '127.0.0.1', port = 0, token, l
       let request;
       try { request = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
       catch { res.writeHead(400, { 'content-type': 'text/plain' }); res.end('bad_request'); return; }
+      let payload;
+      try {
+        payload = modelPayload(request);
+        const keys = Object.keys(request).sort().join(',');
+        if (keys !== 'messages,modelId,providerId' && keys !== 'modelId,providerId,request') throw new Error();
+      } catch { res.writeHead(400, { 'content-type': 'text/plain' }); res.end('broker_request_invalid'); return; }
       const controller = new AbortController();
       active.add(controller);
       const deadline = setTimeout(() => { controller.abort(); res.destroy(); }, timeoutMs);
@@ -246,9 +264,7 @@ export function startModelProxy({ broker, host = '127.0.0.1', port = 0, token, l
         'x-mbot-broker-protocol': '1',
       });
       const task = broker.stream({
-        providerId: request?.providerId,
-        modelId: request?.modelId,
-        messages: request?.messages,
+        ...payload,
         signal: controller.signal,
         onEvent: async (payload) => {
           if (finished || controller.signal.aborted) return;

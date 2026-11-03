@@ -3,7 +3,7 @@
 
 **真实执行已通过**：`04d7e97` 的run **41627233229 success**，API26 job125887515761和API35 job125887516140均通过仪器用例。真实隔离进程加载Node24.22.2，版本/UID、私有文件拒绝、Keystore→native broker→Unix FD→Node SSE、取消、Key回显拒绝及descriptor/env/log不含Key检查均已执行。仍是固定脚本/假provider；未启动完整mcode/官方Bot，ICU、better-sqlite3、持久化、物理真机和ARM64待做。后文“设备待CI”是本次实现前的记录，以此覆盖。
 
-当前默认产品仍为 DSH，尚未在 Android 启动 mcode。上一关口：`a094a85` 的 API26/35模拟器各十项通过（run41622547971），native Key/Unix模型FD/IPC已取得组件证据。物理真机、Android Node、better-sqlite3和完整runtime仍未验证。
+当前默认产品仍为 DSH，尚未在 Android 启动 mcode。上一关口：`a094a85` 的 API26/35模拟器各十项通过（run41622547971），native Key/Unix模型FD/IPC已取得组件证据。物理真机、better-sqlite3和完整runtime仍未验证。
 
 ## 当前继续：full ICU 源码构建与验证（尚未完成）
 
@@ -56,4 +56,4 @@
 
 isolated UID没有主App数据路径权限；目录FD/cwd不自动授予SQLite/WAL/JSON创建权限。必须继续设计验证持久化，不能回退main UID执行Agent。
 
-已从钉点mcode实查 `packages/local-runtime-v2/src/service/model-system/resolution/local-model-resolver.ts` 的 `resolveModelFetch`：BYOK支持 `options.fetchImpl`，返回resolved model的fetch字段。可作为以后受控FD fetch adapter入口；现native协议仍仅文本messages，工具调用/高级参数需另行定义、验证与接入。不能只改Base URL或塞dummy Key就宣称mcode已打通。
+已从钉点mcode实查 `packages/local-runtime-v2/src/service/model-system/resolution/local-model-resolver.ts` 的 `resolveModelFetch`：BYOK支持 `options.fetchImpl`，返回resolved model的fetch字段。可作为以后受控FD fetch adapter入口；native协议现增加provider-shaped request，保留工具消息/选项；SDK fetch adapter与正式装配仍待做。钉点third_party/pi-mono/packages/ai/src/providers/google.ts不使用options.fetch，不可假定四类一样直接注入fetch。不能只改Base URL或塞dummy Key就宣称mcode已打通。

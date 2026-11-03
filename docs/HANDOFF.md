@@ -1,43 +1,16 @@
 # 最新接手入口（2026-11-03）
 
-**当前源码构建项**：full-ICU Node已补固定输入、仅Android recipe变更、来源/摘要/config拒绝检查和独立CI构建→API26/35验证流程；尚未完成源码编译。host脚本1项、输入拒绝4项过，现有候选APK再编译 **BUILD SUCCESSFUL in 1m 1s**。既有04d7e97的两台真实Node验证已过，不要混同于full-ICU已过。详情见T-AndroidNode。
+继续 **feat/t-plugins**。用户已授权持续推进、每个可验证阶段更新文档并 push。不新开分支、不动main/dev/integration，不force push、不建PR、不发布APK。
 
-**最新已验证：Android Node24隔离加载**。04d7e97/run **41627233229 success**，API26/35均执行通过真实Node/JNI/Unix模型FD/取消/Key边界用例。它只运行固定验证脚本和假provider，不是完整mcode。当前主要关口：重建带Intl/ICU的Node、better-sqlite3与隔离数据持久化、mcode模型/工具适配。见 [T-AndroidNode](handoff/T-AndroidNode.md)。
+## 当前状态与证据
 
-**当前继续项：Android Node**。新增独立Node24验证target/JNI/private isolated服务，真实生产FD模块生成固定脚本；host脚本1项通过，NDK27d JNI编译通过，Gradle两个验收APK **BUILD SUCCESSFUL in 1m 34s**。API26/35实际Node执行待新CI；候选无Intl，尚不能启动完整mbot。源码/版本/命令/限制见 [T-AndroidNode](handoff/T-AndroidNode.md)。下文a094a85基础十项矩阵仍是已观察的设备基线。
+- **native模型broker支持SDK请求体**：兼容原messages路径，新增互斥request路径。四类provider的工具schema、tool call/result、采样/思考/缓存参数保留；模型白名单、HTTPS endpoint、认证头和Key仍由native决定。拒绝未知顶层字段、URL/headers/Key/model覆盖；不是工具执行器，也不是mcode已接通。
+- 恢复环境后实跑 **JUnit32 + Node31 + provider/service10 + scope4** 全过；Android组件 `testDebugUnitTest assembleDebug assembleDebugAndroidTest` **BUILD SUCCESSFUL in 5m 29s**，XML32项零失败/错误/跳过。跨进程工具请求经过真实Kotlin/OkHttp和假上游；假Key在native生成，检查descriptor/env/log/Agent文件不泄露。见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。
+- **Android已观察基线**：a094a85/run41622547971，API26/35各10项通过（Keystore、独立UID文件/网络拒绝、Unix FD流/取消/容量/截止、IPC生命周期）；04d7e97/run41627233229，两版本均通过真实Node24/JNI固定脚本、模型FD与Key边界。都是组件/模拟器和假provider，**物理真机、硬件Keystore、真实模型、完整Bot未验证**。
+- **full-ICU源码CI进行中**：4df803e/run41630373256仍在build，不能记为通过。默认预编译候选没有Intl，不能直接启动官方Bot。见 [T-AndroidNode](handoff/T-AndroidNode.md)。
+- 正式入口仍为DSH。插件变更保持关闭。better-sqlite3、隔离持久化、正式启动器、可信Bot身份/MCP尚未装配。
 
-**已验证的当前基线**：`a094a85` 的 Android矩阵 run **41622547971 success**。API26 job125871636255、API35 job125871636043均成功；runner解析XML输出每台 **10 tests / 0 failures / 0 errors / 0 skipped**。实际覆盖Keystore/nativeHTTP、独立UID直接文件/网络拒绝、Unix FD流/取消/容量/截止、IPC启动取消解绑与竞争租约/并发关联。物理真机/硬件Keystore/Android Node/完整runtime仍未验证。后文“待观察”和旧失败是演进记录，以此项覆盖。
-
-
-**最新待验修正**：17e7629的Unix矩阵两版本各有两项失败；26日志定位为接收端setopt被拒。现把socket option设置留在主进程，隔离端只读/关闭，并保留完整SSE/Key/cancel断言。另补IPC启动取消解绑、可等待本地close、竞争租约/并发关联用例，总计十项设备用例待新CI；本地组件 Gradle **BUILD SUCCESSFUL in 1m 11s**，JVM27项/仪器编译通过。此前的八项矩阵不能写成通过。
-
-**诊断已定位**：`09faafd`/run41603434315 的26失败有 `binderAlive=true` 和 isolated→app `tcp_socket read write` SELinux拒绝证据。新版17e7629只传Unix socketpair，run41604321437待观察。Android Node源码候选现找到Termux24.22.2（已钉recipe提交、未采用/构建），详见 [runtime计划](ANDROID-RUNTIME-INTEGRATION.md)。数据路径/SQLite/WAL仍是独立关口。
-
-**当前候选传输**：native 主进程保留 TCP，向隔离端只传 Unix socketpair 端点；`NativeModelChannels` 最多4通道，每通道单 poll worker/32KiB缓冲，支持容量拒绝、取消、截止与owner关闭。新增仪器用例共八项已编译，API26/35新矩阵待观察。宿主 **JVM27 + Node30 全过**（含真实 Unix FD），组件 Gradle **BUILD SUCCESSFUL in 1m 24s**。不能提前说26兼容已解决。
-
-**最新 FD 结果与后续**：Node FD 消费器、共有SSE消费和回调取消已实现；宿主脚本 **JVM27 + Node29 全过**，供应商/服务10、scope4通过。Android矩阵 `41602011149`：**API35六项成功，API26两项TCP FD传递失败（DeadObjectException）**，总体失败，仍须解决26兼容。API35才有直接文件/网络拒绝与FD流/取消实证，不等于已装入Node。下一步先诊断/修复26传输，再做Android Node/JNI与原生依赖。
-
-**最新 FD 通道**：可信 native 可创建单个已认证模型请求的预连接 FD；只移交 FD，不移交 native endpoint/token/Key。新增测试专用隔离探针，验证直接文件/网络拒绝、通过 Binder 接收 FD 的真实 broker SSE、关闭 FD 取消停滞 provider。六项仪器测试已编译，API26/35 CI 待观察。组件 Gradle **BUILD SUCCESSFUL in 1m 30s**，JVM27项通过。Node FD 消费、runtime 加载、工具协议和正式生命周期仍未接；见 [T-RuntimeBroker 首节](handoff/T-RuntimeBroker.md)。
-
-**最新工作区资源限制**：文件读取改为读取期间最多 1MiB +1 探测字节，不再只信 length；目录改为惰性枚举，最多1000条/128KiB文件名字节预算后才排序，超限拒绝而不返回截断列表。拒绝非普通文件。宿主脚本 **JVM27 + Node22 全过**；组件 Gradle构建再过，XML27项零失败/错误/跳过。这不解决路径检查到打开的 TOCTOU/hardlink 问题，设备结果仍另行观察。
-
-**最新设备验证**：`2d7367b` 的 Android35/KVM 模拟器 run **41600336727 success**，日志确认 `Finished 3 tests on emulator-5554 - 15` / `BUILD SUCCESSFUL in 5m 20s`。覆盖真实 Android Keystore 存储、native HTTP 假 provider 注入/回显拦截、独立 UID 文件 IPC 与 broker 穿越拒绝；不证明直接私有文件/网络拒绝（另待探针）、硬件 Keystore 或真实 API。XML artifact 下载在本环境返回403，结论来自 run API 和执行日志，未宣称读过 XML。**物理真机未验证**。本地仪器 APK 编译：`BUILD SUCCESSFUL in 1m 27s`。验收工程复用生产 localhost-only network security config，不放宽 provider HTTPS。上一阶段 `5af2ed8` 的 GitHub native **41599240875**、host **41599240883**、scope **41599240858** 全部 success。
-
-**最新流式补强**：native/host 增加完整结束标记、异常断流处理、背压、绝对截止时间、reader/call 清理及解析前 JSON 预算；proxy.dispose 会取消并收敛模型请求。最终本地 **JVM24 + Node22 全过**，Gradle组件构建再过、XML24项通过；设备测试仍未运行。说明见 [T-RuntimeBroker 首节](handoff/T-RuntimeBroker.md)。前一提交 `4c3e808` 的 GitHub **41591483093**：native/Android编译两项均 success。
-
-**最新 Android 构建进展**：新增复用生产源的 `tooling/android-broker-probe` 验收工程，Gradle 9.3.1/AGP9.1/JDK21 下 `testDebugUnitTest assembleDebug assembleDebugAndroidTest` **BUILD SUCCESSFUL**。XML确认 JVM20项全过；Keystore/IPC 两类仪器 APK 已编译打包，但**未在设备执行**；不是完整 Flutter Bot APK，更不是 Node runtime 已移植。存储类从 Flutter 注册文件原样拆出供验收复用。后续依赖/隔离/模型传输关口见 [Android runtime 计划](ANDROID-RUNTIME-INTEGRATION.md)；实际命令/限制见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。
-
-**继续推进 IPC 装配**：补 `AgentIsolationClient`、owner UID/会话 gate、请求 ID 关联、超时/断线/close 与保守 Binder payload 预算；仍是文件占位服务，不是 Node/runtime。JUnit 现 **20 passed** + Node/Kotlin **5 passed**，API36 下 isolation 源码独立编译通过、scope 4 passed。设备 Binder/UID/生命周期用例已写但**未验证**。下一步应先解决 isolated UID 的 Node 加载和受控模型 transport，不能假定 loopback 可访问，见 [T-Isolation 最新节](handoff/T-Isolation.md)。
-
-该阶段提交 `a743d5f` 的 GitHub native **41588261052 success**、scope **41588261051 success** 已实查。
-
-**本次最新进展**：直接从远程 `feat/t-plugins@b7ca158` 续写 native Kotlin provider broker（未新建分支）；四类文本协议、SSE、socket 取消、native Key 回显防护已实现，JUnit 6 + 跨进程 4 + 宿主回归 19 + scope 4 通过。Key 防泄露测试的假 Key 只在 native JVM 生成，检查 runtime descriptor/env/log/Agent 可读文件。正式启动/配置同步/Android 设备验证仍待完成，见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。用户最新要求持续按文档开发、阶段 push，覆盖了之前“只做一项就停”的限制。
-
-**进一步进展**：设置页供应商 probe 的 Node 持 Key/直连旧方案已删除，服务只接受 `modelBroker` 流能力，经 native 完成请求；首个文本输出后取消、超时不重试，跨进程验证增加到 **5 passed**（加 JUnit 6、宿主 CI 集合 18）。native 阶段提交 `fad4f3d` 的 GitHub native CI **41586158979 success**、scope **41586158832 success**；旧 host CI 在临时目录删除遇到竞态，测试清理已加有限 retry，生产 shutdown/drain 未因此宣称完成。
-
-`19d487d` 已经远程实查三组 CI **success**：native **41586891156**、host **41586891056**、scope **41586891057**。原失败记录保留作原因说明，不能继续说 host CI 仍是红的。
-
-用户要求额度结束前推送代码、维护文档，方便其他 Agent 接手。本文件优先描述当前状态；`DEVELOPMENT.md` 下面较旧的逐轮记录只作历史，不能据此判断 App 已完成。
+原先逐轮“最新/待观察”已移到 [过程记录](handoff/RuntimeBroker-2026-11-03-history.md)，旧失败与未验证描述不代表当前结论。
 
 ## 从哪里继续
 
@@ -61,7 +34,7 @@ dev/integration 891aefa
 ## 产品决定
 
 - Android 本机多 Bot，改造 DSH Go 外壳，MiniMax Code WebUI fork 的 runtime，复用官方 mbot 业务；不是通用 coding Agent 工作台，不做云环境、远控、手机操控。
-- 设置输入 Key / Base URL / 模型。保存的 Key 留在 native；provider broker、native→Node 和 WebUI 配置同步尚未装配。
+- 设置输入 Key / Base URL / 模型。保存的Key留在native；broker/隔离Node FD已有组件验证，正式启动器与WebUI配置同步尚未装配。
 - 手机固定竖屏；平板允许横屏和自适应展开。参考 Grok 布局，不复制其商标图案。
 - **自动任务在各 Bot 资料/设置页**，与 Bot 经 mbot MCP 创建的任务共用数据源；全局设置七组，无自动任务组、无电脑行。进程被杀后不执行、不补跑。
 - **单一总工作区 `filesDir/workspace`，项目放子目录，多个 Bot 可绑定同项目协作**。仅总根和路径守卫已落地，项目管理/目录绑定待开发。cwd 不等于授权范围，PRoot 不等于沙箱。
@@ -74,11 +47,11 @@ dev/integration 891aefa
 
 1. [T-Sandbox](handoff/T-Sandbox.md)：路径防护、宿主媒体检查、targetSdk36、去 FileProvider 宽外部路径、凭据备份排除。**不是独立 UID 隔离**。
 2. [T-Settings](handoff/T-Settings.md)：设置接入、通知偏好、native 系统跳转。旧八组已被每 Bot 任务决定覆盖。
-3. [T-Providers](handoff/T-Providers.md)：四 API 协议多供应商/独立 native 加密保存、metadata UI、宿主 probe。真实 broker 桥和模型同步未接。
+3. [T-Providers](handoff/T-Providers.md)：四 API 协议多供应商/独立 native 加密保存、metadata UI、宿主 probe。native-only broker已有组件证据，正式模型同步未接。
 4. [T-Usage](handoff/T-Usage.md)：只读额度白名单投影、页面和 API provider 不冒充账号登录；真实 OAuth/UsageQuotaClient 未装配。
 5. [T-Schedule](handoff/T-Schedule.md)：Bot 资料/任务管理、同源 MCP 宿主测试、进程内 SSE→native 通知桥。调用者身份可信绑定、真机通知、断线/页面外通知尚未完成。
 6. [UI-Motion](handoff/UI-Motion.md)：DSH 路由过渡、轻量骨架、会话入场、lazy lists、SSE 直接合并/32ms 通知与晚到历史竞态保护。
-8. [T-RuntimeBroker](handoff/T-RuntimeBroker.md)：native Kotlin broker、四协议文本流/取消、host 代理/descriptor 与 Key 边界测试；JVM24 + Node22 通过，Android组件编译通过，正式 runtime 装配尚未完成。
+8. [T-RuntimeBroker](handoff/T-RuntimeBroker.md)：native Kotlin broker、四协议文本/工具请求体、流/取消、host代理/FD与Key边界；JUnit32+Node31通过，Android组件编译通过，正式runtime未装配。
 9. [T-Isolation](handoff/T-Isolation.md)：isolatedProcess 文件占位、主进程 broker、身份/请求关联客户端、纯 JVM 路径/会话测试；Android组件 Gradle构建通过，Android35 模拟器文件 IPC 用例通过；完整 Flutter/Node 构建未完成。
 7. [T-Plugins](handoff/T-Plugins.md)：插件页和只读 mcode adapter、GitHub 固定版本预览、协议字段/installed cursor 差异。**生产变更入口强制关闭，当前无正式运行时 descriptor，非已完成安装市场。**
 
@@ -86,8 +59,8 @@ dev/integration 891aefa
 
 ## 接下来优先做
 
-1. 阅读 `docs/architecture.md` 卡与 `docs/sandbox.md`，先落实独立 UID + broker 的 Android 最小实证、Node/runtime 原生依赖与宿主生命周期；禁止回退同 UID 任意 shell。**独立 UID + broker 的代码层最小实证见 [T-Isolation](handoff/T-Isolation.md)**：`isolatedProcess` 服务 + 主进程 broker + 纯 JVM 路径守卫单测已落地；真机行为、Node 原生依赖与宿主生命周期仍未验证。
-2. 打包/启动钉点 runtime，可信 descriptor 私有传递；接 provider native broker、配置/模型同步，真实模型流和取消。API Key 不传入 Agent/插件环境。**进度见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)**：host 代理/descriptor 与 native Kotlin broker 都有实现；跨进程模拟 provider 流/取消、Key 不进 runtime descriptor/env/log/Agent 文件的测试通过。下一步是正式 Android 启动器/隔离装配与可信 descriptor 传递、模型配置/工具协议同步；**Android Keystore/完整 APK/真机及真实 MiniMax API 均未验证**。
+1. 观察full-ICU源码CI run41630373256，处理真实失败并取得API26/35证据；接着解决better-sqlite3与隔离UID数据持久化。目录FD/cwd不自动授予主App路径下SQLite/WAL创建权限，禁止回退同UID任意shell。
+2. 接钉点mcode SDK到native-only模型FD：请求体已扩展，下一步是有界fetch/SSE adapter、取消/背压和native动态通道请求桥。**Google的钉点pi-ai实现不使用options.fetch**，不可假定四种SDK都能直接替换fetch。正式runtime、配置同步、工具执行和真实MiniMax未验证。参看T-RuntimeBroker和T-AndroidNode。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
 5. 总工作区下实现项目管理与 Bot 绑定，遵守路径防护并分开 cwd 和访问许可；补资料库、附件、群聊/记忆/审批等全量 parity 未完成项。
@@ -95,11 +68,13 @@ dev/integration 891aefa
 
 ## 本环境验证工具
 
-- Flutter/Dart：`/workspace/toolchains/flutter/bin/`；App widget 测试加 `DSH_TEST_FONT_DIR=/workspace/toolchains/test-fonts`，否则字体配置会使测试加载失败。
-- Node24.19.0；JDK21 位于 `/usr/lib/jvm/java-21-openjdk-amd64`；Kotlin 编译器在 `/workspace/toolchains/kotlinc/bin/kotlinc`。
-- `/tmp/mbot-api36/android-36/android.jar` 仅供独立 Kotlin 编译，**不是完整 SDK**。无 adb/device/NDK，不要把它当作构建完成。
-- `/tmp/mbot-plugin-reference/` 是本轮临时读取钉点上游协议的文件，不是完整源码/构建，不入仓库。临时 widget 预览图片在 `/tmp/mbot-*.png`，不是真机截图。
-- `flutter pub get` 可能自动改 settings 的 analysis_options，`dart test` 可能改 dsh_client 锁文件；复核并恢复无关变更，只暂存明确路径。
+环境曾中断，恢复后 `/workspace` 保留，`/tmp` 清空并部分重建。路径须实查。
+
+- Node24.19.0；Kotlin `/workspace/toolchains/kotlinc/bin/kotlinc` 2.4.0；Flutter `/workspace/toolchains/flutter/bin/`。
+- 当前组件构建：完整JDK `/tmp/mbot-jdk21`、Gradle9.3.1 `/tmp/mbot-gradle/gradle-9.3.1/bin/gradle`、SDK `/tmp/mbot-android-sdk`（platform36/build-tools36.0.0）；缓存 `/tmp/mbot-gradle-cache`。
+- 固定测试jar `/tmp/mbot-native-deps` 已按CI摘要重取。当前无本地NDK/adb/设备/KVM；旧 `/tmp/mbot-ndk27d` 和下载包已消失，Node源码编译在CI。
+- Widget测试需 `DSH_TEST_FONT_DIR=/workspace/toolchains/test-fonts`；只暂存明确路径，检查pub/analyze产生的无关修改。
+- 完整命令见T-RuntimeBroker；组件APK编译不是完整Flutter Bot APK。
 
 ## 最终验证结果
 

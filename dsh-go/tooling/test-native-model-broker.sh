@@ -26,6 +26,7 @@ done
 classpath="$test_dir/tests.jar:$classpath"
 "$java_bin" -cp "$classpath" org.junit.runner.JUnitCore \
   io.github.ccch1mneyyy.dsh_app.model.NativeModelBrokerTest \
+  io.github.ccch1mneyyy.dsh_app.model.NativeModelPayloadTest \
   io.github.ccch1mneyyy.dsh_app.isolation.WorkspacePathPolicyTest \
   io.github.ccch1mneyyy.dsh_app.isolation.WorkspaceBrokerTest \
   io.github.ccch1mneyyy.dsh_app.isolation.IsolationSessionGateTest
