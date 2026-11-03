@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 internal object NodeProbeRuntime {
     fun load() { System.loadLibrary("mbot_node_probe") }
-    external fun start(script: String, normal: Int, stalled: Int, echo: Int, result: Int, privatePath: String): Int
+    external fun start(script: String, normal: Int, stalled: Int, echo: Int, result: Int, privatePath: String, nativeLibraryDir: String): Int
 }
 
 /** Verification APK only. One fixed APK script per isolated process; no JS,
@@ -62,7 +62,7 @@ class NodeIsolationProbeService : Service() {
                 // Ownership goes to the fixed Node script. It closes model
                 // FDs on every stream path and the result FD after writing.
                 val raw = fds.map { it!!.detachFd() }
-                val exit = NodeProbeRuntime.start(script, raw[0], raw[1], raw[2], raw[3], privatePath)
+                val exit = NodeProbeRuntime.start(script, raw[0], raw[1], raw[2], raw[3], privatePath, applicationInfo.nativeLibraryDir)
                 code = if (exit == 0) "ok" else "node_nonzero_exit"
             } catch (_: UnsatisfiedLinkError) { code = "node_library_unavailable" }
             catch (_: Throwable) { code = "node_start_failed" }

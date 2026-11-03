@@ -36,3 +36,20 @@ verified by the build job's SHA256 before JNI preparation and device checks.
 `--source-build-sha` is for that trusted CI input, never an Agent/runtime setting.
 The full-ICU path additionally requires Chinese Intl and Asia/Shanghai time-zone
 checks. A passing default-candidate test does not imply this source build passed.
+
+## SQLite addon verification
+
+The candidate workflow additionally builds pinned better-sqlite3 12.11.1 from
+its npm source archive using NDK27d and the verified Node24 headers. Run
+`prepare-probe.py` first, then `prepare-sqlite.py --ndk /path/to/ndk27d
+--esbuild /path/to/esbuild`. The latter checks input hashes/ABI, bundles the
+unchanged JS wrapper and includes upstream notices. No install scripts or
+Linux addon binaries run. Generated libraries/assets remain ignored.
+
+The fixed isolated Node script loads the APK native addon using its official
+`nativeBinding` object option and tests in-memory transactions, rollback,
+Unicode, JSON, serialization and restoration. This does **not** solve isolated
+UID storage, WAL, restart durability or the complete mcode runtime. Only the
+API26/35 instrumentation result can establish Android execution; host tests
+and successful native compilation cannot. Full ICU + SQLite is a separate
+combination to verify. See [T-SQLite](../../../docs/handoff/T-SQLite.md).

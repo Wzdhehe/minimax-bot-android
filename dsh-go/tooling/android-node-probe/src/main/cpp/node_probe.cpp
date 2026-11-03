@@ -17,11 +17,11 @@ std::string ReadString(JNIEnv* env, jstring value) {
 // This is a fixed-script test entry, loaded only by a private isolated service.
 // No credential, network endpoint or arbitrary command is accepted here.
 jint Start(JNIEnv* env, jobject, jstring script, jint normal, jint stalled,
-           jint echo, jint result, jstring private_path) {
+           jint echo, jint result, jstring private_path, jstring native_dir) {
   std::vector<std::string> args{
       "mbot-node-probe", "--no-warnings", "-e", ReadString(env, script),
       std::to_string(normal), std::to_string(stalled), std::to_string(echo),
-      std::to_string(result), ReadString(env, private_path)};
+      std::to_string(result), ReadString(env, private_path), ReadString(env, native_dir)};
   if (env->ExceptionCheck()) return -1;
   size_t size = 0;
   for (const auto& arg : args) size += arg.size() + 1;
@@ -43,7 +43,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   jclass type = env->FindClass("io/github/ccch1mneyyy/dsh_app/nodeprobe/NodeProbeRuntime");
   if (!type) return JNI_ERR;
   JNINativeMethod method{const_cast<char*>("start"),
-      const_cast<char*>("(Ljava/lang/String;IIIILjava/lang/String;)I"), reinterpret_cast<void*>(Start)};
+      const_cast<char*>("(Ljava/lang/String;IIIILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Start)};
   if (env->RegisterNatives(type, &method, 1) != JNI_OK) return JNI_ERR;
   return JNI_VERSION_1_6;
 }

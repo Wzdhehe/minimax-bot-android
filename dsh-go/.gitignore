@@ -37,3 +37,4 @@ site/build/
 
 # Pinned provider source bundles are generated for the host probe only.
 tooling/model-sdk-probe/.build/
+tooling/android-node-probe/.kotlin/

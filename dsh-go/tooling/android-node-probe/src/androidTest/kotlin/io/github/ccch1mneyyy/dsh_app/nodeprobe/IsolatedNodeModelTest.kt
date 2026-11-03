@@ -130,6 +130,16 @@ class IsolatedNodeModelTest {
                                 assertEquals("zh-CN", report.getJSONObject("intlSmoke").getString("locale"))
                                 assertEquals("Asia/Shanghai", report.getJSONObject("intlSmoke").getString("timeZone"))
                             }
+                            if (expected.optBoolean("requiresSqlite")) {
+                                val sqlite = report.getJSONObject("sqlite")
+                                assertEquals(expected.getString("sqliteEngineVersion"), sqlite.getString("version"))
+                                assertEquals("你好", sqlite.getJSONArray("rows").getString(0))
+                                assertEquals("second", sqlite.getJSONArray("rows").getString(1))
+                                assertEquals(2, sqlite.getJSONArray("rows").length())
+                                assertEquals(2, sqlite.getInt("restoredCount"))
+                                assertEquals("memory", sqlite.getString("journalMode"))
+                                assertEquals(7, sqlite.getInt("jsonValue"))
+                            }
                             assertEquals(reply.uid, report.getInt("uid"))
                             assertTrue(report.getBoolean("privateDenied"))
                             assertEquals("done", report.getJSONObject("normal").getString("code"))

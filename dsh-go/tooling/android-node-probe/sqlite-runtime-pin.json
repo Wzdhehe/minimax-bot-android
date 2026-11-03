@@ -1,0 +1,13 @@
+{
+  "_license": "SPDX-License-Identifier: AGPL-3.0-only",
+  "package": "better-sqlite3",
+  "version": "12.11.1",
+  "url": "https://registry.npmjs.org/better-sqlite3/-/better-sqlite3-12.11.1.tgz",
+  "sha256": "ebf0ed75a7a59dbcb3b24bbd014ef49d9f15bc328e4adcbf516f2a8fadfa2835",
+  "license": "MIT",
+  "nodeVersion": "24.22.2",
+  "ndkVersion": "27.3.13750724",
+  "abi": "x86_64",
+  "api": 26,
+  "esbuildVersion": "0.28.2"
+}

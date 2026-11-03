@@ -24,7 +24,7 @@ def digest(path):
         return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
-def bundle():
+def bundle(output_dir=None):
     host = DSH / 'runtime/minimax-bot-host'
     broker = (host / 'model-broker.mjs').read_text()
     fd = (host / 'model-fd-client.mjs').read_text()
@@ -36,7 +36,7 @@ def bundle():
     template = (ROOT / 'src/main/js/node-fd-probe.cjs').read_text()
     placeholder = '"__MBOT_FD_MODULE_URL__"'
     assert template.count(placeholder) == 1
-    assets = ROOT / 'build/verified-assets'
+    assets = output_dir or ROOT / 'build/verified-assets'
     assets.mkdir(parents=True, exist_ok=True)
     (assets / 'node-fd-probe.cjs').write_text(template.replace(placeholder, json.dumps(module_url)))
 
@@ -106,6 +106,10 @@ def prepare(ndk, archive, source_sha=None):
         variables = ast.literal_eval((source_dir / 'config.gypi').read_text())['variables']
         if variables.get('v8_enable_i18n_support') not in (1, True, '1', 'true') or variables.get('icu_small') not in (0, False, '0', 'false'):
             raise RuntimeError('Source build must include full ICU')
+    (ROOT / 'build/node-headers.json').write_text(json.dumps({
+        'nodeArchiveSha256': digest(archive),
+        'files': {str(path.relative_to(source_dir)): digest(path) for path in sorted(source_dir.rglob('*')) if path.is_file()},
+    }) + '\n')
     toolchain = ndk / 'toolchains/llvm/prebuilt/linux-x86_64'
     shutil.copyfile(toolchain / 'sysroot/usr/lib/x86_64-linux-android/libc++_shared.so', jni / 'libc++_shared.so')
     (notices / 'ndk').mkdir(parents=True, exist_ok=True)
@@ -117,7 +121,7 @@ def prepare(ndk, archive, source_sha=None):
     subprocess.run(command, check=True)
     bundle()
     (ROOT / 'build/verified-assets/node-validation.json').write_text(json.dumps({
-        'requiresIntl': source_sha is not None, 'sourceArchiveSha256': source_sha,
+        'requiresIntl': source_sha is not None, 'sourceArchiveSha256': source_sha, 'requiresSqlite': False,
     }) + '\n')
     print('Prepared pinned Node', PIN['version'], PIN['abi'], 'and JNI verification glue')
 
@@ -126,11 +130,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--ndk', type=Path)
     parser.add_argument('--archive', type=Path, default=ROOT / 'build/downloads/nodejs-mobile.zip')
+    parser.add_argument('--bundle-output', type=Path)
     parser.add_argument('--bundle-only', action='store_true')
     parser.add_argument('--source-build-sha', help='Trusted full-ICU build job SHA256; not a runtime override')
     args = parser.parse_args()
     if args.bundle_only:
-        bundle()
+        bundle(args.bundle_output)
     elif not args.ndk:
         parser.error('--ndk is required for native preparation')
     else:

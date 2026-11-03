@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'dsh-go/tooling/android-node-probe/**'
+      - 'dsh-go/tooling/model-sdk-probe/package*.json'
       - '!dsh-go/tooling/android-node-probe/README.md'
       - 'dsh-go/runtime/minimax-bot-host/model-broker.mjs'
       - 'dsh-go/runtime/minimax-bot-host/model-fd-client.mjs'
@@ -15,6 +16,7 @@ on:
   pull_request:
     paths:
       - 'dsh-go/tooling/android-node-probe/**'
+      - 'dsh-go/tooling/model-sdk-probe/package*.json'
       - '!dsh-go/tooling/android-node-probe/README.md'
       - 'dsh-go/runtime/minimax-bot-host/model-broker.mjs'
       - 'dsh-go/runtime/minimax-bot-host/model-fd-client.mjs'
@@ -56,6 +58,12 @@ jobs:
         run: |
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.3.13750724'
           python3 dsh-go/tooling/android-node-probe/prepare-probe.py --ndk "$ANDROID_HOME/ndk/27.3.13750724"
+      - name: Build pinned SQLite addon for the isolated in-memory check
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund --prefix dsh-go/tooling/model-sdk-probe
+          python3 dsh-go/tooling/android-node-probe/prepare-sqlite.py \
+            --ndk "$ANDROID_HOME/ndk/27.3.13750724" \
+            --esbuild dsh-go/tooling/model-sdk-probe/node_modules/.bin/esbuild
       - name: Check the exact packaged JS on the host (not isolation evidence)
         run: |
           node --test dsh-go/tooling/android-node-probe/probe-bundle.test.mjs

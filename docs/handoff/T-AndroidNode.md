@@ -5,6 +5,10 @@
 
 当前默认产品仍为 DSH，尚未在 Android 启动 mcode。上一关口：`a094a85` 的 API26/35模拟器各十项通过（run41622547971），native Key/Unix模型FD/IPC已取得组件证据。物理真机、better-sqlite3和完整runtime仍未验证。
 
+## SQLite候选（新增，设备执行待CI）
+
+NDK27d已将better-sqlite3 12.11.1源码编译为Android x86_64 addon，APK固定脚本新增内存数据库验证；最后两个APK构建43s成功、host1+输入拒绝8项过。**Android SQLite执行仍待本阶段CI**，不是持久化/WAL已解决。详情见 [T-SQLite](T-SQLite.md)。旧段“better-sqlite3未做”只描述当时。
+
 ## 当前继续：full ICU 源码构建与验证（尚未完成）
 
 新增 `node-source-build.json` / `build-source.py` / `android-node-source.yml`。固定mobile提交、官方Node提交与tree、重构mobile tree、构建脚本SHA256、NDK27d、API26/x86_64；在忽略目录复制原脚本，仅把Android的`--with-intl=none`改为full-icu，保留原仓库与子模块洁净。单ABI两路编译，CI允许较长构建；产物只作七天private工作流输入，不发布release/APK。下游通过build job的archive SHA再次验证，校验来源/ABI/config，才编译JNI并在API26/35跑中文Intl/Asia-Shanghai时区与原Key边界用例。

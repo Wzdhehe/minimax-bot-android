@@ -13,10 +13,17 @@ import { buildRuntimeEnv } from '../../runtime/minimax-bot-host/runtime-descript
 const root = fileURLToPath(new URL('.', import.meta.url));
 const header = 'HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nX-Mbot-Broker-Protocol: 1\r\nConnection: close\r\n\r\n';
 
-test('the exact APK script consumes inherited Unix FDs and reports privately without filesystem modules', { timeout: 12_000 }, async () => {
-  execFileSync('python3', [join(root, 'prepare-probe.py'), '--bundle-only']);
-  const script = await readFile(join(root, 'build/verified-assets/node-fd-probe.cjs'), 'utf8');
+test('the exact APK script consumes inherited Unix FDs and reports privately without filesystem modules', { timeout: 12_000 }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'mbot-node-bundle-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  execFileSync('python3', [join(root, 'prepare-probe.py'), '--bundle-only', '--bundle-output', directory]);
+  const fresh = await readFile(join(directory, 'node-fd-probe.cjs'), 'utf8');
+  let script;
+  try { script = await readFile(join(root, 'build/verified-assets/node-fd-probe.cjs'), 'utf8'); }
+  catch { script = fresh; }
+  // Do not overwrite the prepared APK asset (which may include the pinned
+  // SQLite wrapper). Model transport must still be today's exact source.
+  assert.equal(script.replace(/^const sqliteWrapper = .*;$/m, 'const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";'), fresh);
   const marker = join(directory, 'marker');
   await writeFile(marker, 'non-sensitive marker');
   const servers = [], owners = [], peers = [];

@@ -4,7 +4,9 @@
 
 ## 当前状态与证据
 
-- **四类真实pi-ai provider组件已过**：不改钉点源码，验证commit/tree/洁净和SDK依赖后打包provider，8项工具翻译/取消测试通过；Google用AsyncLocalStorage model fetch scope解决无fetch注入点的问题。dispatcher仅在测试子进程安装，生产启动器仍未接。实际body快照由Kotlin消费，确认四类请求通过native白名单和认证。最新完整脚本JUnit32+Node41；另SDK9项、pi-ai8项。见T-RuntimeBroker。
+- **SQLite Android验收候选已编译**：钉点better-sqlite3 12.11.1源码→NDK27d→x86_64 addon；固定隔离Node脚本加内存事务/回滚/中文/JSON/序列化恢复，两个仪器APK最后 **BUILD SUCCESSFUL in 43s**，host1项+输入拒绝8项过。**Android SQLite执行待新CI；持久化/WAL/ARM64/真机未验证**。见 [T-SQLite](handoff/T-SQLite.md)。
+
+- **四类真实pi-ai provider组件与CI已过**：不改钉点源码，验证commit/tree/洁净和SDK依赖后打包provider，8项工具翻译/取消测试通过；Google用AsyncLocalStorage model fetch scope解决无fetch注入点的问题。dispatcher仅在测试子进程安装，生产启动器仍未接。实际body快照由Kotlin消费，确认四类请求通过native白名单和认证。最新完整脚本JUnit32+Node41；另SDK9项、pi-ai8项；7ce84ec的native41659981145/host41659981258/scope41659981166全部success。见T-RuntimeBroker。
 
 - **SDK→模型FD适配已实现（宿主组件）**：新增有界、无网络fallback的 `createNativeModelFetch`，固定provider/model/SDK URL，只传IDs+JSON到native通道工厂，丢弃SDK认证头。流式背压、取消、总截止、晚到FD关闭、协议event恢复已测试；实际OpenAI6.26.0两种协议和Anthropic0.91.1共9项SDK测试通过。完整脚本JUnit32+Node37通过；不是完整pi-ai/mcode，也未实现生产动态Binder/JNI请求桥。Google宿主provider接入已在下一阶段验证，生产装配仍待做。见T-RuntimeBroker和 `dsh-go/tooling/model-sdk-probe/README.md`。
 
@@ -12,7 +14,7 @@
 - 恢复环境后实跑 **JUnit32 + Node31 + provider/service10 + scope4** 全过；Android组件 `testDebugUnitTest assembleDebug assembleDebugAndroidTest` **BUILD SUCCESSFUL in 5m 29s**，XML32项零失败/错误/跳过。跨进程工具请求经过真实Kotlin/OkHttp和假上游；假Key在native生成，检查descriptor/env/log/Agent文件不泄露。见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。
 - **Android已观察基线**：a094a85/run41622547971，API26/35各10项通过（Keystore、独立UID文件/网络拒绝、Unix FD流/取消/容量/截止、IPC生命周期）；04d7e97/run41627233229，两版本均通过真实Node24/JNI固定脚本、模型FD与Key边界。都是组件/模拟器和假provider，**物理真机、硬件Keystore、真实模型、完整Bot未验证**。
 - **full-ICU源码CI进行中**：4df803e/run41630373256仍在build，不能记为通过。默认预编译候选没有Intl，不能直接启动官方Bot。见 [T-AndroidNode](handoff/T-AndroidNode.md)。
-- 正式入口仍为DSH。插件变更保持关闭。better-sqlite3、隔离持久化、正式启动器、可信Bot身份/MCP尚未装配。
+- 正式入口仍为DSH。插件变更保持关闭。better-sqlite3仅编译了内存验收候选；隔离持久化、正式启动器、可信Bot身份/MCP尚未装配。
 
 原先逐轮“最新/待观察”已移到 [过程记录](handoff/RuntimeBroker-2026-11-03-history.md)，旧失败与未验证描述不代表当前结论。
 
@@ -63,7 +65,7 @@ dev/integration 891aefa
 
 ## 接下来优先做
 
-1. 观察full-ICU源码CI run41630373256，处理真实失败并取得API26/35证据；接着解决better-sqlite3与隔离UID数据持久化。目录FD/cwd不自动授予主App路径下SQLite/WAL创建权限，禁止回退同UID任意shell。
+1. 观察full-ICU源码CI run41630373256，处理真实失败并取得API26/35证据；观察新SQLite API26/35矩阵，再解决隔离UID数据持久化。目录FD/cwd不自动授予主App路径下SQLite/WAL创建权限，禁止回退同UID任意shell。
 2. 接钉点mcode SDK到native-only模型FD：请求体已扩展，fetch/SSE adapter及宿主SDK探针已过，下一步是生产native动态通道请求桥、生产模型scope装配；四类pi-ai宿主provider现已通过，完整runtime仍待验证。**Google的钉点pi-ai实现不使用options.fetch**，宿主已验证async scope dispatcher，正式隔离进程还须显式安装并绑定生命周期。正式runtime、配置同步、工具执行和真实MiniMax未验证。参看T-RuntimeBroker和T-AndroidNode。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
@@ -76,7 +78,7 @@ dev/integration 891aefa
 
 - Node24.19.0；Kotlin `/workspace/toolchains/kotlinc/bin/kotlinc` 2.4.0；Flutter `/workspace/toolchains/flutter/bin/`。
 - 当前组件构建：完整JDK `/tmp/mbot-jdk21`、Gradle9.3.1 `/tmp/mbot-gradle/gradle-9.3.1/bin/gradle`、SDK `/tmp/mbot-android-sdk`（platform36/build-tools36.0.0）；缓存 `/tmp/mbot-gradle-cache`。
-- 固定测试jar `/tmp/mbot-native-deps` 已按CI摘要重取。当前无本地NDK/adb/设备/KVM；旧 `/tmp/mbot-ndk27d` 和下载包已消失，Node源码编译在CI。
+- 固定测试jar `/tmp/mbot-native-deps` 已按CI摘要重取。本轮又恢复 `/tmp/mbot-ndk27d` x86编译器/sysroot/clang runtime及 `/tmp/mbot-node24-mobile.zip`，已重建JNI/SQLite；没有adb/设备/KVM，full-ICU Node源码编译在CI。
 - Widget测试需 `DSH_TEST_FONT_DIR=/workspace/toolchains/test-fonts`；只暂存明确路径，检查pub/analyze产生的无关修改。
 - 完整命令见T-RuntimeBroker；组件APK编译不是完整Flutter Bot APK。
 

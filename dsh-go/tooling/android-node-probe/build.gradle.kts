@@ -4,6 +4,7 @@ import org.gradle.api.file.FileSystemOperations
 import org.gradle.api.provider.ListProperty
 import javax.inject.Inject
 import org.gradle.work.DisableCachingByDefault
+import groovy.json.JsonSlurper
 
 plugins { id("com.android.application") version "9.1.0" }
 
@@ -38,6 +39,13 @@ val verifyPreparedInputs by tasks.registering {
         }
         check(file("build/verified-assets/node-fd-probe.cjs").isFile)
         check(file("build/verified-assets/node-validation.json").isFile)
+        val verification = JsonSlurper().parse(file("build/verified-assets/node-validation.json")) as Map<*, *>
+        if (verification["requiresSqlite"] == true) {
+            check(file("build/verified-jni/x86_64/libmbot_sqlite_probe.so").isFile)
+            check(file("build/verified-assets/third_party/better-sqlite3/LICENSE").isFile)
+            check(file("build/verified-assets/third_party/better-sqlite3/SQLITE-PUBLIC-DOMAIN.txt").isFile)
+            check(!file("build/verified-assets/node-fd-probe.cjs").readText().contains("\"__MBOT_SQLITE_WRAPPER__\""))
+        }
         check(file("build/verified-assets/third_party/nodejs-mobile/LICENSE").isFile)
         check(file("build/verified-assets/third_party/nodejs-mobile/LICENSE-nodejs-mobile").isFile)
         check(file("build/verified-assets/third_party/ndk/NOTICE").isFile)

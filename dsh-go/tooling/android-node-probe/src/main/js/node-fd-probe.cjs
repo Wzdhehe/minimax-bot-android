@@ -3,9 +3,10 @@
 // This script is packaged in the verification APK, never supplied by an Agent.
 const modelModuleUrl = "__MBOT_FD_MODULE_URL__";
 const fs = require('node:fs');
+const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
 
 (async () => {
-  const [normal, stalled, echo, result, privatePath] = process.argv.slice(1);
+  const [normal, stalled, echo, result, privatePath, nativeLibraryDir] = process.argv.slice(1);
   const { streamNativeModelFd } = await import(modelModuleUrl);
   async function consume(fd, cancel) {
     const controller = new AbortController();
@@ -24,7 +25,32 @@ const fs = require('node:fs');
   }
   let privateDenied = true;
   try { fs.readFileSync(privatePath); privateDenied = false; } catch {}
-  const report = {
+  let sqlite = null;
+  if (nativeLibraryDir && !sqliteWrapper.startsWith('__MBOT_SQLITE_')) {
+    const wrapper = { exports: {} };
+    new Function('require', 'module', 'exports', sqliteWrapper)(require, wrapper, wrapper.exports);
+    const addon = { exports: {} };
+    process.dlopen(addon, nativeLibraryDir + '/libmbot_sqlite_probe.so');
+    const Database = wrapper.exports;
+    const options = { nativeBinding: addon.exports };
+    const db = new Database(':memory:', options);
+    try {
+      db.exec('CREATE TABLE notes(id INTEGER PRIMARY KEY, text TEXT)');
+      const insert = db.prepare('INSERT INTO notes(text) VALUES (?)');
+      db.transaction(() => { insert.run('你好'); insert.run('second'); })();
+      try { db.transaction(() => { insert.run('rollback'); throw Error('rollback'); })(); } catch {}
+      const rows = db.prepare('SELECT text FROM notes ORDER BY id').all();
+      const snapshot = db.serialize();
+      const restored = new Database(snapshot, options);
+      try {
+        sqlite = { version: db.prepare('SELECT sqlite_version() AS version').get().version,
+          rows: rows.map((row) => row.text), restoredCount: restored.prepare('SELECT count(*) AS n FROM notes').get().n,
+          journalMode: db.pragma('journal_mode', { simple: true }),
+          jsonValue: db.prepare("SELECT json_extract('{\"v\":7}', '$.v') AS v").get().v };
+      } finally { restored.close(); }
+    } finally { db.close(); }
+  }
+  const report = { sqlite,
     version: process.versions.node, modules: process.versions.modules,
     uid: process.getuid(), privateDenied, intlAvailable: typeof Intl !== 'undefined',
     intlSmoke: typeof Intl === 'undefined' ? null : {
