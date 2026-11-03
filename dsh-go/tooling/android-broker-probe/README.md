@@ -26,8 +26,11 @@ unique preference names and randomly generated test-only keys. No keys,
 signing files, local SDK paths, APKs or build caches belong in Git.
 
 Validated on the development host: AGP 9.1.0 / Gradle 9.3.1 / Temurin 21.0.13,
-platform 36 / Build Tools 36.0.0. `testDebugUnitTest` ran 20 tests with zero
+platform 36 / Build Tools 36.0.0. `testDebugUnitTest` ran 24 tests with zero
 failures/errors/skips; both debug and instrumentation APKs assembled. The
 compiled manifest retains private services and `isolatedProcess=true`.
-**No connected-device tests have run.** See the latest root
+The separate `android-broker-device.yml` workflow runs three instrumentation
+tests on an Android 35 emulator. This adds device execution to the compilation
+workflow; configuration alone does not prove a pass. **No connected-device
+result has been observed yet; physical-device checks remain unverified.** See the latest root
 `docs/handoff/T-RuntimeBroker.md` for the recorded limits.

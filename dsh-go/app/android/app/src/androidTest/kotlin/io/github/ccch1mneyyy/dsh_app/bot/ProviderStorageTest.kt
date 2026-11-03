@@ -11,9 +11,82 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.json.JSONArray
 import org.json.JSONObject
+import io.github.ccch1mneyyy.dsh_app.model.NativeModelBroker
+import io.github.ccch1mneyyy.dsh_app.model.ProviderTransport
+import io.github.ccch1mneyyy.dsh_app.model.ProviderCall
+import io.github.ccch1mneyyy.dsh_app.model.ProviderResponse
+import java.net.HttpURLConnection
+import java.net.URI
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(AndroidJUnit4::class)
 class ProviderStorageTest {
+    @Test
+    fun storedKeyIsInjectedNativelyAndEchoedProviderContentIsRejectedOverHttp() {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val prefix = "mbot-native-stream-test-${UUID.randomUUID()}-"
+        val context = object : ContextWrapper(base) {
+            override fun getSharedPreferences(name: String, mode: Int) = base.getSharedPreferences(prefix + name, mode)
+        }
+        val store = BotProviderStore(context)
+        val secret = "device-test-only-${UUID.randomUUID()}"
+        val injected = AtomicBoolean()
+        val echo = AtomicBoolean()
+        val logs = java.util.concurrent.CopyOnWriteArrayList<String>()
+        var id: String? = null
+        try {
+            store.save(mapOf("name" to "Native stream test", "baseUrl" to "https://example.com/v1",
+                "apiFormat" to "openai-completions", "models" to listOf("m1"), "key" to secret))
+            id = ((store.catalog()["providers"] as List<*>).single() as Map<*, *>)["providerId"] as String
+            val transport = ProviderTransport { request ->
+                injected.set(request.headers["Authorization"] == "Bearer $secret")
+                object : ProviderCall {
+                    override fun execute(): ProviderResponse {
+                        val json = JSONObject().put("delta", if (echo.get()) secret else "hello").toString()
+                        return ProviderResponse(200, "text/event-stream", "data: $json\n\ndata: [DONE]\n\n".byteInputStream())
+                    }
+                    override fun cancel() { }
+                    override fun close() { }
+                }
+            }
+            NativeModelBroker(store::resolveForModelBroker, transport) { logs.add(it.wire) }.use { broker ->
+                fun post(): String {
+                    val connection = URI(broker.session.baseUrl + "/v1/model/stream").toURL().openConnection() as HttpURLConnection
+                    try {
+                        connection.requestMethod = "POST"
+                        connection.doOutput = true
+                        connection.connectTimeout = 2000
+                        connection.readTimeout = 3000
+                        connection.setRequestProperty("Authorization", "Bearer ${broker.session.token}")
+                        connection.setRequestProperty("Content-Type", "application/json")
+                        val bytes = JSONObject().put("providerId", id).put("modelId", "m1")
+                            .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", "Hi")))
+                            .toString().toByteArray(Charsets.UTF_8)
+                        connection.setFixedLengthStreamingMode(bytes.size)
+                        connection.outputStream.use { it.write(bytes) }
+                        assertEquals(200, connection.responseCode)
+                        assertEquals("1", connection.getHeaderField("X-Mbot-Broker-Protocol"))
+                        return connection.inputStream.bufferedReader().use { it.readText() }
+                    } finally { connection.disconnect() }
+                }
+                val normal = post()
+                assertTrue(injected.get())
+                assertTrue(normal.contains("hello"))
+                assertTrue(normal.contains("[DONE]"))
+                assertFalse(normal.contains(secret))
+                echo.set(true)
+                val blocked = post()
+                assertTrue(blocked.contains("provider_sensitive_response"))
+                assertFalse(blocked.contains(secret))
+                assertFalse(logs.any { it.contains(secret) })
+                assertFalse(store.catalog().toString().contains(secret))
+            }
+        } finally {
+            id?.let { store.delete(it) }
+            base.deleteSharedPreferences(prefix + "minimax_bot_provider")
+        }
+    }
+
     @Test
     fun keysAreEncryptedAndCatalogsContainOnlyMetadata() {
         val base = InstrumentationRegistry.getInstrumentation().targetContext

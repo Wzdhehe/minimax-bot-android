@@ -1,5 +1,20 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+## 最新：Android 仪器测试与模拟器 CI 准备
+
+新增 `.github/workflows/android-broker-device.yml`：GitHub ephemeral Ubuntu/KVM、API35 google_apis x86_64，执行 `connectedDebugAndroidTest`，只保存 XML，不发布 APK 或签名文件。使用独立 `.brokerprobe` applicationId；复用生产 localhost-only network security config。
+
+`ProviderStorageTest` 增加 HTTP 流用例：Android 进程生成假 Key，经真实 Keystore 保存/读取，真实 NativeModelBroker HTTP/SSE 接受请求；只有远端 provider transport 被替身替换。确认 header 注入、正常完成、回显 Key 拦截及 catalog/log 不泄露。加原存储测试和 IPC 测试共三项。没有真实模型调用/费用。
+
+本地 `assembleDebug assembleDebugAndroidTest` 再跑原始结尾：
+
+```text
+BUILD SUCCESSFUL in 1m 27s
+67 actionable tasks: 24 executed, 43 up-to-date
+```
+
+**上述只证明编译；模拟器运行待 CI 观察，真机未验证。** 无本地 KVM/adb，不编造设备结果。上一阶段 `5af2ed8` 的 native run **41599240875**（含 Android 组件编译）已实查 success；host **41599240883**、scope **41599240858** 同样 success。
+
 ## 最新：流式完成、背压、截止时间与解析预算
 
 - native 请求在 JSONTokener **之前**检查深度 64、结构符 16384 的预算（字符串和转义内容不误计）；响应同样在 JSONObject 之前检查，避免深层输入先触发递归溢出。原 1 MiB 请求/256 KiB 事件大小限制保留。

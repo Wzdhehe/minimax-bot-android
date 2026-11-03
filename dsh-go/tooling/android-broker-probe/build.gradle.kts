@@ -38,6 +38,11 @@ val unitTests by tasks.registering(SharedNativeSources::class) {
     includes.set(listOf("model/**", "isolation/**"))
     outputDir.set(layout.buildDirectory.dir("shared-unit-tests"))
 }
+val sharedResources by tasks.registering(SharedNativeSources::class) {
+    inputDir.set(file("../../app/android/app/src/main/res"))
+    includes.set(listOf("xml/network_security_config.xml"))
+    outputDir.set(layout.buildDirectory.dir("shared-resources"))
+}
 android {
     namespace = "io.github.ccch1mneyyy.dsh_app"
     compileSdk = 36
@@ -56,6 +61,7 @@ android {
 }
 androidComponents.onVariants { variant ->
     variant.sources.kotlin?.addGeneratedSourceDirectory(nativeSources) { it.outputDir }
+    variant.sources.res?.addGeneratedSourceDirectory(sharedResources) { it.outputDir }
     variant.deviceTests.values.forEach { test ->
         test.sources.kotlin?.addGeneratedSourceDirectory(deviceTests) { it.outputDir }
     }

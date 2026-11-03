@@ -1,5 +1,7 @@
 # 最新接手入口（2026-11-03）
 
+**最新设备验证准备**：增加 Android35/KVM 模拟器 CI，执行复用生产源码的三项仪器测试（Keystore 存储、native HTTP 注入/回显拦截、独立 UID 文件 IPC）。本地仪器 APK 再编译通过：`BUILD SUCCESSFUL in 1m 27s`；**模拟器结果待观察，真机未验证**。验收工程复用生产 localhost-only network security config，不放宽 provider HTTPS。上一阶段 `5af2ed8` 的 GitHub native **41599240875**、host **41599240883**、scope **41599240858** 全部 success。
+
 **最新流式补强**：native/host 增加完整结束标记、异常断流处理、背压、绝对截止时间、reader/call 清理及解析前 JSON 预算；proxy.dispose 会取消并收敛模型请求。最终本地 **JVM24 + Node22 全过**，Gradle组件构建再过、XML24项通过；设备测试仍未运行。说明见 [T-RuntimeBroker 首节](handoff/T-RuntimeBroker.md)。前一提交 `4c3e808` 的 GitHub **41591483093**：native/Android编译两项均 success。
 
 **最新 Android 构建进展**：新增复用生产源的 `tooling/android-broker-probe` 验收工程，Gradle 9.3.1/AGP9.1/JDK21 下 `testDebugUnitTest assembleDebug assembleDebugAndroidTest` **BUILD SUCCESSFUL**。XML确认 JVM20项全过；Keystore/IPC 两类仪器 APK 已编译打包，但**未在设备执行**；不是完整 Flutter Bot APK，更不是 Node runtime 已移植。存储类从 Flutter 注册文件原样拆出供验收复用。后续依赖/隔离/模型传输关口见 [Android runtime 计划](ANDROID-RUNTIME-INTEGRATION.md)；实际命令/限制见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。
@@ -55,8 +57,8 @@ dev/integration 891aefa
 4. [T-Usage](handoff/T-Usage.md)：只读额度白名单投影、页面和 API provider 不冒充账号登录；真实 OAuth/UsageQuotaClient 未装配。
 5. [T-Schedule](handoff/T-Schedule.md)：Bot 资料/任务管理、同源 MCP 宿主测试、进程内 SSE→native 通知桥。调用者身份可信绑定、真机通知、断线/页面外通知尚未完成。
 6. [UI-Motion](handoff/UI-Motion.md)：DSH 路由过渡、轻量骨架、会话入场、lazy lists、SSE 直接合并/32ms 通知与晚到历史竞态保护。
-8. [T-RuntimeBroker](handoff/T-RuntimeBroker.md)：HANDOFF 第 2 项 host 侧部分（模型代理、descriptor、测试替身）。**native broker 未实现。**
-9. [T-Isolation](handoff/T-Isolation.md)：独立 UID + broker 代码层最小实证（isolatedProcess 占位服务、主进程 broker、纯 JVM 路径守卫与单测）。**没有真机验证，没有完整 Gradle 构建，Key 边界只在协议层成立。**
+8. [T-RuntimeBroker](handoff/T-RuntimeBroker.md)：native Kotlin broker、四协议文本流/取消、host 代理/descriptor 与 Key 边界测试；JVM24 + Node22 通过，Android组件编译通过，正式 runtime 装配尚未完成。
+9. [T-Isolation](handoff/T-Isolation.md)：isolatedProcess 文件占位、主进程 broker、身份/请求关联客户端、纯 JVM 路径/会话测试；Android组件 Gradle构建通过，设备执行待观察，完整 Flutter/Node 构建未完成。
 7. [T-Plugins](handoff/T-Plugins.md)：插件页和只读 mcode adapter、GitHub 固定版本预览、协议字段/installed cursor 差异。**生产变更入口强制关闭，当前无正式运行时 descriptor，非已完成安装市场。**
 
 关键现实：默认正式启动器仍是 DSH 基线。`lib/dev/minimax_bot_main.dart` 只是 UI 联调入口。没有成功构建完整 fork APK，没有真实 Android 设备，不能说 App 已写完/模型已跑通/完整沙箱可用。

@@ -11,6 +11,8 @@ on:
       - 'dsh-go/runtime/minimax-bot-host/**'
       - 'dsh-go/tooling/test-native-model-broker.sh'
       - 'dsh-go/tooling/android-broker-probe/**'
+      - 'dsh-go/app/android/app/src/androidTest/**'
+      - 'dsh-go/app/android/app/src/main/res/xml/network_security_config.xml'
       - '.github/workflows/native-model-broker.yml'
   pull_request:
     paths:
@@ -22,6 +24,8 @@ on:
       - 'dsh-go/runtime/minimax-bot-host/**'
       - 'dsh-go/tooling/test-native-model-broker.sh'
       - 'dsh-go/tooling/android-broker-probe/**'
+      - 'dsh-go/app/android/app/src/androidTest/**'
+      - 'dsh-go/app/android/app/src/main/res/xml/network_security_config.xml'
       - '.github/workflows/native-model-broker.yml'
   workflow_dispatch:
 permissions:
