@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application android:label="Native broker verification" android:allowBackup="false"
         android:networkSecurityConfig="@xml/network_security_config">
+        <!-- Verification-only probe. This service is not in the product APK. -->
+        <service android:name="io.github.ccch1mneyyy.dsh_app.probe.IsolationBoundaryProbeService"
+            android:exported="false" android:isolatedProcess="true" />
         <service android:name="io.github.ccch1mneyyy.dsh_app.isolation.AgentBrokerService"
             android:exported="false" />
         <service android:name="io.github.ccch1mneyyy.dsh_app.isolation.AgentIsolationService"

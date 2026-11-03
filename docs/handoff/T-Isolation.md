@@ -1,5 +1,11 @@
 # T-Isolation 交接（独立 UID + broker 最小实证）
 
+## 最新：Android35 模拟器已执行基础三项
+
+`2d7367b` 的 GitHub run **41600336727 success**，日志 `Finished 3 tests on emulator-5554 - 15` / `BUILD SUCCESSFUL in 5m 20s`。其中生产 `AgentIsolationClientTest` 真实 bind/握手，观测 sendingUid 与主进程不同，经 broker 读写并拒绝穿越，close 后拒绝请求；另两项为 Keystore/native HTTP。XML下载403，未检查 XML。
+
+此用例没有在 isolated UID 直接打开私有文件或 TCP socket，不能据此宣称这些直接访问已验证；网络/文件 OS 探针、预连接 FD 及关闭取消另行补充。无物理真机、硬件 Keystore、Node/runtime 证据。以下“设备全部未运行”段落是历史，当前状态以本节及 HANDOFF 为准。
+
 ## 最新：工作区读取与目录枚举的内存上限
 
 `WorkspaceBroker` 不再用 `readBytes()`/`File.list()` 将不受限内容先读入内存：只读普通文件，真实读取时最多预算+1字节；即使文件在 metadata 检查后增长也拒绝超限。目录用 DirectoryStream 惰性枚举，在1000条/128KiB文件名预算内收集排序，超限不返回截断结果。response Binder 预算复用相同目录常量。没有扩大路径权限/新增操作。

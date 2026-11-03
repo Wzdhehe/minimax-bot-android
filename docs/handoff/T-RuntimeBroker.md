@@ -1,5 +1,17 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+## 最新：单请求模型 FD 通道（设备结果待观察）
+
+`bot/NativeModelChannel.kt` 由可信主进程创建/连接 native loopback socket，完整写入已认证的单个请求后只移交 dup FD。native endpoint/session token/Key 不进入接收端 Bundle、文件或环境；接收端只能读该请求的 HTTP/SSE 字节，关闭 FD 或写额外字节触发原 broker 的 peer 取消。raw Os.close 避免 Socket 包装的 shutdown 影响重复 FD。`NativeProviderBroker.openModelChannel()` 仅 native 内部可用，未注册到 Flutter/Agent，也未装入正式启动器。调用应离开 UI 线程，发送失败和结束都必须 close FD；broker.close 会取消所有在途连接。
+
+验收工程新增**仅测试 APK 内的** `IsolationBoundaryProbeService`（独立 UID、私有、无 shell），不在产品 Manifest。新三项仪器测试：
+
+- 独立 UID 直接打开主 App 非敏感标记文件失败，INTERNET permission 拒绝，不能新建 loopback 连接；主进程同路径/端口可用。
+- 向该 UID 通过 Binder 转移已连接模型 FD，消费真实 NativeModelBroker HTTP/SSE；假 provider 只在主进程看到 header Key，返回流中无 Key/native token。
+- isolated 接收端读一个响应字节后关闭 FD，真实 native broker 取消仍停滞的替身 provider call；发送方不保留重复 FD。
+
+加基础三项共六项。CI 扩为 API26/35 独立矩阵；从 XML 只输出数量/用例名，不输出响应或诊断正文，便于 artifact 下载不可用时审查。**设备执行尚待新 run，物理真机未验证**。本地复用生产源码的 `testDebugUnitTest assembleDebug assembleDebugAndroidTest`：`BUILD SUCCESSFUL in 1m 30s`，JVM27项零失败，两个 APK 编译通过。不是 Node FD adapter、mcode 工具协议或完整产品 APK。
+
 ## 最新：Android 仪器测试与模拟器 CI 准备
 
 新增 `.github/workflows/android-broker-device.yml`：GitHub ephemeral Ubuntu/KVM、API35 google_apis x86_64，执行 `connectedDebugAndroidTest`，只保存 XML，不发布 APK 或签名文件。使用独立 `.brokerprobe` applicationId；复用生产 localhost-only network security config。
@@ -13,7 +25,7 @@ BUILD SUCCESSFUL in 1m 27s
 67 actionable tasks: 24 executed, 43 up-to-date
 ```
 
-**上述只证明编译；模拟器运行待 CI 观察，真机未验证。** 无本地 KVM/adb，不编造设备结果。上一阶段 `5af2ed8` 的 native run **41599240875**（含 Android 组件编译）已实查 success；host **41599240883**、scope **41599240858** 同样 success。
+**后续实际运行**：`2d7367b` 的 Android35 emulator run **41600336727 success**；从 gh run API 和原始执行日志确认三项仪器测试完成，`BUILD SUCCESSFUL in 5m 20s`。XML artifact 下载403，未读取 XML 内容。这是 Android 软件 Keystore/native HTTP/独立 UID 文件 IPC 的证据，不证明硬件背书、真实 provider、原生 Node 或直接文件/网络访问拒绝。**物理真机未验证。** 无本地 KVM/adb，不编造设备结果。上一阶段 `5af2ed8` 的 native run **41599240875**（含 Android 组件编译）已实查 success；host **41599240883**、scope **41599240858** 同样 success。
 
 ## 最新：流式完成、背压、截止时间与解析预算
 

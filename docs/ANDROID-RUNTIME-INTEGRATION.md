@@ -28,8 +28,8 @@
 ## 分阶段验收关口
 
 1. **Android 组件验收工程**：`dsh-go/tooling/android-broker-probe` 直接复用生产源码，编译 Keystore/服务与 instrumentation 测试，避开产品 Flutter/NDK 构建依赖。不创建第二套 App 逻辑，不作为产品发布。
-2. **实际设备隔离探针**：运行 `AgentIsolationClientTest` 与 `ProviderStorageTest`，观察真实 sendingUid/服务绑定/读写/私有文件拒绝/Keystore；补网络拒绝、宿主死亡、超时和关闭的仪器用例。当前均未运行。
-3. **受控字节通道**：对 isolated 与主进程之间的预连接 FD/Binder 验证请求关联、大小限制、背压、取消、死亡清理与权限；不增加凭据读取或任意 shell 操作。
+2. **实际设备隔离探针**：运行 `AgentIsolationClientTest` 与 `ProviderStorageTest`，观察真实 sendingUid/服务绑定/读写/私有文件拒绝/Keystore；补网络拒绝、宿主死亡、超时和关闭的仪器用例。Android35 run41600336727 已运行基础三项并通过；直接文件/网络拒绝探针、FD 通道新增用例待后续矩阵结果，物理真机仍未验证。
+3. **受控字节通道**（native 已实现单请求预连接 FD，仪器用例已编译、API26/35执行待观察；尚无 Node FD adapter）：对 isolated 与主进程之间的预连接 FD/Binder 验证请求关联、大小限制、背压、取消、死亡清理与权限；不增加凭据读取或任意 shell 操作。
 4. **目标 Node + 原生扩展**：用可追踪来源、匹配 ABI/Node 的 Android 构建，验证 .so/.node 动态加载、SQLite/WAL、运行时只读 bundle 与可写数据路径。禁止把 Linux glibc 产物当作 Android 二进制。
 5. **完整 mcode 端口**：provider/model 映射、真实模型与工具调用适配、身份/会话归属、取消、重启与关闭 drain；此后才谈正式 Bot 启动器切换和插件策略开放。
 

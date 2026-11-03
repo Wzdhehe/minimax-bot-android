@@ -1,8 +1,10 @@
 # 最新接手入口（2026-11-03）
 
+**最新 FD 通道**：可信 native 可创建单个已认证模型请求的预连接 FD；只移交 FD，不移交 native endpoint/token/Key。新增测试专用隔离探针，验证直接文件/网络拒绝、通过 Binder 接收 FD 的真实 broker SSE、关闭 FD 取消停滞 provider。六项仪器测试已编译，API26/35 CI 待观察。组件 Gradle **BUILD SUCCESSFUL in 1m 30s**，JVM27项通过。Node FD 消费、runtime 加载、工具协议和正式生命周期仍未接；见 [T-RuntimeBroker 首节](handoff/T-RuntimeBroker.md)。
+
 **最新工作区资源限制**：文件读取改为读取期间最多 1MiB +1 探测字节，不再只信 length；目录改为惰性枚举，最多1000条/128KiB文件名字节预算后才排序，超限拒绝而不返回截断列表。拒绝非普通文件。宿主脚本 **JVM27 + Node22 全过**；组件 Gradle构建再过，XML27项零失败/错误/跳过。这不解决路径检查到打开的 TOCTOU/hardlink 问题，设备结果仍另行观察。
 
-**最新设备验证准备**：增加 Android35/KVM 模拟器 CI，执行复用生产源码的三项仪器测试（Keystore 存储、native HTTP 注入/回显拦截、独立 UID 文件 IPC）。本地仪器 APK 再编译通过：`BUILD SUCCESSFUL in 1m 27s`；**模拟器结果待观察，真机未验证**。验收工程复用生产 localhost-only network security config，不放宽 provider HTTPS。上一阶段 `5af2ed8` 的 GitHub native **41599240875**、host **41599240883**、scope **41599240858** 全部 success。
+**最新设备验证**：`2d7367b` 的 Android35/KVM 模拟器 run **41600336727 success**，日志确认 `Finished 3 tests on emulator-5554 - 15` / `BUILD SUCCESSFUL in 5m 20s`。覆盖真实 Android Keystore 存储、native HTTP 假 provider 注入/回显拦截、独立 UID 文件 IPC 与 broker 穿越拒绝；不证明直接私有文件/网络拒绝（另待探针）、硬件 Keystore 或真实 API。XML artifact 下载在本环境返回403，结论来自 run API 和执行日志，未宣称读过 XML。**物理真机未验证**。本地仪器 APK 编译：`BUILD SUCCESSFUL in 1m 27s`。验收工程复用生产 localhost-only network security config，不放宽 provider HTTPS。上一阶段 `5af2ed8` 的 GitHub native **41599240875**、host **41599240883**、scope **41599240858** 全部 success。
 
 **最新流式补强**：native/host 增加完整结束标记、异常断流处理、背压、绝对截止时间、reader/call 清理及解析前 JSON 预算；proxy.dispose 会取消并收敛模型请求。最终本地 **JVM24 + Node22 全过**，Gradle组件构建再过、XML24项通过；设备测试仍未运行。说明见 [T-RuntimeBroker 首节](handoff/T-RuntimeBroker.md)。前一提交 `4c3e808` 的 GitHub **41591483093**：native/Android编译两项均 success。
 
@@ -60,7 +62,7 @@ dev/integration 891aefa
 5. [T-Schedule](handoff/T-Schedule.md)：Bot 资料/任务管理、同源 MCP 宿主测试、进程内 SSE→native 通知桥。调用者身份可信绑定、真机通知、断线/页面外通知尚未完成。
 6. [UI-Motion](handoff/UI-Motion.md)：DSH 路由过渡、轻量骨架、会话入场、lazy lists、SSE 直接合并/32ms 通知与晚到历史竞态保护。
 8. [T-RuntimeBroker](handoff/T-RuntimeBroker.md)：native Kotlin broker、四协议文本流/取消、host 代理/descriptor 与 Key 边界测试；JVM24 + Node22 通过，Android组件编译通过，正式 runtime 装配尚未完成。
-9. [T-Isolation](handoff/T-Isolation.md)：isolatedProcess 文件占位、主进程 broker、身份/请求关联客户端、纯 JVM 路径/会话测试；Android组件 Gradle构建通过，设备执行待观察，完整 Flutter/Node 构建未完成。
+9. [T-Isolation](handoff/T-Isolation.md)：isolatedProcess 文件占位、主进程 broker、身份/请求关联客户端、纯 JVM 路径/会话测试；Android组件 Gradle构建通过，Android35 模拟器文件 IPC 用例通过；完整 Flutter/Node 构建未完成。
 7. [T-Plugins](handoff/T-Plugins.md)：插件页和只读 mcode adapter、GitHub 固定版本预览、协议字段/installed cursor 差异。**生产变更入口强制关闭，当前无正式运行时 descriptor，非已完成安装市场。**
 
 关键现实：默认正式启动器仍是 DSH 基线。`lib/dev/minimax_bot_main.dart` 只是 UI 联调入口。没有成功构建完整 fork APK，没有真实 Android 设备，不能说 App 已写完/模型已跑通/完整沙箱可用。
