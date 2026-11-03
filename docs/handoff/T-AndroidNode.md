@@ -56,4 +56,4 @@
 
 isolated UID没有主App数据路径权限；目录FD/cwd不自动授予SQLite/WAL/JSON创建权限。必须继续设计验证持久化，不能回退main UID执行Agent。
 
-已从钉点mcode实查 `packages/local-runtime-v2/src/service/model-system/resolution/local-model-resolver.ts` 的 `resolveModelFetch`：BYOK支持 `options.fetchImpl`，返回resolved model的fetch字段。可作为以后受控FD fetch adapter入口；native协议现增加provider-shaped request，保留工具消息/选项；SDK fetch adapter与正式装配仍待做。钉点third_party/pi-mono/packages/ai/src/providers/google.ts不使用options.fetch，不可假定四类一样直接注入fetch。不能只改Base URL或塞dummy Key就宣称mcode已打通。
+已从钉点mcode实查 `packages/local-runtime-v2/src/service/model-system/resolution/local-model-resolver.ts` 的 `resolveModelFetch`：BYOK支持 `options.fetchImpl`，返回resolved model的fetch字段。可作为以后受控FD fetch adapter入口；native协议现增加provider-shaped request，保留工具消息/选项；SDK fetch adapter/三协议真实SDK宿主组件已过（T-RuntimeBroker），动态Binder/JNI桥与正式装配仍待做。钉点third_party/pi-mono/packages/ai/src/providers/google.ts不使用options.fetch，不可假定四类一样直接注入fetch。不能只改Base URL或塞dummy Key就宣称mcode已打通。

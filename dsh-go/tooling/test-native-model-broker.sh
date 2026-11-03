@@ -33,5 +33,6 @@ classpath="$test_dir/tests.jar:$classpath"
 MBOT_NATIVE_CLASSPATH="$classpath" MBOT_JAVA="$java_bin" node --test --test-reporter=tap \
   "$root_dir/runtime/minimax-bot-host/model-broker.test.mjs" \
   "$root_dir/runtime/minimax-bot-host/model-fd-client.test.mjs" \
+  "$root_dir/runtime/minimax-bot-host/model-sdk-fetch.test.mjs" \
   "$root_dir/runtime/minimax-bot-host/runtime-descriptor.test.mjs" \
   "$root_dir/runtime/minimax-bot-host/native-model-broker.test.mjs"

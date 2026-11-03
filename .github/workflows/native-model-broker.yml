@@ -10,6 +10,7 @@ on:
       - 'dsh-go/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/isolation/**'
       - 'dsh-go/runtime/minimax-bot-host/**'
       - 'dsh-go/tooling/test-native-model-broker.sh'
+      - 'dsh-go/tooling/model-sdk-probe/**'
       - 'dsh-go/tooling/android-broker-probe/**'
       - 'dsh-go/app/android/app/src/androidTest/**'
       - 'dsh-go/app/android/app/src/main/res/xml/network_security_config.xml'
@@ -23,6 +24,7 @@ on:
       - 'dsh-go/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/isolation/**'
       - 'dsh-go/runtime/minimax-bot-host/**'
       - 'dsh-go/tooling/test-native-model-broker.sh'
+      - 'dsh-go/tooling/model-sdk-probe/**'
       - 'dsh-go/tooling/android-broker-probe/**'
       - 'dsh-go/app/android/app/src/androidTest/**'
       - 'dsh-go/app/android/app/src/main/res/xml/network_security_config.xml'
@@ -31,6 +33,22 @@ on:
 permissions:
   contents: read
 jobs:
+  provider-sdk-streams:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: dsh-go/tooling/model-sdk-probe/package-lock.json
+      - name: Install pinned provider SDK probe dependencies (no lifecycle scripts)
+        working-directory: dsh-go/tooling/model-sdk-probe
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Real inherited FD streams through provider SDK parsers
+        working-directory: dsh-go/tooling/model-sdk-probe
+        run: npm test
   native-boundary:
     runs-on: ubuntu-latest
     timeout-minutes: 10

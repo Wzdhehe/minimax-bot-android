@@ -25,6 +25,7 @@ app/android/build/
 .claude/
 # the media plugin carries its own JS package
 runtime/media/dsh-media/node_modules/
+tooling/model-sdk-probe/node_modules/
 # Python bytecode from tooling/
 **/__pycache__/
 *.pyc

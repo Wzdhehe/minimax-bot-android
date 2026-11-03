@@ -1,5 +1,23 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+## 当前：SDK fetch / SSE / FD adapter（2026-11-03）
+
+新增 `model-sdk-fetch.mjs`：绑定providerId/modelId/apiFormat和精确SDK URL；仅POST/JSON对象，读取期间1MiB限制；SDK headers全部丢弃，不调用网络fetch。只通过 `openChannel({providerId,modelId,request},{signal})` 获取owned FD，复用真实生产FD reader；晚到FD在取消后关闭，不因等待bridge或不合作的request body cancel而阻塞截止。native必须再次授权，**生产动态Binder/JNI callback仍未实现**。
+
+SSE按provider重建：Anthropic/Responses从受限type恢复event行，只有completions追加[DONE]。64KiB按字节队列，最多额外一个已有大小限制的native事件；下游慢则await，取消中断回调等待并关闭FD。总截止包含body/open/消费。桥错误返回固定400，防SDK按5xx/网络错误自动重试；流已开始时body只报稳定错误。
+
+真实测试：
+
+```bash
+MBOT_NATIVE_DEPS=/tmp/mbot-native-deps KOTLINC=/workspace/toolchains/kotlinc/bin/kotlinc bash dsh-go/tooling/test-native-model-broker.sh
+npm ci --ignore-scripts --no-audit --no-fund --prefix dsh-go/tooling/model-sdk-probe
+npm test --prefix dsh-go/tooling/model-sdk-probe
+```
+
+组件结果 **JUnit32 + Node37**；额外SDK **9 tests / 9 pass / 0 fail / 0 skipped**。后者不是手写SDK替身：固定上游package.json一致的OpenAI6.26.0/Anthropic0.91.1，真实子进程Unix FD，通过SDK异步迭代器验证工具事件、早停关闭和失败不重试。依赖只在独立host probe/CI，不进APK。初轮Anthropic因测试baseURL多带/v1导致路由拒绝；按其真实SDK追加规则修正，native端未放宽URL策略。
+
+**边界**：未运行完整pi-ai/mcode、未进行这阶段Android执行或真实provider调用；Google钉点忽略options.fetch，仍缺接入。Anthropic beta/affinity等SDK头不透传，高级header策略待native明确。没有新增任意shell/网络或凭据接口。CI增加SDK job；远程结果需继续观察，不能用本地通过替代。
+
 ## 当前：SDK请求体与工具协议（2026-11-03）
 
 native与Node proxy接受且只接受两个互斥body：`{providerId, modelId, messages}` 或 `{providerId, modelId, request}`。后者是provider实际HTTP JSON，不是SDK内部config。NativeModelPayload按四种格式检查顶层字段、model/stream和必要类型；保留tool schema/call/result和钉点SDK缓存、思考、采样字段。复用原endpoint/auth逻辑；native复查enabled/model白名单，不允许调用者覆盖Key/headers/URL。嵌套工具数据中名为headers的字段只是数据。不是完整provider schema校验，未知vendor字段拒绝，未接工具执行器。
