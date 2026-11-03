@@ -23,6 +23,8 @@
 
 ## 未验证与后续
 
+后续 `feat/t-plugins` 中完整设置包 **27 项**（含全部 4 个 motion 测试）通过；UI-Motion 的真实 GitHub settings run **41556055349** 与 scope run **41556055408** 均已实查 success。接手看 [总交接](../HANDOFF.md)，不要从本专题对应的旧分支继续。
+
 没有 Android 设备/完整 SDK，未测真机帧耗时、60/120 FPS、长会话内存曲线、输入法与预测返回手势；不能用 widget 测试代替这些验收。没有完成生产 runtime/UID/broker 装配，之前卡的所有缺口继续保留，见各自 handoff。
 
 后续在 Android profile 模式记录滚动/输入/流式输出的 frame/raster timings，覆盖低端机、系统减少动态效果和后台恢复。产品加载不得承诺固定耗时；主题/语言的完整用户设置页、插件页仍待开发。供应商弹出菜单对极大模型清单的搜索和虚拟化仍可改进。

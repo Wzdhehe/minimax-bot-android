@@ -14,7 +14,7 @@ dev/integration 891aefa
   → feat/t-usage ce00692
   → feat/t-schedule 5e1860e
   → feat/ui-motion f04ce36
-  → feat/t-plugins（本轮最终提交，git log / ls-remote 获取精确 HEAD）
+  → feat/t-plugins f0d93cb（插件代码；后续收尾文档提交见 git log）
 ```
 
 `main` 保持 `e32fbd7383cd9bdc268aa7df2ec9150e8bc4e48e`；`dev/integration` 保持 `891aefa71c5aea952ec8aa2502c2ada854854042`。没有合并到这两个分支，没有 force push、PR 或 APK 发布。用户已授权持续开发及阶段 push，后续继续在功能分支提交并及时 push，不再为普通可逆修改重复询问。
@@ -69,4 +69,4 @@ dev/integration 891aefa
 - mcode 插件协议 **4 passed**；协议客户端、协议测试和 runtime 测试文件静态分析通过。**本轮未设置 MCODE_WEBUI_ENTRY，没有跑真实 WebUI runtime 测试。**
 - App `flutter analyze --no-pub lib/bot test/bots/bot_plugins_test.dart` 与设置包 `dart analyze` 无问题；最后对 cursor/subPath 补拒绝截断的校验并复跑插件测试。
 - 已实查成功的 GitHub Actions：T-Schedule host **41554914121** / settings **41554913845** / scope **41554913796**；UI-Motion settings **41556055349** / scope **41556055408**。UI-only 提交没有触发 host workflow，不编造对应 run。
-- `feat/t-plugins` 推送后会触发 settings/scope，最终状态待收尾实查并补记；不要默认成功。以上 CI 均不构建 Android APK。
+- `feat/t-plugins@f0d93cb9ed8fbc4254fefd476505793ef10c683a` 已推送并通过 ls-remote 确认。scope **41557103632 success**；settings **41557103607** 截至收尾实查仍在准备 Flutter，**尚不能算通过**。下一位运行 `gh run view 41557103607` 查看结论；以上 CI 均不构建 Android APK。后续仅文档提交不改变已测试代码。
