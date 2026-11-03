@@ -99,55 +99,85 @@ export function createModelBrokerClient({ baseUrl, token, fetchImpl = fetch }) {
         if (signal?.aborted) throw new BrokerError('broker_cancelled');
         throw new BrokerError('broker_unavailable');
       }
-      if (!response.ok) {
-        await response.body?.cancel().catch(() => {});
-        throw new BrokerError('broker_rejected');
-      }
-      if (!response.body) throw new BrokerError('broker_invalid_response');
-      if (response.headers?.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'text/event-stream') {
-        await response.body.cancel().catch(() => {});
-        throw new BrokerError('broker_invalid_response');
-      }
-      const reader = response.body.getReader();
-      const framed = response.headers?.get('x-mbot-broker-protocol') === '1';
-      const decoder = new TextDecoder();
-      let buffer = '';
-      try {
-        for (;;) {
-          let chunk;
-          try { chunk = await reader.read(); }
-          catch {
-            if (signal?.aborted) throw new BrokerError('broker_cancelled');
-            throw new BrokerError('broker_stream_failed');
-          }
-          if (chunk.done) break;
-          buffer += decoder.decode(chunk.value, { stream: true });
-          const { events, rest } = parseSseFrames(buffer);
-          buffer = rest;
-          if (buffer.length > MAX_FRAME_CHARS) throw new BrokerError('broker_invalid_response');
-          for (const event of events) {
-            if (signal?.aborted) throw new BrokerError('broker_cancelled');
-            if (event.done) return;
-            if (event.invalid) throw new BrokerError('broker_invalid_response');
-            const failure = event.payload && typeof event.payload.error === 'string' ? event.payload.error : null;
-            if (failure) {
-              // The host only ever reports a stable code here. Anything else is
-              // dropped rather than forwarded, because a provider body could
-              // carry a credential.
-              throw new BrokerError(PUBLIC_FAILURE_CODES.has(failure) ? failure : 'broker_unavailable');
-            }
-            if (typeof onEvent === 'function') await onEvent(event.payload);
-          }
-        }
-        if (framed) throw new BrokerError('broker_stream_failed');
-      } finally {
-        // Also close on DONE, invalid JSON, callback failure or cancellation.
-        // Otherwise a caller can leave an upstream body/socket pinned forever.
-        await reader.cancel().catch(() => {});
-        reader.releaseLock();
-      }
+      return consumeModelBrokerResponse(response, { signal, onEvent });
     },
   });
+}
+
+
+/** Shared response consumer for fetch and preconnected native FD transport.
+ * Both enforce the same framing, backpressure and stable error contract. */
+export async function consumeModelBrokerResponse(response, { signal, onEvent } = {}) {
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    throw new BrokerError('broker_rejected');
+  }
+  if (!response.body) throw new BrokerError('broker_invalid_response');
+  if (response.headers?.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'text/event-stream') {
+    await response.body.cancel().catch(() => {});
+    throw new BrokerError('broker_invalid_response');
+  }
+  const reader = response.body.getReader();
+  const framed = response.headers?.get('x-mbot-broker-protocol') === '1';
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const abortReader = () => { reader.cancel().catch(() => {}); };
+  signal?.addEventListener('abort', abortReader, { once: true });
+  try {
+    for (;;) {
+      if (signal?.aborted) throw new BrokerError('broker_cancelled');
+      let chunk;
+      try { chunk = await reader.read(); }
+      catch {
+        if (signal?.aborted) throw new BrokerError('broker_cancelled');
+        throw new BrokerError('broker_stream_failed');
+      }
+      if (signal?.aborted) throw new BrokerError('broker_cancelled');
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const { events, rest } = parseSseFrames(buffer);
+      buffer = rest;
+      if (buffer.length > MAX_FRAME_CHARS) throw new BrokerError('broker_invalid_response');
+      for (const event of events) {
+        if (signal?.aborted) throw new BrokerError('broker_cancelled');
+        if (event.done) return;
+        if (event.invalid) throw new BrokerError('broker_invalid_response');
+        const failure = event.payload && typeof event.payload.error === 'string' ? event.payload.error : null;
+        if (failure) {
+          // The host only ever reports a stable code here. Anything else is
+          // dropped rather than forwarded, because a provider body could
+          // carry a credential.
+          throw new BrokerError(PUBLIC_FAILURE_CODES.has(failure) ? failure : 'broker_unavailable');
+        }
+        if (typeof onEvent === 'function') await deliverBrokerEvent(onEvent, event.payload, signal);
+      }
+    }
+    if (framed) throw new BrokerError('broker_stream_failed');
+  } finally {
+    signal?.removeEventListener('abort', abortReader);
+    // Also close on DONE, invalid JSON, callback failure or cancellation.
+    // Otherwise a caller can leave an upstream body/socket pinned forever.
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+
+/** A suspended consumer must not pin a cancelled model stream indefinitely.
+ * This stops waiting, not arbitrary side effects inside a caller's callback. */
+async function deliverBrokerEvent(callback, payload, signal) {
+  if (!signal) return callback(payload);
+  if (signal.aborted) throw new BrokerError('broker_cancelled');
+  let abort;
+  const cancelled = new Promise((_, reject) => {
+    abort = () => reject(new BrokerError('broker_cancelled'));
+    signal.addEventListener('abort', abort, { once: true });
+  });
+  try {
+    await Promise.race([Promise.resolve().then(() => {
+      if (signal.aborted) throw new BrokerError('broker_cancelled');
+      return callback(payload);
+    }), cancelled]);
+  } finally { signal.removeEventListener('abort', abort); }
 }
 
 /**

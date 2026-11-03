@@ -1,6 +1,16 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
-## 最新：单请求模型 FD 通道（设备结果待观察）
+## 最新：Node 预连接 FD 消费与回调取消
+
+新增 `model-fd-client.mjs`：只消费已有连接 FD，不接收 endpoint/token/Key，不发起连接或写请求。解析有界 HTTP header、强制 native framing/SSE/DONE、字节计数64KiB队列，复用 fetch 路径同一 SSE 消费器；完成/错误/abort/绝对截止均 close。消费回调挂起时取消也能释放流（不能撤销回调内部已发生的副作用）。错误只用稳定代码。
+
+真实 Node 子进程通过 stdio FD表继承连接；父进程先认证，只传FD，子进程 env 用白名单。六项测试覆盖分包、回调背压、截断/超大头/错误SSE、取消/挂起/截止、错误内容和无效FD清理。与现有脚本一起实跑：**JUnit27 + Node29 全过**；供应商/服务回归10、scope4通过。这里是宿主 Node24 的互通，**没有 Android Node/JNI 或正式 runtime 证据**；native FD创建请求的可信 Binder/JNI 调用仍未装配。
+
+## 最新：Android FD 矩阵结果（存在 API26 阻塞）
+
+`ebe339b` 的 run **41602011149 failure**：API35 job **125802739079 success**（六项）；API26 job **125802739439 failure**（六项中两项 FD 发送报 DeadObjectException，另四项通过）。API35 已观察直接私有文件/网络权限/loopback拒绝，预连接 TCP FD 可读 native SSE，关闭 FD 取消假 provider；API26 不能宣称 TCP FD 可用。正在定位传递失败，尚不能仅凭 DeadObjectException 认定具体 SELinux 原因。不得靠增加网络权限/换回主 UID 运行 Agent 绕过。物理真机、硬件 Keystore 和 Node仍未验证。
+
+## 单请求模型 FD 初版（历史实现，API26受阻）
 
 `bot/NativeModelChannel.kt` 由可信主进程创建/连接 native loopback socket，完整写入已认证的单个请求后只移交 dup FD。native endpoint/session token/Key 不进入接收端 Bundle、文件或环境；接收端只能读该请求的 HTTP/SSE 字节，关闭 FD 或写额外字节触发原 broker 的 peer 取消。raw Os.close 避免 Socket 包装的 shutdown 影响重复 FD。`NativeProviderBroker.openModelChannel()` 仅 native 内部可用，未注册到 Flutter/Agent，也未装入正式启动器。调用应离开 UI 线程，发送失败和结束都必须 close FD；broker.close 会取消所有在途连接。
 

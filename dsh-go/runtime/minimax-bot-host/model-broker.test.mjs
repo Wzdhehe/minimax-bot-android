@@ -31,6 +31,20 @@ function clientBody(text, { framed = true, close = true } = {}) {
   };
 }
 
+test('abort releases a model stream even while its event consumer never resolves', { timeout: 1000 }, async () => {
+  const source = clientBody('data: {"delta":"first"}\n\n', { close: false });
+  const controller = new AbortController();
+  let entered;
+  const consuming = new Promise((resolve) => { entered = resolve; });
+  const request = source.client.stream({ providerId: 'p', modelId: 'm', messages: [], signal: controller.signal,
+    onEvent: () => { entered(); return new Promise(() => {}); },
+  });
+  await consuming;
+  controller.abort();
+  await assert.rejects(request, { code: 'broker_cancelled' });
+  assert.equal(source.cancelled(), true);
+});
+
 test('framed streams require DONE and release the reader even when the server stays open', async () => {
   const partial = clientBody('data: {"delta":"partial"}\n\n');
   await assert.rejects(partial.client.stream({ providerId: 'p', modelId: 'm', messages: [] }),
