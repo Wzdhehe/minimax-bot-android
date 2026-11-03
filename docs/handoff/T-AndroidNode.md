@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
-> 最新覆盖：b2a32b5/run41693324311 的 FD VFS 验收在 API26/35 均失败，不能视为 WAL/持久化通过。e983424/run41695986670 也失败且未取得阶段码；续写补XML正文解析/测试行号与新PID干净重启用例（本地APK40s成功、宿主跨进程通过，Android未验证）；详情以 [T-Persistence](T-Persistence.md) 与总 [HANDOFF](../HANDOFF.md) 为准。旧段的“待CI”只记实现当时，不能覆盖后续证据。
+> 最新覆盖：b2a32b5/run41693324311 的 FD VFS 验收在 API26/35 均失败，不能视为 WAL/持久化通过。e983424/run41695986670、56390d7/run41698083995 也失败且未取得阶段码；补有限状态artifact元数据通道（19项Python检查过，CI待观察）；续写补XML正文解析/测试行号与新PID干净重启用例（本地APK40s成功、宿主跨进程通过，Android未验证）；详情以 [T-Persistence](T-Persistence.md) 与总 [HANDOFF](../HANDOFF.md) 为准。旧段的“待CI”只记实现当时，不能覆盖后续证据。
 
 ## full-ICU产物复用入口（待端到端验收）
 

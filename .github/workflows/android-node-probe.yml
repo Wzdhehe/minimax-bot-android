@@ -134,15 +134,18 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -cores 2
           script: bash dsh-go/tooling/android-node-probe/run-device-tests.sh
       - name: Record counts only, never Node reports or environment snapshots
+        id: results
         if: always()
         run: |
           python3 dsh-go/tooling/android-node-probe/report-results.py \
             dsh-go/tooling/android-node-probe/build/outputs/androidTest-results/connected
-      - name: Save test XML only
+      - name: Save test XML and finite result status only
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: node-candidate-results-api-${{ matrix.api-level }}
-          path: dsh-go/tooling/android-node-probe/build/outputs/androidTest-results/connected/**/*.xml
+          name: node-candidate-results-api-${{ matrix.api-level }}-${{ steps.results.outputs.result_id }}
+          path: |
+            dsh-go/tooling/android-node-probe/build/outputs/androidTest-results/connected/**/*.xml
+            dsh-go/tooling/android-node-probe/build/outputs/androidTest-results/node-probe-status.txt
           if-no-files-found: ignore
           retention-days: 7

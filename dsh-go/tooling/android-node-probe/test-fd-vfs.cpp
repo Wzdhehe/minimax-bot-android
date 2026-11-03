@@ -5,6 +5,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <poll.h>
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
@@ -22,6 +23,11 @@ int rows(sqlite3* db) {
   assert(sqlite3_step(stmt) == SQLITE_ROW);
   const int count = sqlite3_column_int(stmt, 0); sqlite3_finalize(stmt); return count;
 }
+void receive(int fd) {
+  pollfd ready{fd, POLLIN, 0};
+  assert(poll(&ready, 1, 5000) == 1 && (ready.revents & POLLIN));
+  char value; assert(read(fd, &value, 1) == 1 && value == 'R');
+}
 void integrity(sqlite3* db) {
   sqlite3_stmt* statement = nullptr;
   assert(sqlite3_prepare_v2(db, "PRAGMA integrity_check", -1, &statement, nullptr) == SQLITE_OK);
@@ -30,15 +36,25 @@ void integrity(sqlite3* db) {
   assert(sqlite3_step(statement) == SQLITE_DONE); sqlite3_finalize(statement);
 }
 int main(int argc, char** argv) {
-  if (argc == 7) {
+  if (argc == 7 || argc == 9) {
     const int directory = std::atoi(argv[2]);
     int descriptors[4]; for (int i=0; i<4; ++i) descriptors[i] = std::atoi(argv[i+3]);
     const char* names[] = {"state.db", "state.db-wal", "state.db-shm", "state.db-journal"};
     assert(mbot_register_fd_vfs(directory, names, descriptors, 4) == SQLITE_OK);
-    sqlite3* db = nullptr; assert(sqlite3_open("state.db", &db) == SQLITE_OK);
+    sqlite3* db = nullptr;
+    const bool reading = std::strcmp(argv[1], "reader") == 0;
+    assert(sqlite3_open_v2("state.db", &db, reading ? SQLITE_OPEN_READONLY : SQLITE_OPEN_READWRITE, nullptr) == SQLITE_OK);
     if (std::strcmp(argv[1], "busy") == 0) {
       assert(sqlite3_exec(db, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) == SQLITE_BUSY);
       sqlite3_close(db); return 0;
+    }
+    if (reading) {
+      assert(argc == 9);
+      sql(db, "BEGIN"); assert(rows(db) == 2);
+      assert(write(std::atoi(argv[7]), "R", 1) == 1);
+      receive(std::atoi(argv[8]));
+      assert(rows(db) == 2); // writer commit/close cannot change this snapshot.
+      sql(db, "COMMIT"); sqlite3_close(db); return 0;
     }
     sql(db, "INSERT INTO notes(text) VALUES('crash-committed')");
     _exit(0); // no close/checkpoint/atexit: committed WAL must survive.
@@ -81,9 +97,30 @@ int main(int argc, char** argv) {
   assert(sqlite3_open("state.db", &first) == SQLITE_OK);
   assert(rows(first) == 2);
   sqlite3_close(first);
+  // A separate process holds a read snapshot while the writer commits/closes.
+  // WAL and SHM lifecycle must not discard a still-observed snapshot.
+  int ready[2], release[2]; assert(pipe(ready) == 0 && pipe(release) == 0);
+  const pid_t reader = fork(); assert(reader >= 0);
+  if (reader == 0) {
+    const auto d=std::to_string(directory), a=std::to_string(fds[0]), b=std::to_string(fds[1]), c=std::to_string(fds[2]), e=std::to_string(fds[3]);
+    const auto send=std::to_string(ready[1]), wait=std::to_string(release[0]);
+    execl(argv[0], argv[0], "reader", d.c_str(), a.c_str(), b.c_str(), c.c_str(), e.c_str(), send.c_str(), wait.c_str(), static_cast<char*>(nullptr));
+    _exit(99);
+  }
+  receive(ready[0]);
+  assert(sqlite3_open("state.db", &first) == SQLITE_OK);
+  sql(first, "INSERT INTO notes(text) VALUES('reader-held')");
+  int log_frames = -1, checkpointed = -1;
+  assert(sqlite3_wal_checkpoint_v2(first, nullptr, SQLITE_CHECKPOINT_TRUNCATE, &log_frames, &checkpointed) == SQLITE_BUSY);
+  sqlite3_close(first);
+  assert(write(release[1], "R", 1) == 1);
+  int reader_status = 0; assert(waitpid(reader, &reader_status, 0) == reader && WIFEXITED(reader_status) && WEXITSTATUS(reader_status) == 0);
+  for (int fd : {ready[0], ready[1], release[0], release[1]}) close(fd);
+  assert(sqlite3_open("state.db", &first) == SQLITE_OK);
+  assert(rows(first) == 3); integrity(first); sqlite3_close(first);
   child("crash");
   assert(sqlite3_open("state.db", &first) == SQLITE_OK);
-  assert(rows(first) == 3);
+  assert(rows(first) == 4);
   integrity(first);
   sqlite3_close(first);
   sqlite3* denied = nullptr;
@@ -92,6 +129,6 @@ int main(int argc, char** argv) {
   assert(access(ungranted.c_str(), F_OK) != 0);
   for (size_t i = 0; i < fds.size(); ++i) { close(fds[i]); unlinkat(directory, names[i], 0); }
   close(directory); rmdir(physical);
-  std::puts("PASS: FD VFS WAL, multiple connections, external writer lock, rollback, reopen, crash recovery, integrity and ungranted-path refusal");
+  std::puts("PASS: FD VFS WAL, multiple connections, external writer lock, external reader snapshot/checkpoint contention, rollback, reopen, crash recovery, integrity and ungranted-path refusal");
   return 0;
 }

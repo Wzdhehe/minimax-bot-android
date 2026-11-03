@@ -3,6 +3,26 @@
 
 **当前：验收APK已接入并编译，但首轮Android执行失败；产品runtime未接。**
 
+## 诊断读取限制与下一步（最新覆盖）
+
+56390d7/run41698083995现已API26/35均失败，Check API仍未取得任何Node阶段/行号。不能据此推断具体异常或说已修好SQLite；原始日志/XML本环境依然不能下载。新报告器补namespace、suite级failure、嵌套堆栈、有限exception类别，**总计19项Python检查通过**。还将仅由计数/白名单阶段或类别/数字行号组成的result_id写入GITHUB_OUTPUT，进入私有XML artifact的name；只读artifact元数据即可定位，即使Azure日志下载受限也不依赖日志正文。用例确认输出/元数据不含测试敏感哨兵。旧提取器为何没给出阶段尚未证实。
+
+看新run后先执行 `gh api repos/Wzdhehe/minimax-bot-android/actions/runs/<run-id>/artifacts --jq '.artifacts[]|{id,name}'`，再读取check annotations；根据有限结果定位，**不要继续猜目录FD/SELinux/SQLite错误**。该artifact metadata通道的真实CI执行仍待本次push，不冒充已取得设备结果。没有放宽Android权限、同UID执行或输出原始异常。
+
+## 宿主并发补验（Android仍待定位）
+
+test-fd-vfs.cpp新增独立只读进程的持有快照：先读两条，另一个进程写第三条，TRUNCATE checkpoint必须BUSY；写者关闭后读者仍读原两条，读者结束后新连接必须见三条且integrity=ok，接着保留原崩溃提交恢复（最终四条）。父/子用有界5秒pipe握手，子进程exec重置SQLite，父在fork前已无连接。避免仅用一个进程的双连接就声称跨进程WAL生命周期正确。
+
+再次执行同一 `test-fd-vfs.py --archive ... --ndk ... --node-probe`，实际输出：
+
+```text
+PASS: FD VFS WAL, multiple connections, external writer lock, external reader snapshot/checkpoint contention, rollback, reopen, crash recovery, integrity and ungranted-path refusal
+PASS: exact APK SQLite block, addon and FD VFS preserve data across independent host Node processes; not Android evidence
+PASS: Android API26/x86_64 VFS object compilation only; not Android execution
+```
+
+这不是物理真机或Android并发验收；Android仍先看56390d7/run41698083995的有限阶段/行号。full-ICU产物复用已在ee40005落地，producer41680254279仍未完成，不宣称已下载/组合验证。
+
 ## 续写：跨进程验收与XML诊断
 
 第二轮 e983424/run41695986670 的 API26/35 也失败，没有取得有限阶段码。下载日志和XML均被本环境的下载请求拒绝；没有读到原始异常，不能推断SELinux/SQLite的具体原因。发现提取器只读failure.message，未覆盖Android把堆栈放在XML正文的形式，现改为独立report-results.py，合并正文/属性私下匹配，仅输出固定phase/code及本测试行号；未知文本、env/响应/异常原文一律不输出。4项回归覆盖正文/属性、未知/敏感文本不输出、无结果拒绝、skipped拒绝；全部Python构建/报告检查共12项通过。
