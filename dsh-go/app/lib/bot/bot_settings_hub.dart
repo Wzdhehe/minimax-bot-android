@@ -7,10 +7,18 @@ import 'package:dsh_client/dsh_client.dart';
 import '../l10n/l10n.dart';
 import 'bot_providers.dart';
 import 'bot_usage.dart';
+import 'bot_plugins.dart';
 
 /// Product settings use their own platform channel; no DSH engine is required.
 class BotSettingsHub extends StatefulWidget {
-  const BotSettingsHub({super.key, this.platform = const BotSettingsPlatform(), this.store, this.botApi});
+  const BotSettingsHub({
+    super.key,
+    this.platform = const BotSettingsPlatform(),
+    this.store,
+    this.botApi,
+    this.plugins = const BotPluginsPort(),
+  });
+  final MbotPluginPort plugins;
   final MbotPlatform platform;
   final PrefsStore? store;
   final MiniMaxBotApi? botApi;
@@ -46,6 +54,7 @@ class _BotSettingsHubState extends State<BotSettingsHub> {
         platform: widget.platform,
         notificationPrefs: prefs,
         pages: {
+          MbotSettingsGroupId.plugins: (_) => MbotPluginSettingsPage(port: widget.plugins),
           MbotSettingsGroupId.accountAndModel: (_) => MbotProviderSettingsPage(
             port: const NativeBotProviders(),
             testProvider: widget.botApi?.testProvider,

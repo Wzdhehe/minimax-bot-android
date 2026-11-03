@@ -34,4 +34,4 @@ jobs:
         run: |
           flutter pub get
           flutter analyze --no-pub lib/bot lib/ui/settings/settings_screen.dart test/bots/bot_settings_hub_test.dart
-          flutter test --no-pub test/bots/minimax_bot_home_test.dart test/bots/bot_settings_hub_test.dart test/bots/bot_usage_test.dart test/bots/bot_profile_test.dart test/bots/bot_schedule_notifications_test.dart test/bots/bot_stream_performance_test.dart
+          flutter test --no-pub test/bots/minimax_bot_home_test.dart test/bots/bot_settings_hub_test.dart test/bots/bot_usage_test.dart test/bots/bot_profile_test.dart test/bots/bot_schedule_notifications_test.dart test/bots/bot_stream_performance_test.dart test/bots/bot_plugins_test.dart

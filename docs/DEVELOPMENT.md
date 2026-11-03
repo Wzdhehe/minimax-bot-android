@@ -1,5 +1,7 @@
 # 开发交接
 
+**最新接手入口：[HANDOFF.md](HANDOFF.md)**。从 `feat/t-plugins` 继续；下文保留历史分轮记录，最新状态和未完成装配以总交接和专题 handoff 为准。
+
 ## 产品边界
 
 Android 本机多 Bot，参考 Grok Bot 布局及官方 MiniMax Bot 功能。用户在设置中输入 MiniMax 的 API Key、Base URL 和模型；模型服务需要联网，无需自建云或远控。手机固定竖屏，平板允许旋转并根据窗口宽度展开。不要加入手机 UI 操控或通用 Agent 工作台。
@@ -14,6 +16,8 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 - 考前节奏：小步继续开发。插件在 Android 上的安装策略、以及定时验收档位（报告 F.7）**仍未定**。
 
 ## 当前代码和真实进度
+
+- **T-Plugins 界面/只读阶段**（最新 `feat/t-plugins`）：全局设置接入插件页，已安装/官方市场、搜索、市场翻页和 GitHub 固定 commit 预览复用 mcode 协议。生产 adapter 未连接正式 WebUI descriptor，所有变更强制拒绝；Android 包/执行策略和真实运行时装配尚未完成，整卡不算完成。见 [handoff](handoff/T-Plugins.md)。
 
 - **UI 动画与性能**（`feat/ui-motion`，基于 `feat/t-schedule@5e1860e`）：沿用 DSH 页面过渡/预测返回与低性能减少动态效果机制；主要初次加载入口加入单 ticker 骨架，页面内会话切换短过渡，供应商/任务按需构建。消息流直接合并 SSE，合并 UI 通知并处理晚到历史/摘要竞态。相关 widget/状态测试和分析通过；**未做 Android profile 帧率实测**。最新续写分支为此分支，详见 [handoff](handoff/UI-Motion.md)。
 
