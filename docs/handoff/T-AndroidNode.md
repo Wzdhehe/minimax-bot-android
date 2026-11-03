@@ -1,6 +1,10 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+## 当前：文件FD VFS验收（设备待CI）
+
+Main给临时非敏感数据文件/目录的五个FD；JNI传到Node，SQLite addon注册受控VFS，先关输入别名再开文件DB。固定脚本增加WAL、并行只读连接、写入、关闭重开和完整性；Main检查实际文件与无Key。最后APK3m42s成功，JNI/SQLite重编及host1/input8通过；**执行待CI，不是正式持久化/跨进程重启已完成**。原模型链路用例保留。详见T-Persistence。
+
 ## SDK route设备证据与持久化原型
 
 e03b997/run41686820725的API26/35均success，包含SDK route→JNI→Main broker的tool-shaped fetch及原大请求/SQLite/Key用例。日志未实读，不伪造计数。最新FD VFS仅宿主原型/NDK object编译，**未接Android**，见T-Persistence；full-ICU重跑仍待结论。

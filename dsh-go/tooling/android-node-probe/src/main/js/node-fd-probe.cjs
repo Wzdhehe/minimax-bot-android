@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
 
 (async () => {
-  const [normal, stalled, echo, result, privatePath, nativeLibraryDir, providerId] = process.argv.slice(1);
+  const [normal, stalled, echo, result, privatePath, nativeLibraryDir, providerId, ...dataFdArgs] = process.argv.slice(1);
   const { streamNativeModelFd } = await import(modelModuleUrl);
   async function consume(fd, cancel) {
     const controller = new AbortController();
@@ -27,6 +27,8 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
   let privateDenied = true;
   try { fs.readFileSync(privatePath); privateDenied = false; } catch {}
   let sqlite = null;
+  let persistent = null;
+  const dataFds = dataFdArgs.map(Number);
   if (nativeLibraryDir && !sqliteWrapper.startsWith('__MBOT_SQLITE_')) {
     const wrapper = { exports: {} };
     new Function('require', 'module', 'exports', sqliteWrapper)(require, wrapper, wrapper.exports);
@@ -50,8 +52,31 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
           jsonValue: db.prepare("SELECT json_extract('{\"v\":7}', '$.v') AS v").get().v };
       } finally { restored.close(); }
     } finally { db.close(); }
+    if (dataFds.length === 5) {
+      addon.exports.setFdVfs(...dataFds);
+      // Remove input aliases before SQLite creates locks; registry owns dup FDs.
+      dataFds.forEach((fd) => fs.closeSync(fd)); dataFds.length = 0;
+      const disk = new Database('state.db', options);
+      let verify;
+      try {
+        const mode = disk.pragma('journal_mode=WAL', { simple: true });
+        disk.pragma('temp_store=MEMORY');
+        disk.exec('CREATE TABLE durable(text TEXT); INSERT INTO durable VALUES (\'你好\')');
+        verify = new Database('state.db', { ...options, readonly: true, fileMustExist: true });
+        const parallelRows = verify.prepare('SELECT text FROM durable').all();
+        verify.close(); verify = null;
+        disk.transaction(() => { disk.prepare('INSERT INTO durable VALUES (?)').run('second'); })();
+        persistent = { mode, parallelRows: parallelRows.map((row) => row.text), count: disk.prepare('SELECT count(*) AS n FROM durable').get().n };
+      } finally { verify?.close(); disk.close(); }
+      const reopened = new Database('state.db', options);
+      try {
+        persistent.reopened = reopened.prepare('SELECT text FROM durable').all().map((row) => row.text);
+        persistent.integrity = reopened.pragma('integrity_check', { simple: true });
+      } finally { reopened.close(); }
+    }
   }
-  const report = { sqlite,
+  dataFds.forEach((fd) => fs.closeSync(fd));
+  const report = { sqlite, persistent,
     version: process.versions.node, modules: process.versions.modules,
     uid: process.getuid(), privateDenied, intlAvailable: typeof Intl !== 'undefined',
     intlSmoke: typeof Intl === 'undefined' ? null : {

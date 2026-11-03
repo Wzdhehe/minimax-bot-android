@@ -5,7 +5,7 @@
 
 ## FD VFS宿主原型
 
-已新增受控FD路径映射的unix VFS宿主原型，WAL/双连接/外部writer锁/崩溃后恢复等通过；NDK仅object编译通过。**未接APK，Android VFS未验证**。必须先读 [T-Persistence](T-Persistence.md)，不要直接启用或把基本FD实证当成WAL证据。
+已新增受控FD路径映射的unix VFS宿主原型，WAL/双连接/外部writer锁/崩溃后恢复等通过；NDK仅object编译通过。**此后已接验收APK并编译，Android VFS仍待CI**。必须先读 [T-Persistence](T-Persistence.md)，不要直接启用或把基本FD实证当成WAL证据。
 
 ## 最新：数据FD五项能力也已过
 

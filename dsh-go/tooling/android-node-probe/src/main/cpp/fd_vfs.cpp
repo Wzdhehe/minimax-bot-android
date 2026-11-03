@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Experimental SQLite VFS: explicit data FDs only. Not wired into the APK.
+// Verification-only SQLite VFS: explicit data FDs. No product launcher wiring.
 // Reuses SQLite unix locking/SHM/inode bookkeeping, including deferred close.
 #include <sqlite3.h>
 #include <sys/stat.h>

@@ -44,6 +44,7 @@ val verifyPreparedInputs by tasks.registering {
             check(file("build/verified-jni/x86_64/libmbot_sqlite_probe.so").isFile)
             check(file("build/verified-assets/third_party/better-sqlite3/LICENSE").isFile)
             check(file("build/verified-assets/third_party/better-sqlite3/SQLITE-PUBLIC-DOMAIN.txt").isFile)
+            if (verification["requiresFdVfs"] == true) check(file("build/verified-assets/third_party/better-sqlite3/FD-VFS-AGPL-LICENSE").isFile)
             check(!file("build/verified-assets/node-fd-probe.cjs").readText().contains("\"__MBOT_SQLITE_WRAPPER__\""))
         }
         check(file("build/verified-assets/third_party/nodejs-mobile/LICENSE").isFile)

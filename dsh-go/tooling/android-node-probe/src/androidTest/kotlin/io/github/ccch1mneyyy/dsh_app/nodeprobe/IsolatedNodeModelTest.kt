@@ -56,9 +56,18 @@ class IsolatedNodeModelTest {
         val logs = java.util.concurrent.CopyOnWriteArrayList<String>()
         val marker = File(base.filesDir, "node-private-${UUID.randomUUID()}")
         marker.writeText("non-sensitive marker")
+        val dataDirectory = File(base.filesDir, "node-data-${UUID.randomUUID()}").apply { mkdirs() }
+        val dataFiles = listOf("state.db", "state.db-wal", "state.db-shm", "state.db-journal").map { File(dataDirectory, it).apply { writeBytes(byteArrayOf()) } }
+        val dataDescriptors = mutableListOf<ParcelFileDescriptor>()
         assertTrue(marker.inputStream().use { it.read() } >= 0)
         var providerId: String? = null
         try {
+            dataFiles.forEach { dataDescriptors.add(ParcelFileDescriptor.open(it, ParcelFileDescriptor.MODE_READ_WRITE)) }
+            val directoryFd = Os.open(dataDirectory.absolutePath, OsConstants.O_RDONLY, 0)
+            try {
+                check((Os.fstat(directoryFd).st_mode and OsConstants.S_IFMT) == OsConstants.S_IFDIR)
+                dataDescriptors.add(ParcelFileDescriptor.dup(directoryFd))
+            } finally { Os.close(directoryFd) }
             store.save(mapOf("name" to "Node test", "baseUrl" to "https://example.invalid/v1",
                 "apiFormat" to "openai-completions", "models" to listOf("normal", "stalled", "echo"), "key" to secret))
             providerId = ((store.catalog()["providers"] as List<*>).single() as Map<*, *>)["providerId"] as String
@@ -108,6 +117,7 @@ class IsolatedNodeModelTest {
                                 putBinder("model_host", host); putString("model_session", host.session); putString("providerId", providerId)
                                 putParcelable("normal", modelFds[0]); putParcelable("stalled", modelFds[1])
                                 putParcelable("echo", modelFds[2]); putParcelable("result", resultPair[1])
+                                listOf("db", "wal", "shm", "journal", "directory").forEachIndexed { i, name -> putParcelable(name, dataDescriptors[i]) }
                             }
                             assertFalse(data.toString().contains(secret))
                             val completion = probe.run(data)
@@ -150,6 +160,17 @@ class IsolatedNodeModelTest {
                                 assertEquals("memory", sqlite.getString("journalMode"))
                                 assertEquals(7, sqlite.getInt("jsonValue"))
                             }
+                            if (expected.optBoolean("requiresFdVfs")) {
+                                val persistent = report.getJSONObject("persistent")
+                                assertEquals("wal", persistent.getString("mode"))
+                                assertEquals("你好", persistent.getJSONArray("parallelRows").getString(0))
+                                assertEquals(2, persistent.getInt("count"))
+                                assertEquals("你好", persistent.getJSONArray("reopened").getString(0))
+                                assertEquals("second", persistent.getJSONArray("reopened").getString(1))
+                                assertEquals("ok", persistent.getString("integrity"))
+                                assertTrue(dataFiles[0].length() > 0)
+                                assertTrue(dataFiles.none { it.readBytes().toString(Charsets.UTF_8).contains(secret) })
+                            }
                             assertEquals(reply.uid, report.getInt("uid"))
                             assertTrue(report.getBoolean("privateDenied"))
                             assertEquals("done", report.getJSONObject("normal").getString("code"))
@@ -180,6 +201,8 @@ class IsolatedNodeModelTest {
             providerId?.let { store.delete(it) }
             base.deleteSharedPreferences(prefix + "minimax_bot_provider")
             marker.delete()
+            dataDescriptors.forEach { try { it.close() } catch (_: Exception) { } }
+            dataDirectory.deleteRecursively()
         }
     }
 

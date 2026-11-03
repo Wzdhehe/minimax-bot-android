@@ -89,13 +89,28 @@ def prepare(ndk, archive, esbuild):
     engine_version = re.search(r'#define SQLITE_VERSION\s+"([^"]+)"', (sqlite / 'sqlite3.h').read_text())[1]
     subprocess.run([str(compiler), '-std=c99', *flags, *['-D' + value for value in definitions],
                     '-c', str(sqlite / 'sqlite3.c'), '-o', str(build / 'sqlite3.o')], check=True)
+    addon_source = source / 'src/better_sqlite3.cpp'
+    contents = addon_source.read_text()
+    entry = 'NODE_MODULE_INIT(/* exports, context */) {'
+    if contents.count(entry) != 1:
+        raise RuntimeError('Unexpected addon initialization entry')
+    contents = contents.replace(entry,
+        'extern void MbotInstallFdVfsBinding(v8::Local<v8::Object>, v8::Local<v8::Context>);\n' +
+        entry + '\nMbotInstallFdVfsBinding(exports, context);', 1)
+    addon_source.write_text(contents)
+    adapter_objects = []
+    for name in ('fd_vfs.cpp', 'fd_vfs_node.cpp'):
+        obj = build / (name + '.o')
+        subprocess.run([str(cxx), '-std=c++20', *flags, '-I', str(headers), '-I', str(sqlite),
+                        '-c', str(ROOT / 'src/main/cpp' / name), '-o', str(obj)], check=True)
+        adapter_objects.append(str(obj))
     subprocess.run([str(cxx), '-std=c++20', *flags, '-DBUILDING_NODE_EXTENSION', '-DNODE_GYP_MODULE_NAME=better_sqlite3',
                     '-I', str(headers), '-I', str(sqlite), '-c', str(source / 'src/better_sqlite3.cpp'),
                     '-o', str(build / 'addon.o')], check=True)
     jni = ROOT / 'build/verified-jni/x86_64'
     library = jni / 'libmbot_sqlite_probe.so'
     subprocess.run([str(cxx), '-shared', '-Wl,-z,max-page-size=16384', '-Wl,-z,common-page-size=16384',
-                    '-Wl,-soname,libmbot_sqlite_probe.so', str(build / 'addon.o'), str(build / 'sqlite3.o'),
+                    '-Wl,-soname,libmbot_sqlite_probe.so', str(build / 'addon.o'), str(build / 'sqlite3.o'), *adapter_objects,
                     '-L', str(jni), '-lnode', '-lm', '-ldl', '-o', str(library)], check=True)
     wrapper = build / 'wrapper.cjs'
     subprocess.run([str(esbuild), str(source / 'lib/index.js'), '--bundle', '--platform=node', '--format=cjs',
@@ -110,13 +125,16 @@ def prepare(ndk, archive, esbuild):
     notices = assets / 'third_party/better-sqlite3'
     notices.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source / 'LICENSE', notices / 'LICENSE')
+    shutil.copyfile(ROOT.parents[1] / 'LICENSE', notices / 'FD-VFS-AGPL-LICENSE')
     (notices / 'SQLITE-PUBLIC-DOMAIN.txt').write_text('\n'.join((sqlite / 'sqlite3.c').read_text().splitlines()[:22]) + '\n')
     metadata = json.loads((assets / 'node-validation.json').read_text())
-    metadata.update(requiresSqlite=True, betterSqlite3Version=PIN['version'], sqliteEngineVersion=engine_version)
+    metadata.update(requiresSqlite=True, requiresFdVfs=True, betterSqlite3Version=PIN['version'], sqliteEngineVersion=engine_version)
     (assets / 'node-validation.json').write_text(json.dumps(metadata) + '\n')
     (notices / 'build-inputs.json').write_text(json.dumps({
         'pin': PIN, 'librarySha256': digest(library), 'nodeHeaders': header_manifest,
-        'defines': definitions, 'scope': 'in-memory verification only; no persistent data path',
+        'defines': definitions, 'modifiedAddonSha256': digest(addon_source),
+        'adapters': {name: digest(ROOT / 'src/main/cpp' / name) for name in ('fd_vfs.cpp', 'fd_vfs_node.cpp')},
+        'scope': 'verification only; explicit non-sensitive owner-granted data FDs',
     }, indent=2) + '\n')
     print('Prepared pinned better-sqlite3', PIN['version'], 'Android x86_64 verification addon')
 
