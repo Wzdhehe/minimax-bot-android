@@ -1,6 +1,17 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
-## 最新：Unix socketpair 兼容方案（矩阵待观察）
+## 最新诊断：API26 确认为 TCP socket 权限拒绝
+
+`09faafd` run **41603434315**：API26 job **125807373482 failure**、API35 job **125807374027 success**。失败点仍是两次 TCP FD 发送，`probe_transfer_failed_alive=true`，不是服务真的死亡。runner端过滤后的原始系统证据：
+
+```text
+isolated-denial create u:r:isolated_app:s0:c512,c768 u:r:isolated_app:s0:c512,c768 tcp_socket
+isolated-denial read write u:r:isolated_app:s0:c512,c768 u:r:untrusted_app:s0:c512,c768 tcp_socket
+```
+
+因此新版只传 Unix socketpair，TCP 保持 native；`17e7629` 的新矩阵 **41604321437** 正在观察，尚不提前宣称兼容通过。另补查到 Android Node24 的维护源码候选，具体固定版本/依赖/前缀与持久化关口见 [Android runtime 计划](../ANDROID-RUNTIME-INTEGRATION.md)。
+
+## Unix socketpair 兼容方案（矩阵待观察）
 
 因为 API26 的 direct TCP FD 发送失败，改为 **TCP始终留在主进程，只传 AF_UNIX socketpair 端点**。`NativeModelChannels` 是 native 生命周期 owner，最多4通道，每通道一个非阻塞 poll worker/32KiB缓冲；有界背压、单请求、对端任意输入/EOF取消、10分钟绝对截止、owner.close 全部 shutdown/close。不会把任何对端输入转发到已认证 TCP；无需新权限或同 UID Agent 执行。只传递响应能力而非网络连接能力。具体 SELinux根因仍待诊断 run，不能把兼容方案的合理性当作通过证据。
 

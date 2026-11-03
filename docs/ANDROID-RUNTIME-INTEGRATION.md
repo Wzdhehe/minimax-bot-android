@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android runtime 装配前置核对（2026-11-03）
 
 这是继续 HANDOFF 第 1/2 项的源码核对与待验收计划，**不是“在 isolated UID 上能跑”的结论**。没有设备数据的条目必须保持未验证。当前产品仍没有启动真正的 mcode runtime。
@@ -34,3 +35,17 @@
 5. **完整 mcode 端口**：provider/model 映射、真实模型与工具调用适配、身份/会话归属、取消、重启与关闭 drain；此后才谈正式 Bot 启动器切换和插件策略开放。
 
 不跳过中间关口，也不把 host 模拟模型、JVM 单测或组件测试 APK 当作产品 Android 功能验收。
+
+## Android Node24 源码候选（已核对，未采用/构建）
+
+继续实查发现较新的维护方案：Termux `nodejs-lts`，固定源码提交 **22bd884a0428cef49cc99230ad94bd76ee5456a6**（2026-11-01）。这补充上面 nodejs-mobile 发行列表的有限调查；不能据其 Node18 发行推断整个 Android 没有新 Node。
+
+| 固定引用 | 实查事实 | 仍需做的事情 |
+|---|---|---|
+| [build.sh](https://github.com/termux/termux-packages/blob/22bd884a0428cef49cc99230ad94bd76ee5456a6/packages/nodejs-lts/build.sh) | Node **24.22.2**，符合当前 mcode engines；源码 SHA256 `8fe2ec1723bb9f8d0b683907c82708debbeda64af21cb2aa214c4241eed0a061`；MIT；明确 `--dest-os=android`，含 arm64/x64 交叉构建分支 | 该 recipe 面向 Termux 前缀和 CLI，不是已验证的 APK/JNI/libnode；不能直接 dlopen 一个 CLI executable 或声明它能在 isolated UID 执行 |
+| 同一 recipe | libc++、OpenSSL、c-ares、ICU、SQLite、zlib 依赖；libuv 使用内部构建以避 Android dlopen 符号问题；有小于API28的 aligned_alloc 兼容条件 | 需钉全部源码/patch/ABI/API、Android linker 与16KiB页兼容、许可证、reproducible artifact；小于28条件不是26测试证明。better-sqlite3仍要单独对匹配Node/ABI编译 |
+| [lib-os.js.patch](https://github.com/termux/termux-packages/blob/22bd884a0428cef49cc99230ad94bd76ee5456a6/packages/nodejs-lts/lib-os.js.patch) / [lib-child_process.js.patch](https://github.com/termux/termux-packages/blob/22bd884a0428cef49cc99230ad94bd76ee5456a6/packages/nodejs-lts/lib-child_process.js.patch) | tmpdir fallback 与 Android shell 改成 `@TERMUX_PREFIX@` 目录 | 必须重审这些默认路径，不把 Termux 的私有目录或 shell 模式搬到产品；模型/插件无任意 main UID shell |
+
+本轮只下载/读取公开 recipe/patch 文本，未安装 Termux、未下载其 Node 二进制、未编译 Node、未修改 mcode runtime pin。无 clang/lld/NDK 在本地；组件Gradle工具链不等于Node交叉编译环境。
+
+还有独立的**存储关口**：isolated UID 不能直接打开主 App 的私有路径。传一个目录 FD 不自动授予在目录内按路径创建 SQLite/WAL/JSON 文件的权限。即使模型字节通道和 `.so` 加载成功，也必须验证 runtime 的数据路径/SQLite VFS/持久化方案；不能把 cwd、目录 FD 或 PRoot 当作权限授予。尚未选择未经验证的内存快照、文件系统 shim 或数据库 RPC 方案，也不得因此把含 Agent 执行能力的 Node 放回主 UID。

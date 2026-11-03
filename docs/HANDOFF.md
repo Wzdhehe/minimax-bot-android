@@ -1,5 +1,7 @@
 # 最新接手入口（2026-11-03）
 
+**诊断已定位**：`09faafd`/run41603434315 的26失败有 `binderAlive=true` 和 isolated→app `tcp_socket read write` SELinux拒绝证据。新版17e7629只传Unix socketpair，run41604321437待观察。Android Node源码候选现找到Termux24.22.2（已钉recipe提交、未采用/构建），详见 [runtime计划](ANDROID-RUNTIME-INTEGRATION.md)。数据路径/SQLite/WAL仍是独立关口。
+
 **当前候选传输**：native 主进程保留 TCP，向隔离端只传 Unix socketpair 端点；`NativeModelChannels` 最多4通道，每通道单 poll worker/32KiB缓冲，支持容量拒绝、取消、截止与owner关闭。新增仪器用例共八项已编译，API26/35新矩阵待观察。宿主 **JVM27 + Node30 全过**（含真实 Unix FD），组件 Gradle **BUILD SUCCESSFUL in 1m 24s**。不能提前说26兼容已解决。
 
 **最新 FD 结果与后续**：Node FD 消费器、共有SSE消费和回调取消已实现；宿主脚本 **JVM27 + Node29 全过**，供应商/服务10、scope4通过。Android矩阵 `41602011149`：**API35六项成功，API26两项TCP FD传递失败（DeadObjectException）**，总体失败，仍须解决26兼容。API35才有直接文件/网络拒绝与FD流/取消实证，不等于已装入Node。下一步先诊断/修复26传输，再做Android Node/JNI与原生依赖。

@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Native broker Android verification
 
 This is an **instrumentation target**, not another product app. It has no
