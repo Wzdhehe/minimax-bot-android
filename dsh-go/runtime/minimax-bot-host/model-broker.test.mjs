@@ -6,6 +6,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { request as httpRequest } from 'node:http';
 import { BrokerError, createModelBrokerClient, startModelProxy } from './model-broker.mjs';
 import { buildRuntimeEnv, createRuntimeDescriptor, writeRuntimeDescriptor } from './runtime-descriptor.mjs';
 import { startMockUpstream, startNativeBrokerDouble } from './native-broker-double.helper.mjs';
@@ -13,6 +14,102 @@ import { startMockUpstream, startNativeBrokerDouble } from './native-broker-doub
 const run = promisify(execFile);
 const KEY = 'sk-provider-key-value-9f2c';
 const PIN = '97818b2890b4acae1c6bd1200a226ff506680628';
+
+function clientBody(text, { framed = true, close = true } = {}) {
+  let cancelled = false;
+  const body = new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode(text)); if (close) controller.close(); },
+    cancel() { cancelled = true; },
+  });
+  return {
+    client: createModelBrokerClient({ baseUrl: 'http://127.0.0.1:12345', token: 'test-session',
+      fetchImpl: async () => new Response(body, { headers: {
+        'content-type': 'text/event-stream', ...(framed ? { 'x-mbot-broker-protocol': '1' } : {}),
+      } }),
+    }),
+    cancelled: () => cancelled,
+  };
+}
+
+test('framed streams require DONE and release the reader even when the server stays open', async () => {
+  const partial = clientBody('data: {"delta":"partial"}\n\n');
+  await assert.rejects(partial.client.stream({ providerId: 'p', modelId: 'm', messages: [] }),
+    (error) => error instanceof BrokerError && error.code === 'broker_stream_failed');
+  const completed = clientBody('data: {"delta":"done"}\n\ndata: [DONE]\n\n', { close: false });
+  await completed.client.stream({ providerId: 'p', modelId: 'm', messages: [] });
+  assert.equal(completed.cancelled(), true);
+  const legacy = clientBody('data: {"delta":"legacy"}\n\n', { framed: false });
+  await legacy.client.stream({ providerId: 'p', modelId: 'm', messages: [] });
+});
+
+test('cancellation suppresses later events already buffered in the same packet', async () => {
+  const s = clientBody('data: {"delta":"first"}\n\ndata: {"delta":"second"}\n\ndata: [DONE]\n\n', { close: false });
+  const controller = new AbortController();
+  const events = [];
+  await assert.rejects(s.client.stream({ providerId: 'p', modelId: 'm', messages: [], signal: controller.signal,
+    onEvent(event) { events.push(event); controller.abort(); },
+  }), (error) => error instanceof BrokerError && error.code === 'broker_cancelled');
+  assert.deepEqual(events, [{ delta: 'first' }]);
+  assert.equal(s.cancelled(), true);
+});
+
+test('oversized unfinished frames and unrecognized error text are never forwarded', async () => {
+  const oversized = clientBody('data: ' + 'x'.repeat(256 * 1024 + 1), { close: false });
+  await assert.rejects(oversized.client.stream({ providerId: 'p', modelId: 'm', messages: [] }),
+    (error) => error instanceof BrokerError && error.code === 'broker_invalid_response');
+  assert.equal(oversized.cancelled(), true);
+  const privateText = clientBody('data: {"error":"private_provider_value"}\n\n');
+  await assert.rejects(privateText.client.stream({ providerId: 'p', modelId: 'm', messages: [] }),
+    (error) => error instanceof BrokerError && error.code === 'broker_unavailable' && !error.message.includes('private_provider_value'));
+});
+
+test('proxy applies backpressure and its deadline releases a non-reading runtime connection', { timeout: 5000 }, async (t) => {
+  let emitted = 0;
+  let markAbort;
+  const aborted = new Promise((resolve) => { markAbort = resolve; });
+  const proxy = await startModelProxy({ token: 'proxy-test-session', timeoutMs: 100, broker: {
+    async stream({ onEvent, signal }) {
+      signal.addEventListener('abort', markAbort, { once: true });
+      for (let index = 0; index < 10000; index++) {
+        emitted++;
+        await onEvent({ delta: 'x'.repeat(64 * 1024) });
+      }
+    },
+  } });
+  let incoming;
+  let request;
+  t.after(async () => { incoming?.destroy(); request?.destroy(); await proxy.dispose(); });
+  incoming = await new Promise((resolve, reject) => {
+    request = httpRequest(proxy.baseUrl + '/v1/model/stream', { method: 'POST', headers: {
+      authorization: `Bearer ${proxy.token}`, 'content-type': 'application/json',
+    } }, (response) => { response.on('error', () => {}); response.pause(); resolve(response); });
+    request.on('error', reject);
+    request.end(JSON.stringify({ providerId: 'p', modelId: 'm', messages: [] }));
+  });
+  await aborted;
+  assert.ok(emitted > 0 && emitted < 10000, 'the proxy eagerly buffered the entire provider stream');
+});
+
+test('disposing the proxy cancels and drains active streams without waiting for the model deadline', { timeout: 3000 }, async () => {
+  let cancelled = false;
+  const proxy = await startModelProxy({ token: 'dispose-test-session', broker: {
+    async stream({ onEvent, signal }) {
+      await onEvent({ delta: 'started' });
+      await new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => { cancelled = true; reject(new BrokerError('broker_cancelled')); }, { once: true });
+      });
+    },
+  } });
+  const response = await fetch(proxy.baseUrl + '/v1/model/stream', { method: 'POST',
+    headers: { authorization: `Bearer ${proxy.token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ providerId: 'p', modelId: 'm', messages: [] }),
+  });
+  try {
+    await proxy.dispose();
+    await proxy.dispose();
+    assert.equal(cancelled, true);
+  } finally { await response.body.cancel().catch(() => {}); await proxy.dispose(); }
+});
 
 /** mock provider -> native broker double -> host proxy */
 async function stack({ frames = [{ delta: 'a' }, { delta: 'b' }], status = 200 } = {}) {
@@ -106,6 +203,15 @@ test('the proxy refuses a foreign token and a browser origin', async () => {
       body: JSON.stringify({ providerId: 'p', modelId: 'm', messages: [] }),
     });
     assert.equal(crossOrigin.status, 403);
+    // Fetch overwrites Host; raw HTTP is needed to exercise a foreign Host.
+    const foreignHost = await new Promise((resolve, reject) => {
+      const call = httpRequest(`${proxy.baseUrl}/v1/model/stream`, {
+        method: 'POST', headers: { authorization: `Bearer ${proxy.token}`, host: 'elsewhere.invalid', 'content-type': 'application/json' },
+      }, (response) => { response.resume(); resolve(response.statusCode); });
+      call.on('error', reject);
+      call.end(JSON.stringify({ providerId: 'p', modelId: 'm', messages: [] }));
+    });
+    assert.equal(foreignHost, 403);
   } finally {
     await proxy.dispose();
     await native.dispose();

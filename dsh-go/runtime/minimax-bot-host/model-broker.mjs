@@ -18,9 +18,14 @@
 
 import { timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
+import { once } from 'node:events';
 
 const LOOPBACK_HOST = /^127\.0\.0\.1$/;
 const MAX_BODY_BYTES = 1024 * 1024;
+const MAX_FRAME_CHARS = 256 * 1024;
+const PUBLIC_FAILURE_CODES = new Set(['broker_request_invalid', 'invalid_provider', 'missing_key', 'invalid_endpoint',
+  'provider_rejected', 'provider_request_failed', 'broker_invalid_response', 'provider_sensitive_response',
+  'broker_cancelled', 'broker_unavailable', 'broker_stream_failed', 'broker_rejected']);
 export const MODEL_STREAM_PATH = '/v1/model/stream';
 
 /** Stable error codes. A provider body, a broker body or a stack trace can
@@ -45,6 +50,7 @@ function parseSseFrames(buffer) {
   let index = buffer.indexOf('\n\n');
   while (index !== -1) {
     const frame = buffer.slice(0, index);
+    if (frame.length > MAX_FRAME_CHARS) throw new BrokerError('broker_invalid_response');
     buffer = buffer.slice(index + 2);
     for (const line of frame.split('\n')) {
       if (!line.startsWith('data:')) continue;
@@ -98,32 +104,47 @@ export function createModelBrokerClient({ baseUrl, token, fetchImpl = fetch }) {
         throw new BrokerError('broker_rejected');
       }
       if (!response.body) throw new BrokerError('broker_invalid_response');
+      if (response.headers?.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'text/event-stream') {
+        await response.body.cancel().catch(() => {});
+        throw new BrokerError('broker_invalid_response');
+      }
       const reader = response.body.getReader();
+      const framed = response.headers?.get('x-mbot-broker-protocol') === '1';
       const decoder = new TextDecoder();
       let buffer = '';
-      for (;;) {
-        let chunk;
-        try { chunk = await reader.read(); }
-        catch {
-          if (signal?.aborted) throw new BrokerError('broker_cancelled');
-          throw new BrokerError('broker_stream_failed');
-        }
-        if (chunk.done) break;
-        buffer += decoder.decode(chunk.value, { stream: true });
-        const { events, rest } = parseSseFrames(buffer);
-        buffer = rest;
-        for (const event of events) {
-          if (event.done) return;
-          if (event.invalid) throw new BrokerError('broker_invalid_response');
-          const failure = event.payload && typeof event.payload.error === 'string' ? event.payload.error : null;
-          if (failure) {
-            // The host only ever reports a stable code here. Anything else is
-            // dropped rather than forwarded, because a provider body could
-            // carry a credential.
-            throw new BrokerError(/^[a-z_]{1,40}$/.test(failure) ? failure : 'broker_unavailable');
+      try {
+        for (;;) {
+          let chunk;
+          try { chunk = await reader.read(); }
+          catch {
+            if (signal?.aborted) throw new BrokerError('broker_cancelled');
+            throw new BrokerError('broker_stream_failed');
           }
-          if (typeof onEvent === 'function') onEvent(event.payload);
+          if (chunk.done) break;
+          buffer += decoder.decode(chunk.value, { stream: true });
+          const { events, rest } = parseSseFrames(buffer);
+          buffer = rest;
+          if (buffer.length > MAX_FRAME_CHARS) throw new BrokerError('broker_invalid_response');
+          for (const event of events) {
+            if (signal?.aborted) throw new BrokerError('broker_cancelled');
+            if (event.done) return;
+            if (event.invalid) throw new BrokerError('broker_invalid_response');
+            const failure = event.payload && typeof event.payload.error === 'string' ? event.payload.error : null;
+            if (failure) {
+              // The host only ever reports a stable code here. Anything else is
+              // dropped rather than forwarded, because a provider body could
+              // carry a credential.
+              throw new BrokerError(PUBLIC_FAILURE_CODES.has(failure) ? failure : 'broker_unavailable');
+            }
+            if (typeof onEvent === 'function') await onEvent(event.payload);
+          }
         }
+        if (framed) throw new BrokerError('broker_stream_failed');
+      } finally {
+        // Also close on DONE, invalid JSON, callback failure or cancellation.
+        // Otherwise a caller can leave an upstream body/socket pinned forever.
+        await reader.cancel().catch(() => {});
+        reader.releaseLock();
       }
     },
   });
@@ -135,14 +156,20 @@ export function createModelBrokerClient({ baseUrl, token, fetchImpl = fetch }) {
  * streams the answer back as SSE. A runtime disconnect aborts the upstream
  * broker request, which aborts the provider connection.
  */
-export function startModelProxy({ broker, host = '127.0.0.1', port = 0, token, logger }) {
+export function startModelProxy({ broker, host = '127.0.0.1', port = 0, token, logger, timeoutMs = 10 * 60_000 }) {
   if (!broker || typeof broker.stream !== 'function') throw new TypeError('A broker client is required');
   if (typeof token !== 'string' || !token) throw new TypeError('A runtime session token is required');
   if (!LOOPBACK_HOST.test(host)) throw new TypeError('The proxy must listen on loopback');
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 10 * 60_000) throw new TypeError('Invalid model deadline');
 
-  const log = (code) => { if (typeof logger === 'function') logger(code); };
+  const log = (code) => { try { if (typeof logger === 'function') logger(code); } catch {} };
+  const active = new Set();
+  const pending = new Set();
+  let stopping = false;
+  let disposal;
 
   const server = createServer((req, res) => {
+    if (stopping) { res.destroy(); return; }
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     if (url.pathname !== MODEL_STREAM_PATH || req.method !== 'POST') {
       res.writeHead(404, { 'content-type': 'text/plain' });
@@ -151,7 +178,7 @@ export function startModelProxy({ broker, host = '127.0.0.1', port = 0, token, l
     }
     // A browser origin or a foreign Host header means the caller is not the
     // runtime. The proxy only serves loopback peers.
-    if (req.headers.origin !== undefined) {
+    if (req.headers.origin !== undefined || req.headers.host !== `${host}:${server.address()?.port}`) {
       res.writeHead(403, { 'content-type': 'text/plain' });
       res.end('forbidden');
       return;
@@ -170,11 +197,14 @@ export function startModelProxy({ broker, host = '127.0.0.1', port = 0, token, l
       chunks.push(chunk);
     });
     req.on('end', () => {
+      if (stopping) { res.destroy(); return; }
       if (size > MAX_BODY_BYTES) return;
       let request;
       try { request = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
       catch { res.writeHead(400, { 'content-type': 'text/plain' }); res.end('bad_request'); return; }
       const controller = new AbortController();
+      active.add(controller);
+      const deadline = setTimeout(() => { controller.abort(); res.destroy(); }, timeoutMs);
       let finished = false;
       const abort = () => { if (!finished) controller.abort(); };
       req.on('aborted', abort);
@@ -183,33 +213,41 @@ export function startModelProxy({ broker, host = '127.0.0.1', port = 0, token, l
         'content-type': 'text/event-stream',
         'cache-control': 'no-store',
         connection: 'keep-alive',
+        'x-mbot-broker-protocol': '1',
       });
-      broker.stream({
+      const task = broker.stream({
         providerId: request?.providerId,
         modelId: request?.modelId,
         messages: request?.messages,
         signal: controller.signal,
-        onEvent: (payload) => {
+        onEvent: async (payload) => {
           if (finished || controller.signal.aborted) return;
-          res.write(`data: ${JSON.stringify(payload)}\n\n`);
+          if (!res.write(`data: ${JSON.stringify(payload)}\n\n`)) {
+            await once(res, 'drain', { signal: controller.signal });
+          }
         },
       }).then(() => {
         finished = true;
-        res.end();
+        res.end('data: [DONE]\n\n');
       }).catch((error) => {
         finished = true;
-        const code = error instanceof BrokerError ? error.code : 'broker_unavailable';
+        const code = error instanceof BrokerError && PUBLIC_FAILURE_CODES.has(error.code) ? error.code : 'broker_unavailable';
         log(code);
         if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
         if (!controller.signal.aborted) {
           res.write(`data: ${JSON.stringify({ error: code })}\n\n`);
         }
         res.end();
-      });
+      }).finally(() => { clearTimeout(deadline); active.delete(controller); });
+      pending.add(task);
+      task.finally(() => pending.delete(task)).catch(() => {});
     });
   });
 
   return new Promise((resolvePromise, rejectPromise) => {
+    server.maxConnections = 24;
+    server.headersTimeout = 10_000;
+    server.requestTimeout = 10_000;
     server.on('error', rejectPromise);
     server.listen(port, host, () => {
       const address = server.address();
@@ -218,7 +256,14 @@ export function startModelProxy({ broker, host = '127.0.0.1', port = 0, token, l
         port: address.port,
         baseUrl: `http://${host}:${address.port}`,
         token,
-        dispose: () => new Promise((done) => server.close(() => done())),
+        dispose: () => disposal ??= (async () => {
+          stopping = true;
+          const closing = new Promise((done) => server.close(() => done()));
+          for (const controller of active) controller.abort();
+          server.closeAllConnections?.();
+          await closing;
+          await Promise.allSettled([...pending]);
+        })(),
       }));
     });
   });

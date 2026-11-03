@@ -16,6 +16,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -31,12 +33,18 @@ internal class NativeBrokerSession(val baseUrl: String, val token: String) {
 internal class NativeModelBroker(
     private val resolveProvider: (String, String) -> NativeProvider,
     private val transport: ProviderTransport = OkHttpProviderTransport(),
+    private val headerTimeoutMs: Long = 10_000,
+    private val streamTimeoutMs: Long = 10 * 60_000,
     private val logger: (ModelBrokerCode) -> Unit = {},
 ) : Closeable {
+    init { require(headerTimeoutMs in 1..60_000 && streamTimeoutMs in 1..10 * 60_000) }
     private val listener = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
     private val closed = AtomicBoolean()
     private val sockets = ConcurrentHashMap.newKeySet<Socket>()
     private val streams = ConcurrentHashMap<Socket, StreamCancellation>()
+    private val deadlines = ScheduledThreadPoolExecutor(1) { task ->
+        Thread(task, "mbot-model-deadline").apply { isDaemon = true }
+    }.apply { removeOnCancelPolicy = true }
     private val workers = ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS, ArrayBlockingQueue(8),
         { task -> Thread(task, "mbot-native-model").apply { isDaemon = true } })
     val session = NativeBrokerSession("http://127.0.0.1:${listener.localPort}",
@@ -47,7 +55,13 @@ internal class NativeModelBroker(
             while (!closed.get()) {
                 val socket = try { listener.accept() } catch (_: Exception) { break }
                 sockets.add(socket)
-                try { workers.execute { serve(socket) } } catch (_: Exception) {
+                var headerDeadline: ScheduledFuture<*>? = null
+                try {
+                    val deadline = deadlines.schedule({ expire(socket) }, headerTimeoutMs, TimeUnit.MILLISECONDS)
+                    headerDeadline = deadline
+                    workers.execute { serve(socket, deadline) }
+                } catch (_: Exception) {
+                    headerDeadline?.cancel(false)
                     try { reply(socket, 503, "broker_unavailable") } catch (_: Exception) { }
                     sockets.remove(socket)
                     socket.close()
@@ -56,8 +70,9 @@ internal class NativeModelBroker(
         }, "mbot-native-model-accept").apply { isDaemon = true; start() }
     }
 
-    private fun serve(socket: Socket) {
+    private fun serve(socket: Socket, headerDeadline: ScheduledFuture<*>) {
         var streaming = false
+        var streamDeadline: ScheduledFuture<*>? = null
         val cancellation = StreamCancellation()
         try {
             socket.soTimeout = 10_000
@@ -102,9 +117,11 @@ internal class NativeModelBroker(
                 offset += count
             }
             val request = parseRequest(String(bytes, UTF_8))
+            headerDeadline.cancel(false)
             // A closed downstream must cancel even when upstream emits nothing
             // and its reader is blocked. Connection: close forbids pipelining.
             streams[socket] = cancellation
+            streamDeadline = deadlines.schedule({ expire(socket) }, streamTimeoutMs, TimeUnit.MILLISECONDS)
             socket.soTimeout = 0
             Thread({
                 try { input.read() } catch (_: Exception) { }
@@ -118,7 +135,7 @@ internal class NativeModelBroker(
             if (cancellation.cancelled.get()) return
             socket.getOutputStream().apply {
                 write(("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n" +
-                    "Cache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray(UTF_8))
+                    "X-Mbot-Broker-Protocol: 1\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray(UTF_8))
                 flush()
             }
             streaming = true
@@ -151,6 +168,8 @@ internal class NativeModelBroker(
                 } catch (_: Exception) { }
             }
         } finally {
+            headerDeadline.cancel(false)
+            streamDeadline?.cancel(false)
             cancellation.cancel()
             streams.remove(socket)
             sockets.remove(socket)
@@ -161,10 +180,16 @@ internal class NativeModelBroker(
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         listener.close()
+        deadlines.shutdownNow()
         streams.values.forEach { it.cancel() }
         sockets.forEach { try { it.close() } catch (_: Exception) { } }
         workers.shutdownNow()
         (transport as? Closeable)?.close()
+    }
+
+    private fun expire(socket: Socket) {
+        streams[socket]?.cancel()
+        try { socket.close() } catch (_: Exception) { }
     }
 
     private class StreamCancellation {
@@ -177,6 +202,7 @@ internal class NativeModelBroker(
     private class Input(val providerId: String, val modelId: String, val messages: JSONArray)
     private fun parseRequest(raw: String): Input {
         try {
+            requireNativeJsonBudget(raw, ModelBrokerCode.INVALID_REQUEST)
             val tokener = JSONTokener(raw)
             val value = tokener.nextValue() as? JSONObject ?: throw IllegalArgumentException()
             if (tokener.nextClean().code != 0 || value.keys().asSequence().toSet() != setOf("providerId", "modelId", "messages")) {

@@ -1,5 +1,18 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+## 最新：流式完成、背压、截止时间与解析预算
+
+- native 请求在 JSONTokener **之前**检查深度 64、结构符 16384 的预算（字符串和转义内容不误计）；响应同样在 JSONObject 之前检查，避免深层输入先触发递归溢出。原 1 MiB 请求/256 KiB 事件大小限制保留。
+- native 设置绝对 header/body 截止时间 10 秒、每流 10 分钟。截止时直接取消上游 call 并关闭下游 socket，不只依赖 readTimeout，因此也能中断阻塞发送；排队请求也有 header 截止。timer 正常完成后移除，broker.close 清理计时器。
+- provider 流只有 `[DONE]` 或对应协议终态才允许以 EOF 完成；只有 partial delta 后断开会返回稳定错误，不再补成正常结束。四协议终态与深 JSON、停滞读取均有测试。
+- native/host 新流带 `X-Mbot-Broker-Protocol: 1`，正常结束显式输出 `[DONE]`。客户端对这种标记的流拒绝无 DONE 的断开；旧测试替身未声明标记时保留原关闭兼容。新生产两端均带标记，不能把旧兼容分支当作完整结束校验。
+- host 客户端在 DONE/错误/取消/回调异常时 finally 取消 body 并释放 reader，限制未完成事件大小，校验 SSE content type；取消后不再分发同一包里剩余事件。错误码改为封闭白名单，不能把形似错误码的任意原文写进日志。
+- host 代理 await 回调与 HTTP drain，避免向慢 runtime 无限堆积输出；有每流截止、连接与入站超时、Host/Origin 校验。dispose 会取消、关闭并等待在途模型请求，而不是等模型自然结束。**这不修复前文官方 Bot engine 的持久化 drain 缺口。**
+
+本地最终脚本：**JUnit 24 passed + Node 22 passed**（模型流 10、native 跨进程 6、descriptor 6）；供应商 probe/服务相关 10 passed、scope4 passed。Host 校验用原生 HTTP 请求验证，fetch 会覆盖 Host，不能拿 fetch 的覆盖行为误判服务没有拒绝。Android 验收工程再跑 `testDebugUnitTest assembleDebug assembleDebugAndroidTest`：**BUILD SUCCESSFUL in 1m 28s**；XML **24 tests / 0 failures / 0 errors / 0 skipped**。仪器 APK 编译通过，仍未在设备执行。
+
+前一 Android 组件 CI 初始化修正提交 `4c3e808` 的 run **41591483093** 已实查：native-boundary 与 android-component-compilation **均 success**。不是仅本地推断。最新流式改动需继续观察新 run。
+
 ## 最新：Android 组件 Gradle 验证通过，设备仍未验证
 
 新增 `dsh-go/tooling/android-broker-probe` **验收工程（不是第二个产品 App）**：构建时用 AGP variant API 同步选择的生产 Kotlin 文件与测试到 build 目录，不复制维护业务实现，不依赖 Flutter/NDK。为去掉存储类对 Flutter 注册文件的编译耦合，将原 `BotSettingsPlugin.kt` 内的 `BotSettingsStore` 原样移到同包新文件；对比原 class 代码体完全相同，旧加密/迁移行为不变。

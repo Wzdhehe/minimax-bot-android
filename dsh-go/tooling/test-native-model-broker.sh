@@ -30,4 +30,6 @@ classpath="$test_dir/tests.jar:$classpath"
   io.github.ccch1mneyyy.dsh_app.isolation.WorkspaceBrokerTest \
   io.github.ccch1mneyyy.dsh_app.isolation.IsolationSessionGateTest
 MBOT_NATIVE_CLASSPATH="$classpath" MBOT_JAVA="$java_bin" node --test --test-reporter=tap \
+  "$root_dir/runtime/minimax-bot-host/model-broker.test.mjs" \
+  "$root_dir/runtime/minimax-bot-host/runtime-descriptor.test.mjs" \
   "$root_dir/runtime/minimax-bot-host/native-model-broker.test.mjs"

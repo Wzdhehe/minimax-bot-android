@@ -181,3 +181,18 @@ test('authenticated settings probe uses the real native stream without a Node cr
     await service.dispose();
   }
 });
+
+test('native rejects deeply nested request JSON and does not call a truncated provider stream finished', options, async (t) => {
+  const s = await stack(t);
+  const response = await fetch(`${s.descriptor.baseUrl}/v1/model/stream`, {
+    method: 'POST', headers: { authorization: `Bearer ${s.descriptor.token}`, 'content-type': 'application/json' },
+    body: '{"providerId":"native-provider","modelId":"stream","messages":' + '['.repeat(1000) + '0' + ']'.repeat(1000) + '}',
+  });
+  assert.equal(response.status, 400);
+  assert.equal(await response.text(), 'broker_request_invalid');
+  const events = [];
+  await assert.rejects(s.client.stream({ ...request('truncated'), onEvent: (event) => events.push(event) }),
+    (error) => error instanceof BrokerError && error.code === 'broker_invalid_response');
+  assert.deepEqual(events, [{ delta: 'partial' }]);
+  await s.client.stream(request()); // The native process remains alive.
+});

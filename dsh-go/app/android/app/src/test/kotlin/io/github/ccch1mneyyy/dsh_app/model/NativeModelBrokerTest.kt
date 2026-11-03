@@ -86,6 +86,70 @@ class NativeModelBrokerTest {
         }
     }
 
+    @Test fun truncatedProviderStreamsAreNotNormalCompletion() {
+        try {
+            ProviderSse.copy("data: {\"delta\":\"partial\"}\n\n".reader(), provider()) { }
+            fail("Truncated stream accepted")
+        } catch (failure: ModelBrokerFailure) { assertEquals(ModelBrokerCode.INVALID_RESPONSE, failure.code) }
+        for ((format, event) in mapOf(
+            "openai-completions" to "{\"choices\":[{\"finish_reason\":\"stop\"}]}",
+            "openai-responses" to "{\"type\":\"response.completed\"}",
+            "anthropic-messages" to "{\"type\":\"message_stop\"}",
+            "google-generative-ai" to "{\"candidates\":[{\"finishReason\":\"STOP\"}]}")) {
+            val events = mutableListOf<String>()
+            ProviderSse.copy("data: $event\n\n".reader(), provider(format), events::add)
+            assertEquals(1, events.size)
+        }
+    }
+
+    @Test fun parserBudgetRejectsDeepTreesBeforeJsonParserAndIgnoresQuotedBraces() {
+        val nested = "[".repeat(1000) + "0" + "]".repeat(1000)
+        try { requireNativeJsonBudget(nested, ModelBrokerCode.INVALID_REQUEST); fail("Deep JSON accepted") }
+        catch (failure: ModelBrokerFailure) { assertEquals(ModelBrokerCode.INVALID_REQUEST, failure.code) }
+        try { ProviderSse.copy("data: $nested\n\n".reader(), provider()) { }; fail("Deep provider frame accepted") }
+        catch (failure: ModelBrokerFailure) { assertEquals(ModelBrokerCode.INVALID_RESPONSE, failure.code) }
+        requireNativeJsonBudget(JSONObject().put("text", "[\\\"{}]".repeat(1000)).toString(), ModelBrokerCode.INVALID_REQUEST)
+    }
+
+    @Test fun incompleteHeadersHaveAnAbsoluteDeadlineWithoutResolvingAProvider() {
+        val resolutions = java.util.concurrent.atomic.AtomicInteger()
+        NativeModelBroker({ _, _ -> resolutions.incrementAndGet(); provider() },
+            ProviderTransport { throw IllegalStateException("unexpected transport") }, headerTimeoutMs = 100).use { broker ->
+            val uri = java.net.URI(broker.session.baseUrl)
+            java.net.Socket(uri.host, uri.port).use { socket ->
+                socket.soTimeout = 2000
+                socket.getOutputStream().write("POST /v1/model/stream HTTP/1.1\r\n".toByteArray())
+                assertEquals(-1, socket.getInputStream().read())
+            }
+            assertEquals(0, resolutions.get())
+        }
+    }
+
+    @Test fun streamDeadlineClosesDownstreamAndCancelsAnIdleUpstream() {
+        val release = CountDownLatch(1)
+        val ended = CountDownLatch(1)
+        val call = object : ProviderCall {
+            override fun execute() = ProviderResponse(200, "text/event-stream", object : java.io.InputStream() {
+                override fun read(): Int { release.await(); return -1 }
+            })
+            override fun cancel() { release.countDown() }
+            override fun close() { release.countDown(); ended.countDown() }
+        }
+        NativeModelBroker({ _, _ -> provider() }, ProviderTransport { call }, streamTimeoutMs = 250).use { broker ->
+            val connection = java.net.URI(broker.session.baseUrl + "/v1/model/stream").toURL().openConnection() as java.net.HttpURLConnection
+            try {
+                connection.requestMethod = "POST"; connection.doOutput = true; connection.readTimeout = 2000
+                connection.setRequestProperty("Authorization", "Bearer ${broker.session.token}")
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.outputStream.use { it.write("{\"providerId\":\"p\",\"modelId\":\"m\",\"messages\":[]}".toByteArray()) }
+                assertEquals(200, connection.responseCode)
+                assertEquals("1", connection.getHeaderField("X-Mbot-Broker-Protocol"))
+                assertFalse(connection.inputStream.bufferedReader().readText().contains("[DONE]"))
+                assertTrue(ended.await(2, TimeUnit.SECONDS))
+            } finally { connection.disconnect() }
+        }
+    }
+
     @Test fun downstreamDisconnectCancelsAStalledRealOkHttpCall() {
         val upstream = MockWebServer()
         upstream.enqueue(MockResponse().setHeader("Content-Type", "text/event-stream")

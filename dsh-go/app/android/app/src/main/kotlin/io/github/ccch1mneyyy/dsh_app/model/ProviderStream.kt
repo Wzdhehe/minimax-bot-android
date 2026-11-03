@@ -70,6 +70,7 @@ internal object ProviderSse {
     private const val MAX_EVENT_CHARS = 256 * 1024
     fun copy(reader: Reader, provider: NativeProvider, emit: (String) -> Unit) {
         val data = StringBuilder()
+        var terminal = false
         while (true) {
             val line = line(reader)
             if (line == null || line.isEmpty()) {
@@ -77,16 +78,34 @@ internal object ProviderSse {
                     val raw = data.toString().trimEnd('\n')
                     data.setLength(0)
                     if (raw == "[DONE]") return
+                    requireNativeJsonBudget(raw, ModelBrokerCode.INVALID_RESPONSE)
                     val event = try { JSONObject(raw) } catch (_: Exception) {
                         throw ModelBrokerFailure(ModelBrokerCode.INVALID_RESPONSE)
                     }
                     provider.guardResponse(event)
-                    if (event.has("error") || event.optString("type") == "error") {
+                    val type = event.optString("type")
+                    if (event.has("error") || type in setOf("error", "response.failed", "response.incomplete")) {
                         throw ModelBrokerFailure(ModelBrokerCode.PROVIDER_REJECTED)
                     }
                     emit(event.toString())
+                    terminal = terminal || when (provider.apiFormat) {
+                        "anthropic-messages" -> type == "message_stop"
+                        "openai-responses" -> type == "response.completed"
+                        "openai-completions" -> event.optJSONArray("choices")?.let { choices ->
+                            (0 until choices.length()).any {
+                                (choices.getJSONObject(it).opt("finish_reason") as? String)?.isNotBlank() == true
+                            }
+                        } == true
+                        "google-generative-ai" -> event.optJSONArray("candidates")?.let { candidates ->
+                            (0 until candidates.length()).any { candidates.getJSONObject(it).optString("finishReason").isNotEmpty() }
+                        } == true
+                        else -> false
+                    }
                 }
-                if (line == null) return
+                if (line == null) {
+                    if (!terminal) throw ModelBrokerFailure(ModelBrokerCode.INVALID_RESPONSE)
+                    return
+                }
             } else if (line.startsWith("data:")) {
                 data.append(line.substring(5).removePrefix(" ")).append('\n')
                 if (data.length > MAX_EVENT_CHARS) throw ModelBrokerFailure(ModelBrokerCode.INVALID_RESPONSE)

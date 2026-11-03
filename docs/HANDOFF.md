@@ -1,5 +1,7 @@
 # 最新接手入口（2026-11-03）
 
+**最新流式补强**：native/host 增加完整结束标记、异常断流处理、背压、绝对截止时间、reader/call 清理及解析前 JSON 预算；proxy.dispose 会取消并收敛模型请求。最终本地 **JVM24 + Node22 全过**，Gradle组件构建再过、XML24项通过；设备测试仍未运行。说明见 [T-RuntimeBroker 首节](handoff/T-RuntimeBroker.md)。前一提交 `4c3e808` 的 GitHub **41591483093**：native/Android编译两项均 success。
+
 **最新 Android 构建进展**：新增复用生产源的 `tooling/android-broker-probe` 验收工程，Gradle 9.3.1/AGP9.1/JDK21 下 `testDebugUnitTest assembleDebug assembleDebugAndroidTest` **BUILD SUCCESSFUL**。XML确认 JVM20项全过；Keystore/IPC 两类仪器 APK 已编译打包，但**未在设备执行**；不是完整 Flutter Bot APK，更不是 Node runtime 已移植。存储类从 Flutter 注册文件原样拆出供验收复用。后续依赖/隔离/模型传输关口见 [Android runtime 计划](ANDROID-RUNTIME-INTEGRATION.md)；实际命令/限制见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。
 
 **继续推进 IPC 装配**：补 `AgentIsolationClient`、owner UID/会话 gate、请求 ID 关联、超时/断线/close 与保守 Binder payload 预算；仍是文件占位服务，不是 Node/runtime。JUnit 现 **20 passed** + Node/Kotlin **5 passed**，API36 下 isolation 源码独立编译通过、scope 4 passed。设备 Binder/UID/生命周期用例已写但**未验证**。下一步应先解决 isolated UID 的 Node 加载和受控模型 transport，不能假定 loopback 可访问，见 [T-Isolation 最新节](handoff/T-Isolation.md)。

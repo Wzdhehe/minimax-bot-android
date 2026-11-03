@@ -43,6 +43,7 @@ object NativeBrokerFixture {
                     "escaped" -> response.setChunkedBody("data: {\"delta\":\"${key.map { "\\u%04x".format(it.code) }.joinToString("")}\"}\n\n", 3)
                     "cancel" -> response.setChunkedBody("data: {\"delta\":\"first\"}\n\n" +
                         "data: {\"delta\":\"later\"}\n\n".repeat(1000), 32).throttleBody(32, 100, TimeUnit.MILLISECONDS)
+                    "truncated" -> response.setBody("data: {\"delta\":\"partial\"}\n\n")
                     else -> response.setChunkedBody("data: {\"delta\":\"hello\"}\r\n\r\n" +
                         "data: {\"delta\":\" world\"}\n\ndata: [DONE]\n\n", 3)
                 }
@@ -62,7 +63,7 @@ object NativeBrokerFixture {
                 override fun close() { call.close(); if (model == "cancel") cancelClosed.set(true) }
             }
         }
-        val allowed = setOf("stream", "cancel", "error", "echo", "escaped", "throw", "redirect")
+        val allowed = setOf("stream", "cancel", "error", "echo", "escaped", "throw", "redirect", "truncated")
         val provider = NativeProvider("openai-completions", "https://fixture-provider.invalid/v1", key)
         val broker = NativeModelBroker({ id, model ->
             if (id != "native-provider" || model !in allowed) throw ModelBrokerFailure(ModelBrokerCode.INVALID_PROVIDER)

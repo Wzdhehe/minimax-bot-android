@@ -10,6 +10,8 @@
 //   body: {"providerId","modelId","messages":[{"role","content"}]}
 //   200 text/event-stream, frames "data: {json}\n\n", terminated by
 //   "data: [DONE]\n\n" or by closing the connection.
+// This legacy double has no X-Mbot-Broker-Protocol header. Production v1
+// native/host streams advertise that header and require DONE for completion.
 //
 // The key lives in the double exactly where it lives in the real broker: the
 // native side. It is injected into the upstream request only. The host and
