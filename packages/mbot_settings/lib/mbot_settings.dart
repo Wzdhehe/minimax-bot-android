@@ -13,3 +13,5 @@ export 'src/providers/provider_contract.dart';
 export 'src/ui/provider_settings_page.dart';
 export 'src/usage/usage_quota.dart';
 export 'src/ui/usage_quota_page.dart';
+export 'src/schedules/schedule_port.dart';
+export 'src/ui/schedule_settings_page.dart';

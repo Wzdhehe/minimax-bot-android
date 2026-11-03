@@ -8853,6 +8853,35 @@ class L10nEn extends L10n {
   String get mobileBotSettingsFailed => 'Cannot read or save encrypted settings. Please retry.';
 
   @override
+  String get mobileBotScheduleNoticeTitle => 'Scheduled task due';
+
+  @override
+  String get mobileBotScheduleNoticeBody => 'The task was triggered. Open Bot to check its status.';
+
+  @override
+  String get mobileBotProfile => 'Bot settings';
+
+  @override
+  String get mobileBotEdit => 'Edit';
+
+  @override
+  String get mobileBotScheduledTasks => 'Automations';
+
+  @override
+  String mobileBotScheduleEnabledCount(int count) {
+    return '$count enabled';
+  }
+
+  @override
+  String get mobileBotNotifications => 'Notifications';
+
+  @override
+  String get mobileBotNotifyHint => 'Notifications for this Bot also follow global preferences and system permissions.';
+
+  @override
+  String get mobileBotScheduleSelfHint => 'Tasks created here and by the Bot share the same list';
+
+  @override
   String get nearbyThisChat => 'This chat';
 
   @override

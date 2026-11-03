@@ -25,5 +25,21 @@
   "mobileBotKeyDelete": "删除已保存的 Key",
   "mobileBotSettingsInvalid": "请填写 HTTPS Base URL 和模型 ID。",
   "mobileBotSettingsSaved": "设置已保存",
-  "mobileBotSettingsFailed": "无法读取或保存加密设置，请重试。"
+  "mobileBotSettingsFailed": "无法读取或保存加密设置，请重试。",
+  "mobileBotScheduleNoticeTitle": "定时任务到点",
+  "mobileBotScheduleNoticeBody": "任务已触发，打开 Bot 查看执行状态。",
+  "mobileBotProfile": "Bot 设置",
+  "mobileBotEdit": "编辑",
+  "mobileBotScheduledTasks": "自动任务",
+  "mobileBotScheduleEnabledCount": "{count} 已开启",
+  "mobileBotNotifications": "通知",
+  "mobileBotNotifyHint": "控制此 Bot 的通知，仍受全局通知和系统权限限制。",
+  "mobileBotScheduleSelfHint": "手动设置与 Bot 创建的任务共用同一列表",
+  "@mobileBotScheduleEnabledCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

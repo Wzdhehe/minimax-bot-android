@@ -214,18 +214,6 @@ abstract final class MbotSettingsIa {
       ],
     ),
     MbotSettingsGroup(
-      id: MbotSettingsGroupId.schedules,
-      title: '定时任务',
-      subtitle: '列表与编辑（数据来自 Bot 服务）',
-      kind: MbotSettingsEntryKind.placeholder,
-      items: [
-        MbotSettingsItemId.scheduleList,
-        MbotSettingsItemId.scheduleCreate,
-        MbotSettingsItemId.scheduleEdit,
-        MbotSettingsItemId.scheduleDelete,
-      ],
-    ),
-    MbotSettingsGroup(
       id: MbotSettingsGroupId.backgroundRunning,
       title: '后台运行',
       subtitle: '只检测状态并跳转系统设置',

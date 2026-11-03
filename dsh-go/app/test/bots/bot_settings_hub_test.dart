@@ -15,9 +15,13 @@ void main() {
     );
     await tester.pumpAndSettle();
     for (final group in MbotSettingsIa.groups) {
-      expect(find.byKey(Key('mbot.settings.hub.${group.id.name}')), findsOneWidget);
+      expect(
+        find.byKey(Key('mbot.settings.hub.${group.id.name}')),
+        group.id == MbotSettingsGroupId.schedules ? findsNothing : findsOneWidget,
+      );
     }
     expect(find.textContaining('远控'), findsNothing);
+    expect(find.byKey(const Key('mbot.settings.hub.schedules')), findsNothing);
     expect(find.textContaining('手机操控'), findsNothing);
     expect(platform.calls.where((call) => call.startsWith('open')), isEmpty);
     await tester.tap(find.byKey(const Key('mbot.settings.hub.notifications')));

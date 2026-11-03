@@ -18,6 +18,8 @@ class BotController extends ChangeNotifier {
   int _selection = 0;
   int _messageSequence = 0;
   StreamSubscription<Map<String, Object?>>? _events;
+  final _eventBus = StreamController<Map<String, Object?>>.broadcast();
+  Stream<Map<String, Object?>> get events => _eventBus.stream;
   Timer? _refreshTimer;
   Future<void>? _refreshing;
   bool _refreshAgain = false;
@@ -36,6 +38,7 @@ class BotController extends ChangeNotifier {
     if (_disposed) return;
     _events = api.events().listen(
       (event) {
+        if (!_disposed) _eventBus.add(event);
         connected = true;
         _changed();
         if (_refreshTimer?.isActive != true) {
@@ -150,6 +153,7 @@ class BotController extends ChangeNotifier {
     _disposed = true;
     _refreshTimer?.cancel();
     unawaited(_events?.cancel());
+    unawaited(_eventBus.close());
     super.dispose();
   }
 }

@@ -15428,6 +15428,60 @@ abstract class L10n {
   /// **'无法读取或保存加密设置，请重试。'**
   String get mobileBotSettingsFailed;
 
+  /// No description provided for @mobileBotScheduleNoticeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'定时任务到点'**
+  String get mobileBotScheduleNoticeTitle;
+
+  /// No description provided for @mobileBotScheduleNoticeBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务已触发，打开 Bot 查看执行状态。'**
+  String get mobileBotScheduleNoticeBody;
+
+  /// No description provided for @mobileBotProfile.
+  ///
+  /// In zh, this message translates to:
+  /// **'Bot 设置'**
+  String get mobileBotProfile;
+
+  /// No description provided for @mobileBotEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑'**
+  String get mobileBotEdit;
+
+  /// No description provided for @mobileBotScheduledTasks.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动任务'**
+  String get mobileBotScheduledTasks;
+
+  /// No description provided for @mobileBotScheduleEnabledCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 已开启'**
+  String mobileBotScheduleEnabledCount(int count);
+
+  /// No description provided for @mobileBotNotifications.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知'**
+  String get mobileBotNotifications;
+
+  /// No description provided for @mobileBotNotifyHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'控制此 Bot 的通知，仍受全局通知和系统权限限制。'**
+  String get mobileBotNotifyHint;
+
+  /// No description provided for @mobileBotScheduleSelfHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'手动设置与 Bot 创建的任务共用同一列表'**
+  String get mobileBotScheduleSelfHint;
+
   /// No description provided for @nearbyThisChat.
   ///
   /// In zh, this message translates to:

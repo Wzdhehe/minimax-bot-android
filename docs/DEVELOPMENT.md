@@ -15,6 +15,8 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 
 ## 当前代码和真实进度
 
+- **T-Schedule 进行中**：按用户最新参考图增加 Bot 资料页；自动任务入口下沉到该 Bot 设置，支持同源列表/创建/编辑/开关/删除/立即执行，以及每 Bot 通知开关。全局设置不再显示任务组。Bot 自建任务复用 mbot MCP 并通过真实宿主 HTTP 测试验证，不另做系统 scheduler。新增进程内到点事件通知桥；**真实 runtime 的 MCP 注册、Android 通知实测及断线场景仍未完成**。详见 [handoff](handoff/T-Schedule.md)。
+
 - **T-Usage 契约/界面阶段**（`feat/t-usage`）：账号与模型内增加用量入口，区分无登录租约、自定义 API 供应商不支持、真实查询失败与夹具账号额度；只经本机宿主读取白名单计划/积分/5h/周字段，不读取 Key。已准备 WebUI `getUsageQuota` 注入槽，**尚未装配真实 OAuth 租约和 UsageQuotaClient，不能宣称已查到真实账号额度**。详见 [handoff](handoff/T-Usage.md)。
 
 - **T-Providers 阶段一**（`feat/t-providers`）：账号与模型页已改为多供应商列表/编辑、四种 `apiFormat`、模型列表和本机默认模型选择；native 每供应商独立 Keystore AES-GCM 存储，并原生迁移旧单 Key 配置。增加宿主 provider probe 和仅接收 ID 的鉴权 HTTP 接口，模拟 native resolver 下验证四类请求与 Key 不回显。**真实 native→宿主桥、WebUI 配置同步和 Bot 模型同步仍未完成，整张 T-Providers 未验收。** 详见 [handoff](handoff/T-Providers.md)。
@@ -41,7 +43,7 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 
 完整验收与触碰路径见 [architecture.md](architecture.md) 任务卡 **T-Settings**、**T-Usage**、**T-Schedule**；分组常量以 `packages/mbot_settings/lib/src/ia/settings_groups.dart` 为准。
 
-摘要：设置分组为账号与模型 · 插件 · 通知 · 定时任务 · 后台运行 · 工作区 · 外观 · 关于（无远控/操控）。后台运行只检测+跳转系统设置；须写明进程被杀后定时不会执行。保活由用户在系统设置完成；死后补跑档位未定，UI/文档不得承诺。
+摘要：设置分组为账号与模型 · 插件 · 通知 · 后台运行 · 工作区 · 外观 · 关于（无远控/操控）。后台运行只检测+跳转系统设置；须写明进程被杀后定时不会执行。保活由用户在系统设置完成；死后补跑档位未定，UI/文档不得承诺。
 
 ## 上游及授权
 

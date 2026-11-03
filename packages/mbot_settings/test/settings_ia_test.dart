@@ -2,12 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mbot_settings/mbot_settings.dart';
 
 void main() {
-  test('IA lists the eight E.2 groups with stable titles', () {
+  test('global IA keeps automations in Bot profiles', () {
     expect(MbotSettingsIa.groups.map((g) => g.title).toList(), [
       '账号与模型',
       '插件',
       '通知',
-      '定时任务',
       '后台运行',
       '工作区与存储',
       '外观',

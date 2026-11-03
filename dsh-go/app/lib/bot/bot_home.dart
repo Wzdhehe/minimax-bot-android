@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
 import 'bot_controller.dart';
 import 'bot_settings_hub.dart';
+import 'bot_schedule_notifications.dart';
+import 'bot_profile.dart';
 
 class BotHome extends StatefulWidget {
   const BotHome({super.key, required this.controller});
@@ -17,15 +19,19 @@ class _BotHomeState extends State<BotHome> {
   final _search = TextEditingController();
   final _composer = TextEditingController();
   BotController get bot => widget.controller;
+  StreamSubscription<Map<String, Object?>>? _notices;
 
   @override
   void initState() {
     super.initState();
+    final notices = BotScheduleNotifications();
+    _notices = bot.events.listen((event) => unawaited(notices.handle(event)));
     unawaited(bot.start());
   }
 
   @override
   void dispose() {
+    unawaited(_notices?.cancel());
     _search.dispose();
     _composer.dispose();
     super.dispose();
@@ -204,6 +210,15 @@ class _BotHomeState extends State<BotHome> {
     if (!sent) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.mobileBotSendFailed)));
   }
 
+  Future<void> _profile(String id) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BotProfilePage(api: bot.api, botId: id),
+      ),
+    );
+    if (mounted) await bot.refresh();
+  }
+
   Widget _chat(bool expanded) {
     if (bot.selectedChat == null) return Center(child: Text(context.l10n.mobileBotChoose));
     final isGroup = bot.selectedChat!.startsWith('group:');
@@ -236,6 +251,12 @@ class _BotHomeState extends State<BotHome> {
                 },
                 icon: const Icon(Icons.stop_circle_outlined),
               ),
+              if (!isGroup && selected != null)
+                IconButton(
+                  tooltip: context.l10n.mobileBotProfile,
+                  onPressed: () => _profile(selected['id'] as String),
+                  icon: const Icon(Icons.info_outline),
+                ),
             ],
           ),
         ),

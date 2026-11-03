@@ -8,6 +8,8 @@
 
 ## 1. 已决事项
 
+**2026-11-03 用户补充（优先于旧卡的全局 IA）**：自动任务入口位于每个 Bot 的资料/设置页；用户手工管理与 Bot 经 mbot MCP 创建的定时任务共用同一 runtime 数据源。全局设置不再展示「定时任务」组，不增加电脑/远控入口。Bot 调度使用既有 mbot/mcode 工具与进程内 scheduler，不另建 Android 系统调度链。
+
 | 决定 | 后果 |
 |---|---|
 | 考前小步开发 | 每卡一 PR；考前关入口，考后再删模块 |
@@ -62,7 +64,7 @@ flowchart TB
 
 ### T-Settings — 设置骨架接入壳
 
-- **目标**：把 `packages/mbot_settings/`（通知页、后台运行页、6 组占位）接入 DSH 设置入口；分组与 `lib/src/ia/settings_groups.dart` 一致：账号与模型 · 插件 · 通知 · 定时任务 · 后台运行 · 工作区 · 外观 · 关于。总开关关则子项灰显；后台页只跳系统设置，文案写明进程被杀后定时不跑。
+- **目标**：把 `packages/mbot_settings/`（通知页、后台运行页、6 组占位）接入 DSH 设置入口；分组与 `lib/src/ia/settings_groups.dart` 一致：账号与模型 · 插件 · 通知 · 后台运行 · 工作区 · 外观 · 关于。总开关关则子项灰显；后台页只跳系统设置，文案写明进程被杀后定时不跑。
 - **触碰**：`packages/mbot_settings/`；`dsh-go/app/lib/` 设置路由/入口；必要时 `dsh-go/app/pubspec.yaml`。
 - **必要平台接入**：自写 `MbotSystemSettingsPlugin.kt` 与注册点，仅检测通知/电池状态、建立本产品通知渠道和响应用户点击跳系统设置；不调用 DSH 平台通道，不自动索要权限或后台拉活。对应锁文件与设置 CI 一并维护。
 - **依赖**：无（可先于沙箱）。
@@ -149,6 +151,8 @@ flowchart TB
   当前实现与验证边界见 [T-Sandbox handoff](handoff/T-Sandbox.md)：宿主和源码策略检查已通过，Android 仪器验收未运行；在完成该项前不将整张卡标为验收通过。targetSdk 升至 36，依据 Google Play 2026-08-31 起的新应用/更新要求；旧 DSH rootfs 的 target 28 执行豁免不再保留。
 
 ### T-Schedule — 定时任务 + 通知（进程存活档）
+
+- **入口补充**：会话 → Bot 设置 → 自动任务，列表与创建固定到该 Bot。Bot 自建走 `create_schedule` / `list_schedules` / `delete_schedule`，不能只做 UI 本地任务。普通 Bot 与 Chief 的语义沿用上游；实际 mcode MCP 注册和宿主身份绑定仍须生产 runtime 接入，模型自报 caller ID 不作为新的系统安全保证。
 
 - **目标**：进程/约定服务存活时到点执行并发通知；设置可开关通知渠道；后台页只检测+跳转。UI/文档不得承诺进程被杀后仍执行（死后补跑档位未定）。
 - **触碰**：`dsh-go/app/` 通知渠道与设置；Bot 调度相关（vendor/host，不引入 Ubuntu+pnpm）；`packages/mbot_settings/` 通知/后台/定时分组。

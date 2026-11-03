@@ -25,5 +25,21 @@
   "mobileBotKeyDelete": "Delete saved key",
   "mobileBotSettingsInvalid": "Enter an HTTPS base URL and model ID.",
   "mobileBotSettingsSaved": "Settings saved",
-  "mobileBotSettingsFailed": "Cannot read or save encrypted settings. Please retry."
+  "mobileBotSettingsFailed": "Cannot read or save encrypted settings. Please retry.",
+  "mobileBotScheduleNoticeTitle": "Scheduled task due",
+  "mobileBotScheduleNoticeBody": "The task was triggered. Open Bot to check its status.",
+  "mobileBotProfile": "Bot settings",
+  "mobileBotEdit": "Edit",
+  "mobileBotScheduledTasks": "Automations",
+  "mobileBotScheduleEnabledCount": "{count} enabled",
+  "mobileBotNotifications": "Notifications",
+  "mobileBotNotifyHint": "Notifications for this Bot also follow global preferences and system permissions.",
+  "mobileBotScheduleSelfHint": "Tasks created here and by the Bot share the same list",
+  "@mobileBotScheduleEnabledCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

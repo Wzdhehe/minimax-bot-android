@@ -36,7 +36,7 @@ jobs:
           sdk: stable
       - name: Test Bot runtime adapter
         working-directory: dsh-go
-        run: node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs runtime/minimax-bot-host/workspace.test.mjs runtime/minimax-bot-host/provider-broker.test.mjs runtime/minimax-bot-host/usage-quota.test.mjs
+        run: node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs runtime/minimax-bot-host/workspace.test.mjs runtime/minimax-bot-host/provider-broker.test.mjs runtime/minimax-bot-host/usage-quota.test.mjs runtime/minimax-bot-host/schedule.test.mjs
       - name: Test workspace boundary
         working-directory: packages/mbot-workspace-guard
         run: npm test

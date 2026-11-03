@@ -3,6 +3,8 @@ package io.github.ccch1mneyyy.dsh_app.bot
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.Notification
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -27,6 +29,27 @@ class MbotSystemSettingsPlugin : FlutterPlugin {
                 } catch (_: Exception) { false }
                 try {
                     when (call.method) {
+                        "postSchedule" -> {
+                            val id = call.argument<String>("id") ?: throw IllegalArgumentException()
+                            require(id.matches(Regex("^msg_[A-Za-z0-9]+$")))
+                            val target = notifications.getNotificationChannel("mbot_schedule_due")
+                            if (!notifications.areNotificationsEnabled() || target == null || target.importance == 0) {
+                                result.success(false)
+                            } else {
+                                val number = id.hashCode() and Int.MAX_VALUE
+                                val notification = Notification.Builder(context, "mbot_schedule_due")
+                                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                                    .setContentTitle((call.argument<String>("title") ?: "Bot").take(100))
+                                    .setContentText((call.argument<String>("body") ?: "").take(300))
+                                    .setAutoCancel(true).setOnlyAlertOnce(true)
+                                context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { intent ->
+                                    notification.setContentIntent(PendingIntent.getActivity(context, number, intent,
+                                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+                                }
+                                notifications.notify(number, notification.build())
+                                result.success(true)
+                            }
+                        }
                         "notificationsEnabled" -> result.success(notifications.areNotificationsEnabled())
                         "batteryIgnored" -> result.success(context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName))
                         "openNotifications" -> result.success(open(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)))

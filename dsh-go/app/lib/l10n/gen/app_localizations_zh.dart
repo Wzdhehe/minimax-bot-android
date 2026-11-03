@@ -8399,6 +8399,35 @@ class L10nZh extends L10n {
   String get mobileBotSettingsFailed => '无法读取或保存加密设置，请重试。';
 
   @override
+  String get mobileBotScheduleNoticeTitle => '定时任务到点';
+
+  @override
+  String get mobileBotScheduleNoticeBody => '任务已触发，打开 Bot 查看执行状态。';
+
+  @override
+  String get mobileBotProfile => 'Bot 设置';
+
+  @override
+  String get mobileBotEdit => '编辑';
+
+  @override
+  String get mobileBotScheduledTasks => '自动任务';
+
+  @override
+  String mobileBotScheduleEnabledCount(int count) {
+    return '$count 已开启';
+  }
+
+  @override
+  String get mobileBotNotifications => '通知';
+
+  @override
+  String get mobileBotNotifyHint => '控制此 Bot 的通知，仍受全局通知和系统权限限制。';
+
+  @override
+  String get mobileBotScheduleSelfHint => '手动设置与 Bot 创建的任务共用同一列表';
+
+  @override
   String get nearbyThisChat => '本对话';
 
   @override
