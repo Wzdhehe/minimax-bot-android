@@ -1,5 +1,36 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+## 最新：Android 组件 Gradle 验证通过，设备仍未验证
+
+新增 `dsh-go/tooling/android-broker-probe` **验收工程（不是第二个产品 App）**：构建时用 AGP variant API 同步选择的生产 Kotlin 文件与测试到 build 目录，不复制维护业务实现，不依赖 Flutter/NDK。为去掉存储类对 Flutter 注册文件的编译耦合，将原 `BotSettingsPlugin.kt` 内的 `BotSettingsStore` 原样移到同包新文件；对比原 class 代码体完全相同，旧加密/迁移行为不变。
+
+实跑工具链：新安装在 `/tmp/mbot-jdk21` 的 **Temurin 21.0.13+9**、`/tmp/mbot-gradle/gradle-9.3.1/bin/gradle`、SDK platform36/BuildTools36.0.0；Gradle cache 在 `/tmp/mbot-gradle-cache`。原系统 JRE21/独立 kotlinc 仍在，但本次 Gradle 使用的是完整 JDK。命令实际执行：
+
+```bash
+JAVA_HOME=/tmp/mbot-jdk21 ANDROID_HOME=/tmp/mbot-android-sdk \
+/tmp/mbot-gradle/gradle-9.3.1/bin/gradle --no-daemon \
+  -g /tmp/mbot-gradle-cache -p dsh-go/tooling/android-broker-probe \
+  -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 \
+  -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080 \
+  -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts \
+  testDebugUnitTest assembleDebug assembleDebugAndroidTest
+```
+
+本机首次需修正 AGP9.1 禁止 SourceSet Provider 的旧写法，改为 generated-source variant API；Task 的 include 名称也用显式 receiver 避免 CopySpec 属性遮蔽。修正后原始结尾：
+
+```text
+> Task :assembleDebugAndroidTest
+
+BUILD SUCCESSFUL in 2m 28s
+72 actionable tasks: 72 executed
+```
+
+XML 实查：`NativeModelBrokerTest 6`、`WorkspacePathPolicyTest 5`、`WorkspaceBrokerTest 5`、`IsolationSessionGateTest 4`，共 **20 tests / 0 failures / 0 errors / 0 skipped**。`ProviderStorageTest` 与 `AgentIsolationClientTest` 仪器 APK **编译/打包通过，但未执行**。aapt2 实查验收 APK：独立 `.brokerprobe` applicationId，min26/target36，仅 INTERNET；服务 exported=false，isolatedProcess=true，allowBackup=false。没有将 APK、debug signing key、缓存或本机 SDK 路径提交仓库，也没有发布 APK。
+
+SDK 因缺 platform-tools 提示许可未接受；没有执行连接设备任务、没有伪造许可文件，compile/assemble 在该提示下正常完成。组件构建不需要 NDK；**完整 Flutter Bot APK/Node/.node Android 构建仍未完成，真机 Keystore/UID/Binder/流式取消仍未验证**。CI 新增同款 Android 组件编译 job，推送后需观察真实结果。
+
+runtime 具体依赖与安全装配关口已按钉点源码核对，见 [ANDROID-RUNTIME-INTEGRATION.md](../ANDROID-RUNTIME-INTEGRATION.md)。Node18 mobile 包不满足该钉点 engines；不能把桌面 better-sqlite3/node-pty 拷入 APK 当作完成移植。
+
 ## 本次续写：native provider broker
 
 **后续同分支推进：供应商测试也改为 native-only**。原 `provider-broker.mjs` 的 `resolveProvider -> apiKey -> Node fetch` 方案已删除，不能再把此文件当作允许 native 向 Node 交 Key 的接口。新 `createProviderBroker({ modelBroker })` 只调用 native 流，识别四种协议的文本输出后立即取消，以减少测试请求消耗；仅 role/usage 元数据不算成功，超时取消，不自动重试，错误白名单不带原异常。`startBotService({ modelBroker })` 自动装配该 probe，不再接收旧 providerBroker 参数。HTTP `/api/providers/test` 的用户端协议仍只收 IDs、返回状态。

@@ -1,5 +1,7 @@
 # T-Isolation 交接（独立 UID + broker 最小实证）
 
+**最新补充**：后续验收工程 `tooling/android-broker-probe` 已完成真实 Gradle/AGP 的生产源码、Manifest 和仪器 APK 编译；JVM20项通过，两个设备用例编译通过，**设备执行仍未验证**。这覆盖了下文历史“只做独立 kotlinc”编译层面的缺口，但没有证明系统 UID/权限/生命周期。详情见 [T-RuntimeBroker 最新节](T-RuntimeBroker.md)。
+
 ## 最新同分支续写：IPC 客户端、身份与请求关联
 
 在 `feat/t-plugins@19d487d` 上继续，未新建分支。**这是代码层装配，不是 Android 设备上的隔离实证；以下历史段落的“没有 AgentIsolationClient/身份校验”已被当前源码覆盖。**

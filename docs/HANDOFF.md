@@ -1,6 +1,10 @@
 # 最新接手入口（2026-11-03）
 
+**最新 Android 构建进展**：新增复用生产源的 `tooling/android-broker-probe` 验收工程，Gradle 9.3.1/AGP9.1/JDK21 下 `testDebugUnitTest assembleDebug assembleDebugAndroidTest` **BUILD SUCCESSFUL**。XML确认 JVM20项全过；Keystore/IPC 两类仪器 APK 已编译打包，但**未在设备执行**；不是完整 Flutter Bot APK，更不是 Node runtime 已移植。存储类从 Flutter 注册文件原样拆出供验收复用。后续依赖/隔离/模型传输关口见 [Android runtime 计划](ANDROID-RUNTIME-INTEGRATION.md)；实际命令/限制见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。
+
 **继续推进 IPC 装配**：补 `AgentIsolationClient`、owner UID/会话 gate、请求 ID 关联、超时/断线/close 与保守 Binder payload 预算；仍是文件占位服务，不是 Node/runtime。JUnit 现 **20 passed** + Node/Kotlin **5 passed**，API36 下 isolation 源码独立编译通过、scope 4 passed。设备 Binder/UID/生命周期用例已写但**未验证**。下一步应先解决 isolated UID 的 Node 加载和受控模型 transport，不能假定 loopback 可访问，见 [T-Isolation 最新节](handoff/T-Isolation.md)。
+
+该阶段提交 `a743d5f` 的 GitHub native **41588261052 success**、scope **41588261051 success** 已实查。
 
 **本次最新进展**：直接从远程 `feat/t-plugins@b7ca158` 续写 native Kotlin provider broker（未新建分支）；四类文本协议、SSE、socket 取消、native Key 回显防护已实现，JUnit 6 + 跨进程 4 + 宿主回归 19 + scope 4 通过。Key 防泄露测试的假 Key 只在 native JVM 生成，检查 runtime descriptor/env/log/Agent 可读文件。正式启动/配置同步/Android 设备验证仍待完成，见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。用户最新要求持续按文档开发、阶段 push，覆盖了之前“只做一项就停”的限制。
 
