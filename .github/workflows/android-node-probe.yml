@@ -72,6 +72,9 @@ jobs:
         run: |
           node --test dsh-go/tooling/android-node-probe/probe-bundle.test.mjs
           python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_*.py' -v
+          python3 dsh-go/tooling/android-node-probe/test-fd-vfs.py \
+            --archive dsh-go/tooling/android-node-probe/build/downloads/better-sqlite3.tgz \
+            --ndk "$ANDROID_HOME/ndk/27.3.13750724"
       - name: Require KVM on the ephemeral test runner
         run: |
           test -c /dev/kvm

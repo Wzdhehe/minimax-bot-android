@@ -3,6 +3,10 @@
 
 当前是**隔离Node的内存数据库验收候选**，没有选择持久化方案，不是完整mcode/runtime已运行。默认产品仍DSH。必须继续在feat/t-plugins，不动main/dev/integration。
 
+## FD VFS宿主原型
+
+已新增受控FD路径映射的unix VFS宿主原型，WAL/双连接/外部writer锁/崩溃后恢复等通过；NDK仅object编译通过。**未接APK，Android VFS未验证**。必须先读 [T-Persistence](T-Persistence.md)，不要直接启用或把基本FD实证当成WAL证据。
+
 ## 最新：数据FD五项能力也已过
 
 d7d65ad/run **41683691783 success**，API26 job126083684488/API35 job126083684020成功；无方法过滤的整类仪器用例执行，五项均要求已授予FD能力可用且按私有路径open拒绝。包含pread、实际pwrite/fsync、ftruncate、独占范围锁和RW MAP_SHARED/msync/munmap。此轮日志接口返回空，依据run/job API及未过滤runner，不伪造XML计数或日志。下文“设备待CI”是当轮记录。

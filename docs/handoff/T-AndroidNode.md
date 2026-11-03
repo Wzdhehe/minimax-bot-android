@@ -1,6 +1,10 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+## SDK route设备证据与持久化原型
+
+e03b997/run41686820725的API26/35均success，包含SDK route→JNI→Main broker的tool-shaped fetch及原大请求/SQLite/Key用例。日志未实读，不伪造计数。最新FD VFS仅宿主原型/NDK object编译，**未接Android**，见T-Persistence；full-ICU重跑仍待结论。
+
 ## 当前：SDK route → JNI（设备待CI）
 
 新增纯JS native-model-route，绑定SDK虚拟URL/placeholder/provider/model，将模型JSON和request ID交linked binding，取消关联同ID并保留晚到FD关闭。实际SDK9/pi-ai8、完整JUnit32+Node44通过；验收APK固定脚本新增tool-shaped SDK fetch，JNI→Main broker后恢复SSE工具事件/DONE，Node两个APK43s成功、host1/input8过。设备待新CI，不代表正式model resolver已接。

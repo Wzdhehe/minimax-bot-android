@@ -1,6 +1,8 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
-## 当前：SDK路由接JNI binding（设备待CI）
+> e03b997/run41686820725的SDK route矩阵已API实查API26/35 success；以下待CI是实现当轮状态。正式resolver/启动器与持久化仍未接。
+
+## SDK路由接JNI binding
 
 新增 `native-model-route.mjs` 将provider/model/apiFormat和可信binding组合为SDK配置。SDK使用 `https://models.mbot.invalid` 虚拟源与固定placeholder，真实base URL与Key只由native按ID选取，避免Anthropic版本路径与真实base混用。route生成随机request ID，传JSON到binding.open，abort传同ID到binding.cancel；诊断归一化，取消后的成功FD仍交外层ownedChannel关闭，不能在中途throw丢失FD。
 
