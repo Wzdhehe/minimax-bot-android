@@ -30,12 +30,23 @@ on:
       - 'dsh-go/tooling/android-broker-probe/report-denials.py'
       - '.github/workflows/android-node-probe.yml'
   workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Optional successful full-ICU producer run on this branch; empty uses the pinned release'
+        required: false
+        type: string
+        default: ''
 permissions:
   contents: read
+  actions: read
 jobs:
   isolated-node:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      # Pin a successful source producer here after it exists, then push this
+      # workflow. This also works when workflow_dispatch is not registered on main.
+      PINNED_SOURCE_RUN_ID: ''
     strategy:
       fail-fast: false
       matrix:
@@ -58,10 +69,38 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+      - name: Select and authorize the verification Node input
+        id: source_input
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_SOURCE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.source_run_id || '' }}
+        run: |
+          source_run_id="${REQUESTED_SOURCE_RUN_ID:-$PINNED_SOURCE_RUN_ID}"
+          if [ -n "$source_run_id" ]; then
+            python3 dsh-go/tooling/android-node-probe/verify-source-run.py "$source_run_id"
+          fi
+          printf 'run_id=%s\n' "$source_run_id" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        if: steps.source_input.outputs.run_id != ''
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.source_input.outputs.run_id }}
+          name: node-full-icu-verification-input
+          path: ${{ runner.temp }}/authorized-node-source
       - name: Prepare pinned Node candidate and verification JNI
+        env:
+          SOURCE_RUN_ID: ${{ steps.source_input.outputs.run_id }}
         run: |
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.3.13750724'
-          python3 dsh-go/tooling/android-node-probe/prepare-probe.py --ndk "$ANDROID_HOME/ndk/27.3.13750724"
+          if [ -n "$SOURCE_RUN_ID" ]; then
+            source_archive="$RUNNER_TEMP/authorized-node-source/node-full-icu.zip"
+            source_archive_sha="$(sha256sum "$source_archive" | cut -d ' ' -f 1)"
+            python3 dsh-go/tooling/android-node-probe/prepare-probe.py \
+              --ndk "$ANDROID_HOME/ndk/27.3.13750724" \
+              --archive "$source_archive" --source-build-sha "$source_archive_sha"
+          else
+            python3 dsh-go/tooling/android-node-probe/prepare-probe.py --ndk "$ANDROID_HOME/ndk/27.3.13750724"
+          fi
       - name: Build pinned SQLite addon and explicit data FD VFS
         run: |
           npm ci --ignore-scripts --no-audit --no-fund --prefix dsh-go/tooling/model-sdk-probe

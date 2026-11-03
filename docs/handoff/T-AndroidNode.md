@@ -3,6 +3,14 @@
 
 > 最新覆盖：b2a32b5/run41693324311 的 FD VFS 验收在 API26/35 均失败，不能视为 WAL/持久化通过。e983424/run41695986670 也失败且未取得阶段码；续写补XML正文解析/测试行号与新PID干净重启用例（本地APK40s成功、宿主跨进程通过，Android未验证）；详情以 [T-Persistence](T-Persistence.md) 与总 [HANDOFF](../HANDOFF.md) 为准。旧段的“待CI”只记实现当时，不能覆盖后续证据。
 
+## full-ICU产物复用入口（待端到端验收）
+
+Node源码构建耗时很长，候选验收workflow现在支持复用已成功的同仓库source producer，组合**当前**JNI/SQLite/VFS/模型/Key/Intl测试，而不重跑Node编译。`android-node-probe.yml` 的 `PINNED_SOURCE_RUN_ID` 当前为空，默认仍用固定release；待41680254279的build job真正success后，可只改该值并push到feat/t-plugins触发当前验收。若GitHub已登记workflow_dispatch，也可提供 `source_run_id`；**没有实际运行dispatch，不保证分支workflow可被dispatch，不为此移动main**。
+
+复用前 `verify-source-run.py` 必须通过：run ID仅整数、同repo/同feat/t-plugins、producer workflow路径/事件/commit正确、build job（含上传）success，且producer commit的源码pin、build-source.py、source workflow与当前逐字节一致。随后download-artifact按固定name取私有产物；归档SHA交prepare-probe继续校验source manifest/config/ABI/ICU及recipe。没有任意artifact URL或静默回退。仅申请Actions只读权限，不触碰release/APK发布。
+
+17项Python检查通过（新增5项覆盖source authority/非法ID不触网/fork等拒绝/未完成producer拒绝/recipe或workflow变更拒绝）。**source产物下载/组合设备验收仍未验证**，当前producer尚未完成；过期/缺失artifact应失败，不能假造SHA。原source job的旧verify仅验它当时commit的固定脚本，不能代替当前SQLite/WAL组合测试。
+
 ## 当前：文件FD VFS验收（设备待CI）
 
 Main给临时非敏感数据文件/目录的五个FD；JNI传到Node，SQLite addon注册受控VFS，先关输入别名再开文件DB。固定脚本增加WAL、并行只读连接、写入、关闭重开和完整性；Main检查实际文件与无Key。最后APK3m42s成功，JNI/SQLite重编及host1/input8通过；**执行待CI，不是正式持久化/跨进程重启已完成**。原模型链路用例保留。详见T-Persistence。

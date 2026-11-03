@@ -6,14 +6,14 @@
 
 | 能力 | 已取得的证据 | 尚未完成 |
 |---|---|---|
-| native-only模型broker | 四类请求体/工具、流/取消；JUnit32、Node41、实际SDK9、钉点pi-ai8；7ce84ec的native/host/scope CI通过 | 真实provider、正式配置同步/启动器 |
+| native-only模型broker | 四类请求体/工具、流/取消；JUnit32、Node44、实际SDK9、钉点pi-ai8；7ce84ec的native/host/scope CI通过 | 真实provider、正式配置同步/启动器 |
 | 隔离Node + Keystore + SQLite | bc07b1c/run41663798958：API26/35各1项仪器测试通过，含内存事务/回滚/中文/JSON/serialize及Key边界 | WAL/持久化、ARM64、物理真机 |
 | 动态模型请求 | d545dc7/run41665743434 Binder矩阵成功；4f92405/run41667564473 Node Promise→JNI→Binder→native模型FD在API26/35成功 | 正式model resolver/scope/生命周期装配 |
 | 1MiB大请求FD | 64KiB内保持inline；更大JSON走有界pipe，精确长度/EOF/UTF8/截止/取消。broker目标最终2m53s、Node目标2m39s构建成功，host1+输入拒绝8过 | 3d99bed的Node41682351200/broker41682351421已API26/35通过 |
 | 数据文件FD能力（当前研究） | 单个明确授予FD的读/写同步/截断/锁/RW映射五用例已编译，broker目标1m23s成功；按私有路径open必须继续拒绝 | d7d65ad/run41683691783已API26/35通过；不是VFS/持久化已实现 |
 | **SDK→JNI路由（当前阶段）** | 虚拟SDK URL/placeholder→可信binding；JUnit32+Node44、SDK9/pi-ai8通过，Node APK43s构建成功 | e03b997/run41686820725已API26/35通过；正式resolver未装配 |
 | FD SQLite VFS Android候选（当前阶段） | 固定SQLite源码WAL/双连接/独立writer锁/崩溃后恢复/integrity/路径拒绝通过；NDK API26 object编译通过 | 已接验收APK并3m42s构建通过；**41693324311、41695986670的API26/35均失败**；已补XML正文解析/固定行号和跨进程验收，新结果待CI；见T-Persistence，不能直接切产品 |
-| full-ICU Node | 首轮41630373256被4小时上限取消，check annotation已实查；job360/compile330分钟后重跑 **41680254279** | **重跑进行中**，未取得产物/设备证据。默认候选没有Intl |
+| full-ICU Node | 首轮41630373256被4小时上限取消，check annotation已实查；job360/compile330分钟后重跑 **41680254279** | **重跑进行中**，未取得产物/设备证据；新增同repo/branch/recipe验证后的产物复用入口（17项Python过，下载/组合设备未验证），默认候选没有Intl |
 
 正式入口仍DSH；上述都是组件/独立验收APK/假provider，**没有完整mcode/官方Bot产品运行、完整Flutter Bot APK或真实模型验收**。插件变更仍关闭。持久化、可信Bot身份/MCP、工具权限及生产启动器仍缺。不得因组件通过就宣称App已完成。
 
