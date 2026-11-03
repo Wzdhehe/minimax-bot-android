@@ -2,9 +2,9 @@
 
 Standalone Flutter package for the M Bot Android settings shell.
 
-- **License intent**: original code for this fork; does **not** link or copy DSH Go (AGPL).
-- **Scope (E.2)**: settings hub lists all product groups; this package implements **通知** and **后台运行**.
-- **Platform**: Dart interfaces + fakes for tests. Native Android implementations are deferred and must be self-authored inside this package (or a sibling package), never taken from DSH.
-- **Honest copy**: shutting off notifications or killing the process means scheduled tasks will **not** run. The UI must not claim otherwise.
+- **Integration**: self-authored settings UI, composed into the AGPL Android app. New provider files carry AGPL-3.0-only headers; no DSH implementation was copied into this package.
+- **Scope**: hub IA, notification and background pages, and the provider metadata/editor UI. Native storage/platform implementations live in `dsh-go/app/android/.../bot`.
+- **Platform**: Dart interfaces + fakes for tests; the app supplies its own native channels, without calling DSH runtime channels.
+- **Honest copy**: disabling notifications only stops reminders. Killing the Bot/runtime process stops its in-process scheduled tasks.
 
 Item definitions live in `lib/src/ia/settings_groups.dart` so architecture docs can align against one source.

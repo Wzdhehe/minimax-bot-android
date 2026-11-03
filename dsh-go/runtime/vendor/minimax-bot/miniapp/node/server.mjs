@@ -110,7 +110,7 @@ function chatReferences(messages, src) {
 
 /**
  * @param {MiniAppContext} context
- * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean, resolveMediaPath?: (path: string) => Promise<string> }} [hostOptions]
+ * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean, resolveMediaPath?: (path: string) => Promise<string>, testProvider?: (id: string, model: string) => Promise<{ok: boolean, code?: string, status?: number}> }} [hostOptions]
  * @returns {Promise<MiniAppLifecycle>}
  */
 export async function start(context, hostOptions = {}) {
@@ -531,6 +531,20 @@ export async function start(context, hostOptions = {}) {
     }
 
     if (method === 'GET' && path === '/api/state') return json(response, 200, snapshot());
+
+    if (method === 'POST' && path === '/api/providers/test') {
+      if (!hostOptions.testProvider) return json(response, 503, { ok: false, code: 'provider_unavailable' });
+      const body = await readBody(request);
+      if (!body || typeof body !== 'object' || Array.isArray(body) ||
+          Object.keys(body).some((key) => key !== 'providerId' && key !== 'modelId') ||
+          typeof body.providerId !== 'string' || typeof body.modelId !== 'string') {
+        return json(response, 400, { ok: false, code: 'invalid_provider' });
+      }
+      const result = await hostOptions.testProvider(body.providerId, body.modelId);
+      return json(response, 200, { ok: result.ok === true,
+        ...(typeof result.code === 'string' ? { code: result.code } : {}),
+        ...(Number.isInteger(result.status) ? { status: result.status } : {}) });
+    }
 
     // The page reports the OS language (navigator.languages); it resolves `auto`.
     if (method === 'POST' && path === '/api/locale') {

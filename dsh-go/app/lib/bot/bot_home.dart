@@ -36,7 +36,7 @@ class _BotHomeState extends State<BotHome> {
     final role = TextEditingController();
     final members = <String>{};
     try {
-      final accepted = await showDialog<bool>(
+      final route = DialogRoute<bool>(
         context: context,
         builder: (context) => StatefulBuilder(
           builder: (context, update) => AlertDialog(
@@ -88,6 +88,8 @@ class _BotHomeState extends State<BotHome> {
           ),
         ),
       );
+      final accepted = await Navigator.of(context).push(route);
+      await route.completed;
       if (accepted != true || !mounted) return;
       if (group) {
         await bot.createGroup(name.text, members.toList());
@@ -129,7 +131,8 @@ class _BotHomeState extends State<BotHome> {
               IconButton(
                 tooltip: context.l10n.mobileBotSettings,
                 onPressed: () =>
-                    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BotSettingsHub())),
+                    Navigator.of(context)
+                        .push(MaterialPageRoute<void>(builder: (_) => BotSettingsHub(botApi: bot.api))),
                 icon: const Icon(Icons.settings_outlined),
               ),
               PopupMenuButton<bool>(

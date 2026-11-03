@@ -9,3 +9,5 @@ export 'src/prefs/prefs_store.dart';
 export 'src/ui/settings_hub_page.dart';
 export 'src/ui/notification_settings_page.dart';
 export 'src/ui/background_running_page.dart';
+export 'src/providers/provider_contract.dart';
+export 'src/ui/provider_settings_page.dart';

@@ -20,6 +20,7 @@ enum MbotSettingsGroupId {
 /// One row inside a group (hub entry or page control).
 enum MbotSettingsItemId {
   // accountAndModel
+  providers,
   apiKey,
   baseUrl,
   defaultModel,
@@ -172,9 +173,10 @@ abstract final class MbotSettingsIa {
     MbotSettingsGroup(
       id: MbotSettingsGroupId.accountAndModel,
       title: '账号与模型',
-      subtitle: 'API Key、Base URL、默认模型',
+      subtitle: '供应商、API 协议、默认模型',
       kind: MbotSettingsEntryKind.placeholder,
       items: [
+        MbotSettingsItemId.providers,
         MbotSettingsItemId.apiKey,
         MbotSettingsItemId.baseUrl,
         MbotSettingsItemId.defaultModel,

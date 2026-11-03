@@ -23,4 +23,6 @@
 
 ## 后续
 
+真实 runner 补记：GitHub Actions [Bot settings integration / 41549806006](https://github.com/Wzdhehe/minimax-bot-android/actions/runs/41549806006) 已通过 API 查询确认为 `completed / success`；同轮源码 scope 检查也通过。这仍不包含 APK 构建或 Android 系统行为验收。
+
 继续 T-Providers：将账号与模型页扩展为多供应商，保留 Key 仅 native 可读；Dart 只能读取元数据与 hasKey/掩码。尚未实现模型 broker 或把 Key 注入 MiniMax runtime，不要通过把 Key 写入 Agent 可读配置或环境来绕过。

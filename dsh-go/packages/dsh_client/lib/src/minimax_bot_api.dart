@@ -101,6 +101,17 @@ class MiniMaxBotApi {
 
   Future<Map<String, Object?>> state() => _request('GET', '/api/state');
   Future<Map<String, Object?>> models() => _request('GET', '/api/models');
+
+  /// Probes a native-stored provider by id; never accepts a saved key.
+  Future<Map<String, Object?>> testProvider(String providerId, String modelId) async {
+    try {
+      return await _request('POST', '/api/providers/test', body: {'providerId': providerId, 'modelId': modelId});
+    } on MiniMaxBotException catch (error) {
+      if (error.status == 503) return {'ok': false, 'code': 'provider_unavailable'};
+      rethrow;
+    }
+  }
+
   Future<Map<String, Object?>> updateSettings(Map<String, Object?> settings) =>
       _request('PUT', '/api/settings', body: settings);
   Future<Map<String, Object?>> createBot(Map<String, Object?> properties) =>

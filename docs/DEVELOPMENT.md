@@ -15,6 +15,8 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 
 ## 当前代码和真实进度
 
+- **T-Providers 阶段一**（`feat/t-providers`）：账号与模型页已改为多供应商列表/编辑、四种 `apiFormat`、模型列表和本机默认模型选择；native 每供应商独立 Keystore AES-GCM 存储，并原生迁移旧单 Key 配置。增加宿主 provider probe 和仅接收 ID 的鉴权 HTTP 接口，模拟 native resolver 下验证四类请求与 Key 不回显。**真实 native→宿主桥、WebUI 配置同步和 Bot 模型同步仍未完成，整张 T-Providers 未验收。** 详见 [handoff](handoff/T-Providers.md)。
+
 - **T-Settings 本轮进展**：`feat/t-settings` 基于已推送的 T-Sandbox 分支，`mbot_settings` 已接入 Bot 和旧外壳的设置入口；新 hub 有全部八组，通知/后台为可用页面，账号模型暂接既有加密配置页。独立 Android 通道负责通知渠道、状态检测及用户点击后的系统跳转。包测试 12 项、App 测试 4 项、静态检查及独立 Kotlin 编译通过；原生系统跳转/权限表现未做真机验收，运行时也没有因此完成接入。详见 [T-Settings handoff](handoff/T-Settings.md)。
 
 - **T-Sandbox 本轮进展**：在 `feat/t-sandbox`（自 `dev/integration@891aefa`）接入严格工作区守卫到宿主文件接口和真实媒体读取；修复悬空 symlink 漏洞；删除宽外部 FileProvider 映射、升 targetSdk 到 36、配置 Key prefs 的云备份/迁移排除。守卫 10 项、宿主 5 项、钉点 19 项、Android 源码策略 4 项在 Node 24 环境通过；**Android 构建与 `/sdcard` 仪器用例未运行，整张卡尚未完整验收**。详见 [本轮交接](handoff/T-Sandbox.md)。未改动远程 `main`，未创建 PR。

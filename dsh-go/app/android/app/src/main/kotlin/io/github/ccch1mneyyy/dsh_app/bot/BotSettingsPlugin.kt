@@ -19,10 +19,24 @@ class BotSettingsPlugin : FlutterPlugin {
     private var channel: MethodChannel? = null
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         val store = BotSettingsStore(binding.applicationContext)
+        val providers = BotProviderStore(binding.applicationContext)
         channel = MethodChannel(binding.binaryMessenger, "minimax/bot-settings").also { channel ->
             channel.setMethodCallHandler { call, result ->
                 try {
                     when (call.method) {
+                        "providers" -> result.success(providers.catalog())
+                        "saveProvider" -> {
+                            providers.save(call.arguments as? Map<*, *> ?: throw IllegalArgumentException())
+                            result.success(providers.catalog())
+                        }
+                        "deleteProvider" -> {
+                            providers.delete(call.argument<String>("providerId") ?: throw IllegalArgumentException())
+                            result.success(providers.catalog())
+                        }
+                        "selectDefaultProviderModel" -> {
+                            providers.selectDefault(call.argument<String>("providerId") ?: "", call.argument<String>("modelId") ?: "")
+                            result.success(providers.catalog())
+                        }
                         "load" -> result.success(store.load())
                         "save" -> {
                             store.save(call.argument<String>("baseUrl") ?: "", call.argument<String>("model") ?: "",

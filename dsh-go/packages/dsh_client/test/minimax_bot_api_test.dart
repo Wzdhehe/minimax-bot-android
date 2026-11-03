@@ -60,6 +60,7 @@ void main() {
   });
 
   test('surfaces server errors and refuses non-local or malformed destinations', () async {
+    expect(await api.testProvider('unconfigured', 'model'), {'ok': false, 'code': 'provider_unavailable'});
     await expectLater(api.createBot({'name': ''}), throwsA(isA<MiniMaxBotException>()));
     expect(() => MiniMaxBotApi(Uri.parse('https://example.com')), throwsArgumentError);
     expect(() => MiniMaxBotApi(Uri.parse('http://127.0.0.1:$port/?token=secret')), throwsArgumentError);
