@@ -14,6 +14,9 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
 import org.json.JSONObject
+import io.github.ccch1mneyyy.dsh_app.model.NativeProvider
+import io.github.ccch1mneyyy.dsh_app.model.ModelBrokerCode
+import io.github.ccch1mneyyy.dsh_app.model.ModelBrokerFailure
 
 /** Provider metadata is exportable; API keys are not. This store does not
  * synchronize BYOK config into a runtime or authorize untrusted execution. */
@@ -134,7 +137,25 @@ internal class BotProviderStore(private val context: Context) {
         check(prefs.edit().putString("default_provider_v2", id).putString("default_model_v2", model).commit())
     }
 
-    /** Never registered on a MethodChannel. A future broker may call this. */
+    /** Native-only authorization snapshot. URL, protocol and model permission
+     * come from saved settings, never from a runtime request. The store lock is
+     * released before networking, so a long stream cannot freeze settings. */
+    @Synchronized
+    fun resolveForModelBroker(id: String, model: String): NativeProvider {
+        migrate()
+        val provider = rowList(rows()).firstOrNull { it.getString("providerId") == id }
+        if (provider == null || !provider.optBoolean("enabled", true)) {
+            throw ModelBrokerFailure(ModelBrokerCode.INVALID_PROVIDER)
+        }
+        val models = provider.getJSONArray("models")
+        if ((0 until models.length()).none { models.getString(it) == model }) {
+            throw ModelBrokerFailure(ModelBrokerCode.INVALID_PROVIDER)
+        }
+        val apiKey = readKeyForBroker(id) ?: throw ModelBrokerFailure(ModelBrokerCode.MISSING_KEY)
+        return NativeProvider(provider.getString("apiFormat"), provider.getString("baseUrl"), apiKey)
+    }
+
+    /** Never registered on a MethodChannel. Only native code can call this. */
     @Synchronized
     fun readKeyForBroker(id: String): String? {
         require(rowList(rows()).any { it.getString("providerId") == id })

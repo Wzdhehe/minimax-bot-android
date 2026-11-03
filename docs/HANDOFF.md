@@ -1,5 +1,7 @@
 # 最新接手入口（2026-11-03）
 
+**本次最新进展**：直接从远程 `feat/t-plugins@b7ca158` 续写 native Kotlin provider broker（未新建分支）；四类文本协议、SSE、socket 取消、native Key 回显防护已实现，JUnit 6 + 跨进程 4 + 宿主回归 19 + scope 4 通过。Key 防泄露测试的假 Key 只在 native JVM 生成，检查 runtime descriptor/env/log/Agent 可读文件。正式启动/配置同步/Android 设备验证仍待完成，见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。用户最新要求持续按文档开发、阶段 push，覆盖了之前“只做一项就停”的限制。
+
 用户要求额度结束前推送代码、维护文档，方便其他 Agent 接手。本文件优先描述当前状态；`DEVELOPMENT.md` 下面较旧的逐轮记录只作历史，不能据此判断 App 已完成。
 
 ## 从哪里继续
@@ -50,7 +52,7 @@ dev/integration 891aefa
 ## 接下来优先做
 
 1. 阅读 `docs/architecture.md` 卡与 `docs/sandbox.md`，先落实独立 UID + broker 的 Android 最小实证、Node/runtime 原生依赖与宿主生命周期；禁止回退同 UID 任意 shell。**独立 UID + broker 的代码层最小实证见 [T-Isolation](handoff/T-Isolation.md)**：`isolatedProcess` 服务 + 主进程 broker + 纯 JVM 路径守卫单测已落地；真机行为、Node 原生依赖与宿主生命周期仍未验证。
-2. 打包/启动钉点 runtime，可信 descriptor 私有传递；接 provider native broker、配置/模型同步，真实模型流和取消。API Key 不传入 Agent/插件环境。**进度见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)**：host 侧模型代理、可信 descriptor、环境变量白名单及测试已落地（host 46 passed）；native Kotlin broker、真实打包启动、模型同步和端到端流/取消未做。
+2. 打包/启动钉点 runtime，可信 descriptor 私有传递；接 provider native broker、配置/模型同步，真实模型流和取消。API Key 不传入 Agent/插件环境。**进度见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)**：host 代理/descriptor 与 native Kotlin broker 都有实现；跨进程模拟 provider 流/取消、Key 不进 runtime descriptor/env/log/Agent 文件的测试通过。下一步是正式 Android 启动器/隔离装配与可信 descriptor 传递、模型配置/工具协议同步；**Android Keystore/完整 APK/真机及真实 MiniMax API 均未验证**。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
 5. 总工作区下实现项目管理与 Bot 绑定，遵守路径防护并分开 cwd 和访问许可；补资料库、附件、群聊/记忆/审批等全量 parity 未完成项。

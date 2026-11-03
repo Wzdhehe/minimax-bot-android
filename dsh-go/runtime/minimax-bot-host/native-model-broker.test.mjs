@@ -1,0 +1,153 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import assert from 'node:assert/strict';
+import { spawn, execFile } from 'node:child_process';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createInterface } from 'node:readline';
+import { promisify } from 'node:util';
+import { once } from 'node:events';
+import { test } from 'node:test';
+import { BrokerError, createModelBrokerClient, startModelProxy } from './model-broker.mjs';
+import { buildRuntimeEnv, createRuntimeDescriptor, writeRuntimeDescriptor } from './runtime-descriptor.mjs';
+
+const classpath = process.env.MBOT_NATIVE_CLASSPATH;
+const exec = promisify(execFile);
+const options = { skip: !classpath && 'Run tooling/test-native-model-broker.sh with Kotlin/JVM dependencies', timeout: 30_000 };
+
+async function stack(t) {
+  const root = await mkdtemp(join(tmpdir(), 'mbot-native-boundary-'));
+  const workspace = join(root, 'workspace');
+  await mkdir(workspace);
+  await writeFile(join(workspace, 'project.txt'), 'Agent-readable project content');
+  const native = spawn(process.env.MBOT_JAVA ?? 'java', ['-cp', classpath,
+    'io.github.ccch1mneyyy.dsh_app.model.NativeBrokerFixture', root], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const lines = createInterface({ input: native.stdout });
+  const queue = [];
+  const waiting = [];
+  let output = '', stderr = '';
+  native.stdout.on('data', (data) => { output += data; });
+  native.stderr.on('data', (data) => { stderr += data; });
+  lines.on('line', (line) => waiting.length ? waiting.shift()(line) : queue.push(line));
+  const next = () => queue.length ? Promise.resolve(queue.shift()) : new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('native_fixture_timeout')), 10_000);
+    waiting.push((line) => { clearTimeout(timer); resolve(line); });
+  });
+  let proxy;
+  t.after(async () => {
+    await proxy?.dispose();
+    native.stdin.end('stop\n');
+    const timer = setTimeout(() => native.kill('SIGKILL'), 5000);
+    if (native.exitCode === null) await once(native, 'exit');
+    clearTimeout(timer);
+    lines.close();
+    await rm(root, { recursive: true, force: true });
+  });
+  const descriptor = JSON.parse(await next());
+  const logs = [];
+  proxy = await startModelProxy({
+    broker: createModelBrokerClient(descriptor), token: 'e'.repeat(64), logger: (code) => logs.push(code),
+  });
+  const client = createModelBrokerClient({ baseUrl: proxy.baseUrl, token: proxy.token });
+  return { root, workspace, descriptor, proxy, client, logs,
+    async report() {
+      await writeFile(join(root, 'native-output.txt'), output + stderr);
+      await writeFile(join(root, 'host-logs.json'), JSON.stringify(logs));
+      native.stdin.write('report\n');
+      return JSON.parse(await next());
+    },
+  };
+}
+
+const request = (modelId = 'stream') => ({ providerId: 'native-provider', modelId,
+  messages: [{ role: 'user', content: 'Hi' }] });
+
+test('real Kotlin broker streams through the Node proxy and blocks runtime credential/config overrides', options, async (t) => {
+  const s = await stack(t);
+  const events = [];
+  await s.client.stream({ ...request(), onEvent: (event) => events.push(event) });
+  assert.deepEqual(events, [{ delta: 'hello' }, { delta: ' world' }]);
+  const response = await fetch(`${s.descriptor.baseUrl}/v1/model/stream`, {
+    method: 'POST', headers: { authorization: `Bearer ${s.descriptor.token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ ...request(), apiKey: 'runtime-override', baseUrl: 'https://elsewhere.invalid' }),
+  });
+  assert.equal(response.status, 400);
+  assert.equal(await response.text(), 'broker_request_invalid');
+  const unauthorized = await fetch(`${s.descriptor.baseUrl}/v1/model/stream`, {
+    method: 'POST', headers: { authorization: 'Bearer wrong', 'content-type': 'application/json' }, body: JSON.stringify(request()),
+  });
+  assert.equal(unauthorized.status, 401);
+  await unauthorized.body.cancel();
+  const origin = await fetch(`${s.descriptor.baseUrl}/v1/model/stream`, {
+    method: 'POST', headers: { authorization: `Bearer ${s.descriptor.token}`, origin: 'https://elsewhere.invalid', 'content-type': 'application/json' }, body: JSON.stringify(request()),
+  });
+  assert.equal(origin.status, 403);
+  await origin.body.cancel();
+});
+
+test('cancelling the runtime stream closes the real native OkHttp provider call', options, async (t) => {
+  const s = await stack(t);
+  const controller = new AbortController();
+  const events = [];
+  await assert.rejects(s.client.stream({ ...request('cancel'), signal: controller.signal,
+    onEvent(event) { events.push(event); controller.abort(); },
+  }), (error) => error instanceof BrokerError && error.code === 'broker_cancelled');
+  assert.equal(events.length, 1);
+  let report;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    report = await s.report();
+    if (report.cancelClosed) break;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.equal(report.cancelClosed, true, 'native upstream read did not return after cancellation');
+});
+
+test('native-held key never reaches runtime descriptor, environment, logs or Agent-readable files', options, async (t) => {
+  const s = await stack(t);
+  const descriptor = createRuntimeDescriptor({ entryPath: join(s.root, 'entry.mjs'),
+    pinCommit: '97818b2890b4acae1c6bd1200a226ff506680628', port: s.proxy.port, token: s.proxy.token });
+  const path = writeRuntimeDescriptor({ dir: s.root, descriptor, allowedRoots: [s.root], workspaceRoot: s.workspace });
+  const env = buildRuntimeEnv({ baseEnv: process.env });
+  const source = `
+import { readFile, readdir } from 'node:fs/promises';
+const descriptor = JSON.parse(await readFile(process.argv[1], 'utf8'));
+const files = {};
+for (const name of await readdir(process.argv[2])) files[name] = await readFile(process.argv[2] + '/' + name, 'utf8');
+const response = await fetch('http://127.0.0.1:' + descriptor.port + '/v1/model/stream', {
+ method:'POST', headers:{authorization:'Bearer '+descriptor.token,'content-type':'application/json'},
+ body:JSON.stringify({providerId:'native-provider',modelId:'stream',messages:[{role:'user',content:'Hi'}]})});
+console.log(JSON.stringify({descriptor, env:process.env, argv:process.argv, files, stream:await response.text()}));
+`;
+  const { stdout, stderr } = await exec(process.execPath, ['--input-type=module', '-e', source, path, s.workspace], { env });
+  const result = JSON.parse(stdout);
+  assert.equal(result.files['project.txt'], 'Agent-readable project content');
+  assert.match(result.stream, /hello/);
+  // The fake key was generated inside the native JVM, not sent to this runner.
+  // Ask that process to inspect every runtime-visible artifact for its key.
+  await writeFile(join(s.workspace, 'runtime-observed.json'), stdout);
+  await writeFile(join(s.root, 'runtime-stderr.txt'), stderr);
+  await writeFile(join(s.root, 'runtime-env.json'), JSON.stringify(env));
+  const report = await s.report();
+  assert.equal(report.keyInjected, true, 'fixture did not authenticate an upstream request');
+  assert.equal(report.artifactsSafe, true, 'native key reached an observable artifact');
+  assert.equal(report.logsSafe, true);
+  assert.equal(report.nativeSurfacesSafe, true);
+  assert.deepEqual(Object.keys(JSON.parse(await readFile(path))).sort(), ['entryPath', 'pinCommit', 'port', 'token']);
+});
+
+test('native blocks echoed/escaped keys, provider bodies, redirects and secret-bearing exceptions', options, async (t) => {
+  const s = await stack(t);
+  for (const [model, code] of [['echo', 'provider_sensitive_response'], ['escaped', 'provider_sensitive_response'],
+    ['error', 'provider_rejected'], ['redirect', 'provider_rejected'], ['throw', 'broker_rejected']]) {
+    const events = [];
+    await assert.rejects(s.client.stream({ ...request(model), onEvent: (event) => events.push(event) }),
+      (error) => error instanceof BrokerError && error.code === code);
+    assert.deepEqual(events, [], 'sensitive response event escaped native');
+  }
+  await writeFile(join(s.root, 'error-observations.json'), JSON.stringify(s.logs));
+  const report = await s.report();
+  assert.equal(report.artifactsSafe, true);
+  assert.equal(report.logsSafe, true);
+});

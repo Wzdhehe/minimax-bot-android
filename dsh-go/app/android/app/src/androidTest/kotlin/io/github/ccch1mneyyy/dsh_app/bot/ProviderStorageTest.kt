@@ -9,6 +9,8 @@ import java.util.UUID
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONArray
+import org.json.JSONObject
 
 @RunWith(AndroidJUnit4::class)
 class ProviderStorageTest {
@@ -33,6 +35,18 @@ class ProviderStorageTest {
             assertFalse(store.catalog().toString().contains(secret))
             assertFalse(context.getSharedPreferences("minimax_bot_provider", Context.MODE_PRIVATE).all.values.any { it.toString().contains(secret) })
             assertEquals(secret, store.readKeyForBroker(id))
+            val nativeProvider = store.resolveForModelBroker(id, "m1")
+            val request = nativeProvider.prepare("m1", JSONArray().put(
+                JSONObject().put("role", "user").put("content", "Hi")))
+            assertEquals("Bearer $secret", request.headers["Authorization"])
+            assertFalse(request.url.contains(secret))
+            assertFalse(request.body.contains(secret))
+            assertFalse(nativeProvider.toString().contains(secret))
+            assertFalse(request.toString().contains(secret))
+            try {
+                store.resolveForModelBroker(id, "unlisted-model")
+                fail("Unlisted model accepted")
+            } catch (_: io.github.ccch1mneyyy.dsh_app.model.ModelBrokerFailure) { }
             store.selectDefault(id, "m1")
             assertEquals("m1", store.catalog()["defaultModelId"])
             store.save(mapOf("providerId" to id, "name" to "Changed", "baseUrl" to "https://example.com/v1", "apiFormat" to "openai-responses", "models" to listOf("m2"), "clearKey" to true))

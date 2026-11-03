@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+name: Native model broker boundary
+on:
+  push:
+    paths:
+      - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/model/**'
+      - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/bot/**'
+      - 'dsh-go/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/model/**'
+      - 'dsh-go/runtime/minimax-bot-host/**'
+      - 'dsh-go/tooling/test-native-model-broker.sh'
+      - '.github/workflows/native-model-broker.yml'
+  pull_request:
+    paths:
+      - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/model/**'
+      - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/bot/**'
+      - 'dsh-go/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/model/**'
+      - 'dsh-go/runtime/minimax-bot-host/**'
+      - 'dsh-go/tooling/test-native-model-broker.sh'
+      - '.github/workflows/native-model-broker.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned Kotlin compiler and JVM test dependencies
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/mbot-kotlin" "$RUNNER_TEMP/mbot-native-deps"
+          curl -fsSL https://github.com/JetBrains/kotlin/releases/download/v2.1.21/kotlin-compiler-2.1.21.zip -o "$RUNNER_TEMP/mbot-kotlin/compiler.zip"
+          echo "1ba08a8b45da99339a0601134cc037b54cf85e9bc0edbe76dcbd27c2d684a977  $RUNNER_TEMP/mbot-kotlin/compiler.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/mbot-kotlin/compiler.zip" -d "$RUNNER_TEMP/mbot-kotlin"
+          echo "KOTLINC=$RUNNER_TEMP/mbot-kotlin/kotlinc/bin/kotlinc" >> "$GITHUB_ENV"
+          echo "MBOT_NATIVE_DEPS=$RUNNER_TEMP/mbot-native-deps" >> "$GITHUB_ENV"
+          base=https://repo.maven.apache.org/maven2
+          curl -fsSL "$base/com/squareup/okhttp3/okhttp/4.12.0/okhttp-4.12.0.jar" -o "$RUNNER_TEMP/mbot-native-deps/okhttp-4.12.0.jar"
+          curl -fsSL "$base/com/squareup/okio/okio-jvm/3.6.0/okio-jvm-3.6.0.jar" -o "$RUNNER_TEMP/mbot-native-deps/okio-jvm-3.6.0.jar"
+          curl -fsSL "$base/com/squareup/okhttp3/mockwebserver/4.12.0/mockwebserver-4.12.0.jar" -o "$RUNNER_TEMP/mbot-native-deps/mockwebserver-4.12.0.jar"
+          curl -fsSL "$base/org/json/json/20240303/json-20240303.jar" -o "$RUNNER_TEMP/mbot-native-deps/json-20240303.jar"
+          curl -fsSL "$base/junit/junit/4.13.2/junit-4.13.2.jar" -o "$RUNNER_TEMP/mbot-native-deps/junit-4.13.2.jar"
+          curl -fsSL "$base/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar" -o "$RUNNER_TEMP/mbot-native-deps/hamcrest-core-1.3.jar"
+          cd "$RUNNER_TEMP/mbot-native-deps"
+          sha256sum -c <<'CHECKSUMS'
+          b1050081b14bb7a3a7e55a4d3ef01b5dcfabc453b4573a4fc019767191d5f4e0  okhttp-4.12.0.jar
+          67543f0736fc422ae927ed0e504b98bc5e269fda0d3500579337cb713da28412  okio-jvm-3.6.0.jar
+          6784673687f4ac8f21679b9d4bc7cdb46e1a1ce1be9d3133b36bede59a741561  mockwebserver-4.12.0.jar
+          3cf6cd6892e32e2b4c1c39e0f52f5248a2f5b37646fdfbb79a66b46b618414ed  json-20240303.jar
+          8e495b634469d64fb8acfa3495a065cbacc8a0fff55ce1e31007be4c16dc57d3  junit-4.13.2.jar
+          66fdef91e9739348df7a096aa384a5685f4e875584cce89386a7a47251c4d8e9  hamcrest-core-1.3.jar
+          CHECKSUMS
+      - name: Kotlin tests and Node to native Key boundary tests
+        run: bash dsh-go/tooling/test-native-model-broker.sh

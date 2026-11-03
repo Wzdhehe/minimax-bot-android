@@ -123,11 +123,16 @@ flutter {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    // JVM broker tests use real JSON; production uses Android's org.json.
+    testImplementation("org.json:json:20240303")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
 
     // .tar.xz support for the rootfs bundle.
     implementation("org.tukaani:xz:1.10")
+    // Apache-2.0: native-only streaming HTTPS with socket-level cancellation.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // 不打扰模式 (phone/background): a shell-uid privileged display via Shizuku or self-ADB.
     implementation("dev.rikka.shizuku:api:13.1.5")       // MIT

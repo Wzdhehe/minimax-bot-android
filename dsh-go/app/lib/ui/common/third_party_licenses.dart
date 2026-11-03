@@ -25,6 +25,7 @@ void registerThirdPartyLicenses() {
       LicenseEntryWithLineBreaks(<String>['Conscrypt'], '$_conscryptNotice\n$_apache2'),
       LicenseEntryWithLineBreaks(<String>['Bouncy Castle'], _bouncyCastle),
       LicenseEntryWithLineBreaks(<String>['XZ for Java'], _xzForJava0bsd),
+      LicenseEntryWithLineBreaks(<String>['OkHttp 4.12.0', 'Okio 3.6.0'], 'Copyright Square, Inc.\n\n$_apache2'),
       LicenseEntryWithLineBreaks(<String>['AndroidX WebKit'], _androidxWebkitNotice + _apache2),
       // flutter_webrtc's own MIT licence comes with its pub package; these are its NOTICE and
       // the native WebRTC it bundles.
