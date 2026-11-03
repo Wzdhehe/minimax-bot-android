@@ -36,6 +36,8 @@ bash dsh-go/tooling/test-native-model-broker.sh
 
 ### 仍需继续
 
+后续已补 file-only 的 `AgentIsolationClient` 与身份/请求关联装配，见 [T-Isolation 最新节](T-Isolation.md)。它未接 Node，也没有把 native Key/模型 descriptor 交给 isolated 端；不能把它当作模型 IPC transport 已完成。供应商 probe 后续提交 `19d487d` 的 GitHub native/host/scope 三组 CI 已实查全部 success，编号见总 HANDOFF。
+
 1. 原生组件的正式生命周期接入、可信 descriptor 私有传递、runtime 包与 Android Node 执行/隔离装配；不得为了打通流程而开启同 UID 任意 shell。
 2. 真实 provider/model 配置映射和 runtime 消息/工具调用协议，不得把 Key 写进 YAML/env，也不能把现有 Node probe 的 resolver 当作允许向 Node 交 Key 的方案。
 3. AndroidKeyStore、完整 Gradle/APK、真机 SSE/断网/取消/宿主销毁/独立 UID 与权限：**未验证**。JVM 测试不证明 Android 系统隔离，模拟 provider 不是真实 MiniMax API。

@@ -8,6 +8,7 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Message
 import android.os.Messenger
+import android.os.Process
 import java.io.File
 
 /**
@@ -24,9 +25,11 @@ class AgentBrokerService : Service() {
     private var broker: WorkspaceBroker? = null
     private lateinit var messenger: Messenger
     private var thread: HandlerThread? = null
+    private lateinit var gate: IsolationSessionGate
 
     override fun onCreate() {
         super.onCreate()
+        gate = IsolationSessionGate(Process.myUid())
         val workspace = File(filesDir, "workspace")
         if (!workspace.exists()) workspace.mkdirs()
         broker = try {
@@ -36,7 +39,9 @@ class AgentBrokerService : Service() {
         }
         val worker = HandlerThread("mbot-agent-broker").apply { start() }
         thread = worker
-        messenger = Messenger(Handler(worker.looper, Handler.Callback { message -> handle(message) }))
+        messenger = Messenger(Handler(worker.looper, Handler.Callback { message ->
+            try { handle(message) } catch (_: RuntimeException) { true }
+        }))
     }
 
     override fun onBind(intent: Intent?): IBinder = messenger.binder
@@ -48,18 +53,38 @@ class AgentBrokerService : Service() {
     }
 
     private fun handle(message: Message): Boolean {
+        if (message.what == IsolationWire.MSG_REGISTER) {
+            val data = message.data
+            val code = gate.register(message.sendingUid, data.getInt(IsolationWire.KEY_AGENT_UID, -1),
+                data.getString(IsolationWire.KEY_SESSION))
+            val reply = Message.obtain(null, IsolationWire.MSG_REGISTERED)
+            reply.data = BrokerCodec.encodeResponse(BrokerResponse(code == BrokerResponse.OK, code)).apply {
+                putString(IsolationWire.KEY_SESSION, data.getString(IsolationWire.KEY_SESSION))
+            }
+            try { message.replyTo?.send(reply) } catch (_: android.os.RemoteException) { }
+            return true
+        }
+        if (message.what == IsolationWire.MSG_REVOKE) {
+            gate.revoke(message.sendingUid, message.data.getString(IsolationWire.KEY_SESSION))
+            return true
+        }
         if (message.what != IsolationWire.MSG_BROKER_REQUEST) return false
         val data = message.data
+        val id = data.getString(IsolationWire.KEY_ID)
+        if (!validIsolationRequestId(id)) return true
         val request = BrokerCodec.decodeRequest(data)
         val response = when {
+            !gate.permits(message.sendingUid, data.getString(IsolationWire.KEY_SESSION)) -> BrokerResponse.error(BrokerResponse.UNAUTHORIZED)
             request == null -> BrokerResponse.error(BrokerResponse.UNSUPPORTED_OP)
             broker == null -> BrokerResponse.error(BrokerResponse.BROKER_UNAVAILABLE)
             else -> broker!!.handle(request)
         }
         val reply = Message.obtain(null, IsolationWire.MSG_BROKER_RESPONSE)
-        reply.data = BrokerCodec.encodeResponse(response)
-        reply.replyTo = message.replyTo
-        message.replyTo?.send(reply)
+        reply.data = BrokerCodec.encodeResponse(boundedIsolationResponse(response)).apply {
+            putString(IsolationWire.KEY_ID, id)
+            putString(IsolationWire.KEY_SESSION, data.getString(IsolationWire.KEY_SESSION))
+        }
+        try { message.replyTo?.send(reply) } catch (_: android.os.RemoteException) { }
         return true
     }
 }

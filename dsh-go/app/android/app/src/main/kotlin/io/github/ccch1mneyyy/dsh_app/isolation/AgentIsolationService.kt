@@ -10,102 +10,136 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
+import android.os.RemoteException
 
-/**
- * Agent execution placeholder running in an **isolated process** (`android:isolatedProcess`
- * in the manifest).
- *
- * The system gives this process its own UID: it holds none of the app's permissions, has no
- * network access and cannot read the app's private `filesDir`. The only capability it can
- * reach is the main-process broker, handed to it as a Messenger at init time, and that
- * broker only serves path-guarded workspace files.
- *
- * It is a placeholder, not the Agent runtime: it executes a file task by asking the broker
- * and relaying the answer. No shell, no exec, no credential.
- */
+/** Isolated-process IPC placeholder, not an embedded Agent runtime. No code,
+ * shell or credential operation exists. UID/permission behavior needs a device. */
 class AgentIsolationService : Service() {
-
     private lateinit var handler: Handler
-    private var brokerMessenger: Messenger? = null
-    private val pending = ConcurrentHashMap<Int, Messenger>()
-    private val nextId = AtomicInteger(1)
+    private var broker: Messenger? = null
+    private var session: String? = null
+    private val pending = mutableMapOf<String, Pending>()
+    private class Pending(val host: Messenger, val timeout: Runnable)
+    private var brokerDeath: IBinder.DeathRecipient? = null
 
     override fun onCreate() {
         super.onCreate()
-        handler = Handler(Looper.getMainLooper(), Handler.Callback { message -> handle(message) })
+        handler = Handler(Looper.getMainLooper(), Handler.Callback { message ->
+            try { handle(message) } catch (_: Exception) { true }
+        })
     }
-
     override fun onBind(intent: Intent?): IBinder = Messenger(handler).binder
+    override fun onDestroy() { reset(); super.onDestroy() }
 
     private fun handle(message: Message): Boolean {
+        // ApplicationInfo names the owning package's UID, while Process.myUid
+        // is isolated here. Never trust a caller UID placed in Bundle fields.
+        if (message.sendingUid != applicationInfo.uid) return true
+        val data = message.data
+        val nonce = data.getString(IsolationWire.KEY_SESSION)
         when (message.what) {
             IsolationWire.MSG_INIT -> {
-                brokerMessenger = readBroker(message.data)
-                message.replyTo?.send(Message.obtain(null, IsolationWire.MSG_READY))
-                return true
+                val accepted = nonce != null && nonce.matches(Regex("[0-9a-f]{64}")) &&
+                    (session == null || session == nonce)
+                if (accepted) {
+                    val channel = readBroker(data)
+                    if (channel != null) {
+                        if (broker?.binder != channel.binder) {
+                            brokerDeath?.let { broker?.binder?.unlinkToDeath(it, 0) }
+                            val expected = channel.binder
+                            val callback = IBinder.DeathRecipient {
+                                handler.post { if (broker?.binder == expected) reset() }
+                            }
+                            channel.binder.linkToDeath(callback, 0)
+                            brokerDeath = callback
+                        }
+                        broker = channel
+                        session = nonce
+                    }
+                }
+                val reply = Message.obtain(null, IsolationWire.MSG_READY)
+                reply.data = BrokerCodec.encodeResponse(BrokerResponse(
+                    accepted && broker != null, if (accepted && broker != null) BrokerResponse.OK else BrokerResponse.BUSY
+                )).apply { putString(IsolationWire.KEY_SESSION, nonce) }
+                try { message.replyTo?.send(reply) } catch (_: RemoteException) { }
             }
-            IsolationWire.MSG_TASK -> {
-                startTask(message)
-                return true
-            }
-            IsolationWire.MSG_BROKER_RESPONSE -> {
-                finishTask(message)
-                return true
-            }
+            IsolationWire.MSG_REVOKE -> if (nonce == session) reset()
+            IsolationWire.MSG_TASK -> if (nonce == session) startTask(message)
+            IsolationWire.MSG_BROKER_RESPONSE -> if (nonce == session) finishTask(message)
             else -> return false
         }
+        return true
     }
 
-    /** The broker channel arrives as a Parcelable Messenger; nothing else crosses over. */
-    private fun readBroker(data: Bundle?): Messenger? {
-        if (data == null) return null
-        return if (Build.VERSION.SDK_INT >= 33) {
-            data.getParcelable(IsolationWire.KEY_BROKER, Messenger::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            data.getParcelable(IsolationWire.KEY_BROKER) as? Messenger
-        }
+    private fun readBroker(data: Bundle): Messenger? = if (Build.VERSION.SDK_INT >= 33) {
+        data.getParcelable(IsolationWire.KEY_BROKER, Messenger::class.java)
+    } else {
+        @Suppress("DEPRECATION")
+        data.getParcelable(IsolationWire.KEY_BROKER) as? Messenger
     }
 
     private fun startTask(message: Message) {
         val data = message.data
-        val op = BrokerOp.fromWire(data?.getString(IsolationWire.KEY_OP))
-        val broker = brokerMessenger
-        val host = message.replyTo
-        if (op == null || broker == null) {
-            val failure = BrokerResponse.error(
-                if (op == null) BrokerResponse.UNSUPPORTED_OP else BrokerResponse.BROKER_UNAVAILABLE
-            )
-            replyToHost(host, null, failure)
-            return
+        val id = data.getString(IsolationWire.KEY_ID)
+        val host = message.replyTo ?: return
+        if (!validIsolationRequestId(id)) return
+        val request = BrokerCodec.decodeRequest(data)
+        val channel = broker
+        val failure = when {
+            pending.containsKey(id) || pending.size >= 32 -> BrokerResponse.BUSY
+            request == null -> BrokerResponse.UNSUPPORTED_OP
+            channel == null -> BrokerResponse.BROKER_UNAVAILABLE
+            else -> null
         }
-        val id = nextId.getAndIncrement()
-        if (host != null) pending[id] = host
-        val request = Message.obtain(null, IsolationWire.MSG_BROKER_REQUEST)
-        request.data = Bundle().apply {
-            putString(IsolationWire.KEY_ID, id.toString())
-            putString(IsolationWire.KEY_OP, op.wire)
-            putString(IsolationWire.KEY_PATH, data?.getString(IsolationWire.KEY_PATH) ?: "")
-            putString(IsolationWire.KEY_TEXT, data?.getString(IsolationWire.KEY_TEXT))
+        if (failure != null) { reply(host, id!!, BrokerResponse.error(failure)); return }
+        val timeout = Runnable {
+            pending.remove(id)?.let {
+                reply(it.host, id!!, BrokerResponse.error(if (request!!.op == BrokerOp.WRITE_FILE)
+                    BrokerResponse.OUTCOME_UNKNOWN else BrokerResponse.TIMEOUT))
+            }
         }
-        request.replyTo = Messenger(handler)
-        broker.send(request)
+        pending[id!!] = Pending(host, timeout)
+        handler.postDelayed(timeout, 15_000)
+        val forwarded = Message.obtain(null, IsolationWire.MSG_BROKER_REQUEST)
+        forwarded.data = Bundle().apply {
+            putString(IsolationWire.KEY_SESSION, session)
+            putString(IsolationWire.KEY_ID, id)
+            putString(IsolationWire.KEY_OP, request!!.op.wire)
+            putString(IsolationWire.KEY_PATH, request.path)
+            putString(IsolationWire.KEY_TEXT, request.text)
+        }
+        forwarded.replyTo = Messenger(handler)
+        try { channel!!.send(forwarded) } catch (_: RemoteException) {
+            pending.remove(id)
+            handler.removeCallbacks(timeout)
+            reply(host, id, BrokerResponse.error(if (request!!.op == BrokerOp.WRITE_FILE)
+                BrokerResponse.OUTCOME_UNKNOWN else BrokerResponse.BROKER_UNAVAILABLE))
+        }
     }
 
     private fun finishTask(message: Message) {
-        val id = message.data?.getString(IsolationWire.KEY_ID)?.toIntOrNull()
-        val host = id?.let { pending.remove(it) }
-        replyToHost(host, id, BrokerCodec.decodeResponse(message.data))
+        val id = message.data.getString(IsolationWire.KEY_ID) ?: return
+        val task = pending.remove(id) ?: return
+        handler.removeCallbacks(task.timeout)
+        reply(task.host, id, BrokerCodec.decodeResponse(message.data))
     }
-
-    private fun replyToHost(host: Messenger?, id: Int?, response: BrokerResponse) {
-        val reply = Message.obtain(null, IsolationWire.MSG_TASK_RESULT)
-        reply.data = BrokerCodec.encodeResponse(response).apply {
-            id?.let { putString(IsolationWire.KEY_ID, it.toString()) }
+    private fun reply(host: Messenger, id: String, response: BrokerResponse) {
+        val result = Message.obtain(null, IsolationWire.MSG_TASK_RESULT)
+        result.data = BrokerCodec.encodeResponse(response).apply {
+            putString(IsolationWire.KEY_ID, id)
+            putString(IsolationWire.KEY_SESSION, session)
         }
-        reply.replyTo = host
-        host?.send(reply)
+        try { host.send(result) } catch (_: RemoteException) { }
+    }
+    private fun reset() {
+        pending.toMap().forEach { (id, task) ->
+            handler.removeCallbacks(task.timeout)
+            reply(task.host, id, BrokerResponse.error(BrokerResponse.OUTCOME_UNKNOWN))
+        }
+        pending.clear()
+        try { brokerDeath?.let { broker?.binder?.unlinkToDeath(it, 0) } } catch (_: Exception) { }
+        brokerDeath = null
+        broker = null
+        session = null
     }
 }

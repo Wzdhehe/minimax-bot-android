@@ -1,5 +1,32 @@
 # T-Isolation 交接（独立 UID + broker 最小实证）
 
+## 最新同分支续写：IPC 客户端、身份与请求关联
+
+在 `feat/t-plugins@19d487d` 上继续，未新建分支。**这是代码层装配，不是 Android 设备上的隔离实证；以下历史段落的“没有 AgentIsolationClient/身份校验”已被当前源码覆盖。**
+
+- 增加 `AgentIsolationClient`：可信主进程分别 bind 两个私有服务，带随机会话凭据进行 INIT → READY → broker REGISTER → REGISTERED 握手；只在 ready 的回复 UID 与主进程不同、broker 注册成功后完成 connect future。UID 取 Android Messenger 的 `sendingUid`，不采信正文 UID；isolated 服务只接收所属 App UID 发来的控制消息。
+- 增加纯 Kotlin `IsolationSessionGate`：只有主进程 owner 能注册一个独立 UID + 会话；未注册、错误 UID、错误/旧凭据均拒绝；不同会话不能抢占当前租约，旧 revoke 不能撤销新租约。**测试使用数值 UID 模拟策略，不证明 Android 的实际 sendingUid 或 isolatedProcess 行为。**
+- 修好旧 broker 响应缺失 KEY_ID 的实际缺陷：现在任务 ID/会话贯穿 host → isolated → broker → isolated → host，异步结果能匹配正确 future；无效 ID、重复/过多在途请求有限制。
+- 增加启动/任务超时、ServiceConnection disconnect/null/death 处理与显式 close；pending 最多 32。broker binder 死亡时 isolated 清空待处理任务；旧 binder 的迟到 death 回调不重置不同的新 binder。控制消息不携带 Key/模型 descriptor，没有任何 exec/shell 或权限扩展。
+- 失败或超时写入返回 `OUTCOME_UNKNOWN`，不承诺未写入、不自动重试；读超时返回 TIMEOUT。close 只撤销会话/解绑，不承诺同步停止 Android 进程；请求已入队的文件写不承诺能回滚。
+- 为 Binder 保守限制输入/文本回复至 256 KiB、目录条目至 1000 且 128 KiB 预算；超限返回 TOO_LARGE，不截断后冒充完整结果。更大文件以后走 FD/分块协议。底层路径守卫的 TOCTOU/hardlink 缺口没有因此消失。
+- 新增设备用例 `AgentIsolationClientTest`：真实 bind、观测 UID 不同、读写结果关联、拒绝 `../shared_prefs`、close 后拒绝请求。**未验证：没有设备/模拟器/adb，该仪器测试未运行、也未单独编译为 APK。**
+
+### 本次实际验证
+
+同一 `tooling/test-native-model-broker.sh` 扩展覆盖 isolation 纯策略：**JUnit 20 passed**（模型 broker 6、原工作区 10、新会话策略 4）+ Node→Kotlin 跨进程 **5 passed**。API36 android.jar 下独立编译 isolation 全部主源码和 JVM 测试源码通过；scope **4 passed**。不是 Gradle/APK，也不证明 Context/Binder 生命周期。CI 增加 isolation 路径触发和这些纯测试。
+
+本环境实查：有约 8 GiB 可用内存，root 分区约 1.6 GiB 可用，独立 `/tmp` 约 4.7 GiB；没有 `/dev/kvm`、adb、完整 SDK/NDK 或模拟器。**没有启动设备，不写设备结论。**
+
+### 仍然阻塞正式 runtime 的事情
+
+1. 真机验证握手来源 UID、私有服务可绑定性、拒绝外部调用、解绑/宿主死亡/isolated 回收，执行新增仪器用例；不能只凭纯 gate 测试开放执行。
+2. 当前 isolated 端依旧是文件任务占位，不是 Node。Android 隔离进程不继承 App 的网络权限，不能假定它能访问 native loopback HTTP；需验证预连接 FD/Binder 等受控 transport，以及 Node/.so/JS bundle 在该 UID 下的加载方式。
+3. 不得为了绕开这点，将带任意 Agent/插件执行能力的 Node 临时放回主 App UID；也不得把 native Key 或 native 会话 descriptor 直接塞入 Agent 文件/环境。
+4. 路径 TOCTOU、hardlink、调用者/Bot 的更细粒度授权、任务取消与真实 runtime/模型桥仍需继续；此客户端没有新增传统 Agent 工作台 UI。
+
+## 先前实现记录（历史）
+
 基线：`feat/t-plugins`。本卡只做**代码层**最小实证：Android `isolatedProcess` 服务 + 主进程 broker + 可在宿主机 JVM 上跑通的路径守卫单测。
 
 ## 改了什么

@@ -11,6 +11,9 @@ object IsolationWire {
     const val MSG_BROKER_REQUEST = 4
     const val MSG_BROKER_RESPONSE = 5
     const val MSG_TASK_RESULT = 6
+    const val MSG_REGISTER = 7
+    const val MSG_REGISTERED = 8
+    const val MSG_REVOKE = 9
 
     const val KEY_OP = "op"
     const val KEY_PATH = "path"
@@ -20,6 +23,8 @@ object IsolationWire {
     const val KEY_CODE = "code"
     const val KEY_ENTRIES = "entries"
     const val KEY_BROKER = "broker"
+    const val KEY_SESSION = "session"
+    const val KEY_AGENT_UID = "agent_uid"
 }
 
 /**

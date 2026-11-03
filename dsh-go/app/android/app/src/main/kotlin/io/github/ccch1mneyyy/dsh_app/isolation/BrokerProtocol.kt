@@ -45,6 +45,10 @@ data class BrokerResponse(
         const val IO_ERROR = "IO_ERROR"
         const val UNSUPPORTED_OP = "UNSUPPORTED_OP"
         const val BROKER_UNAVAILABLE = "BROKER_UNAVAILABLE"
+        const val UNAUTHORIZED = "UNAUTHORIZED"
+        const val BUSY = "BUSY"
+        const val TIMEOUT = "TIMEOUT"
+        const val OUTCOME_UNKNOWN = "OUTCOME_UNKNOWN"
 
         fun error(code: String) = BrokerResponse(ok = false, code = code)
         fun text(value: String) = BrokerResponse(ok = true, code = OK, text = value)
