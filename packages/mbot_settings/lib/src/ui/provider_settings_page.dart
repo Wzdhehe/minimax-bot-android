@@ -4,8 +4,9 @@ import '../providers/provider_contract.dart';
 
 class MbotProviderSettingsPage extends StatefulWidget {
   const MbotProviderSettingsPage(
-      {super.key, required this.port, this.testProvider});
+      {super.key, required this.port, this.testProvider, this.usagePage});
   final MbotProviderPort port;
+  final WidgetBuilder? usagePage;
   final Future<Map<String, Object?>> Function(String id, String model)?
       testProvider;
   @override
@@ -220,6 +221,12 @@ class _MbotProviderSettingsPageState extends State<MbotProviderSettingsPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('账号与模型'), actions: [
+          if (widget.usagePage != null)
+            IconButton(
+                tooltip: '账号用量',
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute<void>(builder: widget.usagePage!)),
+                icon: const Icon(Icons.data_usage)),
           IconButton(
               key: const Key('mbot.provider.add'),
               tooltip: '添加供应商',

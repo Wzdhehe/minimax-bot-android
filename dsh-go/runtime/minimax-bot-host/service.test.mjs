@@ -17,7 +17,7 @@ test('authenticates the actual Bot listener and rotates credentials on restart',
   let service = await startBotService(options);
   t.after(async () => { await service.dispose(); await rm(dataDir, { recursive: true, force: true }); });
   const { baseUrl, headers } = service.descriptor;
-  for (const path of ['/api/state', '/api/events', '/bot', '/mcp']) {
+  for (const path of ['/api/state', '/api/events', '/api/usage-quota', '/bot', '/mcp']) {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 403);
     await response.text();
@@ -40,6 +40,8 @@ test('authenticates the actual Bot listener and rotates credentials on restart',
   const fresh = await fetch(`${baseUrl}/api/state`, { headers: service.descriptor.headers });
   assert.equal(fresh.status, 200);
   await fresh.text();
+  const quota = await fetch(`${baseUrl}/api/usage-quota`, { headers: service.descriptor.headers });
+  assert.deepEqual(await quota.json(), { signedIn: false });
 });
 
 test('authenticated provider probe reaches the broker without keys in its HTTP contract', async (t) => {
@@ -57,7 +59,11 @@ test('authenticated provider probe reaches the broker without keys in its HTTP c
       return Response.json({ choices: [{ message: { content: 'OK' } }] });
     },
   });
-  const service = await startBotService({ port, dataDir, filesDir: dataDir, providerBroker, signal: new AbortController().signal, logger: { info() {}, warn() {}, error() {} } });
+  const getUsageQuota = async ({ forceRefresh }) => {
+    assert.equal(forceRefresh, true);
+    return { signedIn: true, planName: 'M Plan', accessToken: 'must-stay-private', quota: { fiveHour: { usedPercent: 17 }, weekly: { usedPercent: 32 } } };
+  };
+  const service = await startBotService({ port, dataDir, filesDir: dataDir, providerBroker, getUsageQuota, signal: new AbortController().signal, logger: { info() {}, warn() {}, error() {} } });
   t.after(async () => { await service.dispose(); await rm(dataDir, { recursive: true, force: true }); });
   const post = (body, authorized = true) => fetch(`${service.descriptor.baseUrl}/api/providers/test`, {
     method: 'POST', headers: { ...(authorized ? service.descriptor.headers : {}), 'content-type': 'application/json' }, body: JSON.stringify(body),
@@ -71,4 +77,6 @@ test('authenticated provider probe reaches the broker without keys in its HTTP c
   assert.equal(anonymous.status, 403);
   await anonymous.text();
   assert.equal(requests, 1);
+  const quota = await fetch(`${service.descriptor.baseUrl}/api/usage-quota?refresh=true`, { headers: service.descriptor.headers });
+  assert.deepEqual(await quota.json(), { signedIn: true, planName: 'M Plan', quota: { fiveHour: { usedPercent: 17, unlimited: false }, weekly: { usedPercent: 32, unlimited: false } } });
 });

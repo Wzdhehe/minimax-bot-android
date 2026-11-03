@@ -35,6 +35,8 @@ node --test agent-port.test.mjs service.test.mjs workspace.test.mjs provider-bro
 
 ## 下一步必须补齐
 
+真实 CI 补记：`4c88198` 的 [宿主/协议检查](https://github.com/Wzdhehe/minimax-bot-android/actions/runs/41551612068)、[设置集成](https://github.com/Wzdhehe/minimax-bot-android/actions/runs/41551612131) 和 [源码 scope](https://github.com/Wzdhehe/minimax-bot-android/actions/runs/41551612320) 已通过 GitHub API 实查为 completed/success。仍不含 Android APK/Keystore 仪器验收。
+
 1. native→可信宿主的私有 bridge 尚未实现。当前 broker 的 resolver 在测试中为模拟函数；不能通过新增 Flutter「读 Key」方法、写明文 YAML 或将 Key 塞进 Agent 环境来接通。
 2. WebUI BYOK provider/model 管理、模型 ID 映射与实际会话 resolver 尚未接入。本机生成的 provider UUID 不能直接当成 WebUI 的 `custom_provider:<key>`；需要明确映射。全局默认值也尚未同步到各 Bot。
 3. 新目录当前只覆盖自定义 API provider；MiniMax OAuth 账号租约不在这里，不能拿 API Key 充当 T-Usage 的登录态。高级自定义请求头、OAuth 编辑和模型发现未实现。

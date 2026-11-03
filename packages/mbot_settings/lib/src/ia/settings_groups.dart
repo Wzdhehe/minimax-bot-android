@@ -21,6 +21,7 @@ enum MbotSettingsGroupId {
 enum MbotSettingsItemId {
   // accountAndModel
   providers,
+  usageQuota,
   apiKey,
   baseUrl,
   defaultModel,
@@ -177,6 +178,7 @@ abstract final class MbotSettingsIa {
       kind: MbotSettingsEntryKind.placeholder,
       items: [
         MbotSettingsItemId.providers,
+        MbotSettingsItemId.usageQuota,
         MbotSettingsItemId.apiKey,
         MbotSettingsItemId.baseUrl,
         MbotSettingsItemId.defaultModel,

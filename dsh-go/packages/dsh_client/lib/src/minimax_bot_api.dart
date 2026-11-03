@@ -101,6 +101,8 @@ class MiniMaxBotApi {
 
   Future<Map<String, Object?>> state() => _request('GET', '/api/state');
   Future<Map<String, Object?>> models() => _request('GET', '/api/models');
+  Future<Map<String, Object?>> usageQuota({bool forceRefresh = false}) =>
+      _request('GET', '/api/usage-quota', query: {'refresh': '$forceRefresh'});
 
   /// Probes a native-stored provider by id; never accepts a saved key.
   Future<Map<String, Object?>> testProvider(String providerId, String modelId) async {

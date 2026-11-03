@@ -110,7 +110,7 @@ function chatReferences(messages, src) {
 
 /**
  * @param {MiniAppContext} context
- * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean, resolveMediaPath?: (path: string) => Promise<string>, testProvider?: (id: string, model: string) => Promise<{ok: boolean, code?: string, status?: number}> }} [hostOptions]
+ * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean, resolveMediaPath?: (path: string) => Promise<string>, testProvider?: (id: string, model: string) => Promise<{ok: boolean, code?: string, status?: number}>, getUsageQuota?: (force: boolean) => Promise<object> }} [hostOptions]
  * @returns {Promise<MiniAppLifecycle>}
  */
 export async function start(context, hostOptions = {}) {
@@ -531,6 +531,9 @@ export async function start(context, hostOptions = {}) {
     }
 
     if (method === 'GET' && path === '/api/state') return json(response, 200, snapshot());
+    if (method === 'GET' && path === '/api/usage-quota') {
+      return json(response, 200, hostOptions.getUsageQuota ? await hostOptions.getUsageQuota(url.searchParams.get('refresh') === 'true') : { signedIn: false });
+    }
 
     if (method === 'POST' && path === '/api/providers/test') {
       if (!hostOptions.testProvider) return json(response, 503, { ok: false, code: 'provider_unavailable' });

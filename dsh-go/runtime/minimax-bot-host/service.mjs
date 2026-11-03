@@ -2,10 +2,11 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { start } from '../vendor/minimax-bot/miniapp/node/server.mjs';
 import { createHostWorkspace } from './workspace.mjs';
+import { readUsageQuota } from './usage-quota.mjs';
 
 /** The descriptor belongs on a private Android host channel. This authenticates
  * HTTP requests; it does not isolate Agent code or provide model credentials. */
-export async function startBotService({ port, dataDir, filesDir, agent, providerBroker, signal, logger }) {
+export async function startBotService({ port, dataDir, filesDir, agent, providerBroker, getUsageQuota, signal, logger }) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError('A local port is required');
   const workspace = await createHostWorkspace(filesDir);
   const token = randomBytes(32).toString('hex');
@@ -17,6 +18,7 @@ export async function startBotService({ port, dataDir, filesDir, agent, provider
   }, {
     resolveMediaPath: (path) => workspace.resolve(path),
     testProvider: providerBroker ? (id, model) => providerBroker.testProvider(id, model) : undefined,
+    getUsageQuota: (forceRefresh) => readUsageQuota(getUsageQuota, forceRefresh),
     authorizeRequest(request) {
       if (request.headers.origin !== undefined || request.headers.host !== host) return false;
       const supplied = request.headers.authorization;
