@@ -2,6 +2,10 @@
 
 ## 本次续写：native provider broker
 
+**后续同分支推进：供应商测试也改为 native-only**。原 `provider-broker.mjs` 的 `resolveProvider -> apiKey -> Node fetch` 方案已删除，不能再把此文件当作允许 native 向 Node 交 Key 的接口。新 `createProviderBroker({ modelBroker })` 只调用 native 流，识别四种协议的文本输出后立即取消，以减少测试请求消耗；仅 role/usage 元数据不算成功，超时取消，不自动重试，错误白名单不带原异常。`startBotService({ modelBroker })` 自动装配该 probe，不再接收旧 providerBroker 参数。HTTP `/api/providers/test` 的用户端协议仍只收 IDs、返回状态。
+
+该后续阶段本地：probe/服务/Agent 相关 **12 passed**；完整 CI 同款宿主集合 **18 passed**；同一 Kotlin 脚本 **JUnit 6 + 跨进程 5 passed**，新增「鉴权设置 HTTP → Node probe → 真实 Kotlin broker → 模拟上游」并重新核对文件/日志无 Key。原生桥与 provider 仍为模拟环境，不能写成 Android 真机已装配。
+
 在远程 `feat/t-plugins@b7ca158` 上直接续写，未新建分支。用户先要求完成此项后停，随后明确改为继续按开发文档推进、及时推送阶段成果。协议范围由用户交由实现者判断：本阶段保持现有 `providerId/modelId/messages` 线协议，支持四种协议的**文本消息**与原始 JSON SSE，不扩展 tools/temperature 等高级参数；后续正式 runtime 接入时需要共同扩展两端。
 
 - `model/NativeModelBroker.kt`：main-process 组件，随机 native 会话 token、仅绑定 `127.0.0.1`，实现 `POST /v1/model/stream`。Host/Origin/auth、重复 header、body 大小、字段与消息结构均校验；不接受 Key/URL/请求头覆盖，没有文件、凭据读取或命令执行路由。最多 4 个并发 worker + 8 个排队连接，读取超时、SSE 帧大小和上游 call 总时长有限制。
@@ -35,7 +39,7 @@ bash dsh-go/tooling/test-native-model-broker.sh
 1. 原生组件的正式生命周期接入、可信 descriptor 私有传递、runtime 包与 Android Node 执行/隔离装配；不得为了打通流程而开启同 UID 任意 shell。
 2. 真实 provider/model 配置映射和 runtime 消息/工具调用协议，不得把 Key 写进 YAML/env，也不能把现有 Node probe 的 resolver 当作允许向 Node 交 Key 的方案。
 3. AndroidKeyStore、完整 Gradle/APK、真机 SSE/断网/取消/宿主销毁/独立 UID 与权限：**未验证**。JVM 测试不证明 Android 系统隔离，模拟 provider 不是真实 MiniMax API。
-4. 新增 CI 在阶段 push 后需观察真实结果；本地通过不等于 GitHub runner 已通过。
+4. `fad4f3d` 新增 native CI **41586158979 success**、scope **41586158832 success** 已实查。旧 host CI **41586158827 failure** 是 agent-port 测试删临时 messages 目录遇到 ENOTEMPTY：上游 dispose 等待的 writeChain 是快照，后续收尾写仍可能入队。只给测试目录删除增加有限 retry，不重试模型请求，也不宣称生产 shutdown/drain 已修好；正式生命周期接入时仍需可等待的 turn/任务收敛。
 
 ## 先前已落地（host/Node 侧，历史）
 

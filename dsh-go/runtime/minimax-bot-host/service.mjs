@@ -3,12 +3,16 @@ import { fileURLToPath } from 'node:url';
 import { start } from '../vendor/minimax-bot/miniapp/node/server.mjs';
 import { createHostWorkspace } from './workspace.mjs';
 import { readUsageQuota } from './usage-quota.mjs';
+import { createProviderBroker } from './provider-broker.mjs';
 
 /** The descriptor belongs on a private Android host channel. This authenticates
  * HTTP requests; it does not isolate Agent code or provide model credentials. */
-export async function startBotService({ port, dataDir, filesDir, agent, providerBroker, getUsageQuota, signal, logger }) {
+export async function startBotService({ port, dataDir, filesDir, agent, modelBroker, getUsageQuota, signal, logger }) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError('A local port is required');
   const workspace = await createHostWorkspace(filesDir);
+  // Provider probes use the same native stream capability as model calls.
+  // No resolver returning plaintext credentials is accepted by this wrapper.
+  const providerBroker = modelBroker ? createProviderBroker({ modelBroker }) : undefined;
   const token = randomBytes(32).toString('hex');
   const credential = Buffer.from(`Bearer ${token}`);
   const host = `127.0.0.1:${port}`;

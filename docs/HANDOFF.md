@@ -2,6 +2,8 @@
 
 **本次最新进展**：直接从远程 `feat/t-plugins@b7ca158` 续写 native Kotlin provider broker（未新建分支）；四类文本协议、SSE、socket 取消、native Key 回显防护已实现，JUnit 6 + 跨进程 4 + 宿主回归 19 + scope 4 通过。Key 防泄露测试的假 Key 只在 native JVM 生成，检查 runtime descriptor/env/log/Agent 可读文件。正式启动/配置同步/Android 设备验证仍待完成，见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。用户最新要求持续按文档开发、阶段 push，覆盖了之前“只做一项就停”的限制。
 
+**进一步进展**：设置页供应商 probe 的 Node 持 Key/直连旧方案已删除，服务只接受 `modelBroker` 流能力，经 native 完成请求；首个文本输出后取消、超时不重试，跨进程验证增加到 **5 passed**（加 JUnit 6、宿主 CI 集合 18）。native 阶段提交 `fad4f3d` 的 GitHub native CI **41586158979 success**、scope **41586158832 success**；旧 host CI 在临时目录删除遇到竞态，测试清理已加有限 retry，生产 shutdown/drain 未因此宣称完成。
+
 用户要求额度结束前推送代码、维护文档，方便其他 Agent 接手。本文件优先描述当前状态；`DEVELOPMENT.md` 下面较旧的逐轮记录只作历史，不能据此判断 App 已完成。
 
 ## 从哪里继续

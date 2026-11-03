@@ -58,7 +58,13 @@ test('official Bot service can send two turns through the agent port', async (t)
     logger: { info() {}, warn() {}, error() {} },
     agent: createBotAgentPort({ agent: gateway, caller: { pluginId: 'builtin-bot', runId: 'registered-run' } }),
   });
-  t.after(async () => { await app.dispose(); await rm(dataDir, { recursive: true, force: true }); });
+  t.after(async () => {
+    await app.dispose();
+    // The upstream engine may append a final persistence task after dispose's
+    // writeChain snapshot. Retry only fixture deletion, not model mutations.
+    // This does not establish that production shutdown drains every turn.
+    await rm(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  });
   const base = `http://127.0.0.1:${portNumber}`;
   const state = await (await fetch(`${base}/api/state`)).json();
   const chat = `bot:${state.bots[0].id}`;

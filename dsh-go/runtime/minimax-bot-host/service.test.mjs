@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { startBotService } from './service.mjs';
-import { createProviderBroker } from './provider-broker.mjs';
 
 test('authenticates the actual Bot listener and rotates credentials on restart', async (t) => {
   const dataDir = await mkdtemp(join(tmpdir(), 'bot-auth-'));
@@ -51,19 +50,20 @@ test('authenticated provider probe reaches the broker without keys in its HTTP c
   const port = probe.address().port;
   await new Promise((resolve, reject) => probe.close((error) => error ? reject(error) : resolve()));
   let requests = 0;
-  const providerBroker = createProviderBroker({
-    resolveProvider: async (id) => id === 'p1' ? { enabled: true, apiFormat: 'openai-completions', baseUrl: 'https://example.com/v1', models: ['model'], apiKey: 'host-only-secret' } : undefined,
-    fetchImpl: async (_, options) => {
-      requests++;
-      assert.equal(options.headers.authorization, 'Bearer host-only-secret');
-      return Response.json({ choices: [{ message: { content: 'OK' } }] });
-    },
-  });
+  const modelBroker = {
+      async stream({ providerId, modelId, onEvent, signal }) {
+        requests++;
+        assert.equal(providerId, 'p1');
+        assert.equal(modelId, 'model');
+        onEvent({ choices: [{ delta: { content: 'OK' } }] });
+        assert.equal(signal.aborted, true);
+      },
+  };
   const getUsageQuota = async ({ forceRefresh }) => {
     assert.equal(forceRefresh, true);
     return { signedIn: true, planName: 'M Plan', accessToken: 'must-stay-private', quota: { fiveHour: { usedPercent: 17 }, weekly: { usedPercent: 32 } } };
   };
-  const service = await startBotService({ port, dataDir, filesDir: dataDir, providerBroker, getUsageQuota, signal: new AbortController().signal, logger: { info() {}, warn() {}, error() {} } });
+  const service = await startBotService({ port, dataDir, filesDir: dataDir, modelBroker, getUsageQuota, signal: new AbortController().signal, logger: { info() {}, warn() {}, error() {} } });
   t.after(async () => { await service.dispose(); await rm(dataDir, { recursive: true, force: true }); });
   const post = (body, authorized = true) => fetch(`${service.descriptor.baseUrl}/api/providers/test`, {
     method: 'POST', headers: { ...(authorized ? service.descriptor.headers : {}), 'content-type': 'application/json' }, body: JSON.stringify(body),

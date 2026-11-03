@@ -1,5 +1,7 @@
 # T-Providers 阶段一交接（2026-11-03）
 
+**当前源码更新**：本文保留最初阶段记录。后续同一 `feat/t-plugins` 分支已实现 Kotlin native model broker，并**删除** Node probe 的 `resolveProvider/apiKey/fetch` 旧方案。现在 `createProviderBroker({ modelBroker })` 与 `startBotService({ modelBroker })` 只走 native 流，Node 不拿 Key；详见 [T-RuntimeBroker](T-RuntimeBroker.md)。不要按下文旧 probe 描述恢复 Node 读 Key。正式 Android 启动、provider/model 同步及设备验收仍未完成。
+
 分支 `feat/t-providers`，基于 `feat/t-settings@1e4b97e`，包含之前已推送的 T-Sandbox/T-Settings 进展。`main` 与 `dev/integration` 保持不动，无 PR。**整张 T-Providers 尚未完成，不能把本阶段当作 runtime 已接通。**
 
 ## 已实现

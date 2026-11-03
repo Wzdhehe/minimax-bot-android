@@ -7,9 +7,11 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
+import { createServer } from 'node:net';
 import { test } from 'node:test';
 import { BrokerError, createModelBrokerClient, startModelProxy } from './model-broker.mjs';
 import { buildRuntimeEnv, createRuntimeDescriptor, writeRuntimeDescriptor } from './runtime-descriptor.mjs';
+import { startBotService } from './service.mjs';
 
 const classpath = process.env.MBOT_NATIVE_CLASSPATH;
 const exec = promisify(execFile);
@@ -150,4 +152,32 @@ test('native blocks echoed/escaped keys, provider bodies, redirects and secret-b
   const report = await s.report();
   assert.equal(report.artifactsSafe, true);
   assert.equal(report.logsSafe, true);
+});
+
+test('authenticated settings probe uses the real native stream without a Node credential resolver', options, async (t) => {
+  const s = await stack(t);
+  const probe = createServer();
+  await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', resolve); });
+  const port = probe.address().port;
+  await new Promise((resolve, reject) => probe.close((error) => error ? reject(error) : resolve()));
+  const service = await startBotService({ port, dataDir: join(s.root, 'bot-data'), filesDir: s.root,
+    modelBroker: createModelBrokerClient(s.descriptor), signal: new AbortController().signal,
+    logger: { info() {}, warn() {}, error() {} },
+  });
+  try {
+    const response = await fetch(`${service.descriptor.baseUrl}/api/providers/test`, {
+      method: 'POST', headers: { ...service.descriptor.headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ providerId: 'native-provider', modelId: 'stream' }),
+    });
+    const result = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(result, { ok: true });
+    await writeFile(join(s.root, 'settings-probe-result.json'), JSON.stringify(result));
+    const report = await s.report();
+    assert.equal(report.keyInjected, true);
+    assert.equal(report.artifactsSafe, true);
+    assert.equal(report.logsSafe, true);
+  } finally {
+    await service.dispose();
+  }
 });
