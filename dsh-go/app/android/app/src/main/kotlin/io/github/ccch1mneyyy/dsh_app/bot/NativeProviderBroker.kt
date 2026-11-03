@@ -12,10 +12,11 @@ import io.github.ccch1mneyyy.dsh_app.model.NativeModelBroker
 internal class NativeProviderBroker(context: Context) : Closeable {
     private val store = BotProviderStore(context.applicationContext)
     private val broker = NativeModelBroker(resolveProvider = store::resolveForModelBroker)
+    private val channels = NativeModelChannels(broker.session)
     val session get() = broker.session
     /** Call off the UI thread. Only the returned per-request FD may be sent
      * to an isolated runtime; the receiver must close it on every exit path. */
-    fun openModelChannel(request: String): ParcelFileDescriptor = openNativeModelChannel(broker.session, request)
-    override fun close() = broker.close()
+    fun openModelChannel(request: String): ParcelFileDescriptor = channels.open(request)
+    override fun close() { channels.close(); broker.close() }
     override fun toString() = "NativeProviderBroker(REDACTED)"
 }

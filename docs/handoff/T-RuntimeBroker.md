@@ -1,5 +1,11 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+## 最新：Unix socketpair 兼容方案（矩阵待观察）
+
+因为 API26 的 direct TCP FD 发送失败，改为 **TCP始终留在主进程，只传 AF_UNIX socketpair 端点**。`NativeModelChannels` 是 native 生命周期 owner，最多4通道，每通道一个非阻塞 poll worker/32KiB缓冲；有界背压、单请求、对端任意输入/EOF取消、10分钟绝对截止、owner.close 全部 shutdown/close。不会把任何对端输入转发到已认证 TCP；无需新权限或同 UID Agent 执行。只传递响应能力而非网络连接能力。具体 SELinux根因仍待诊断 run，不能把兼容方案的合理性当作通过证据。
+
+新增容量/owner关闭、接收端持续持FD时的deadline仪器用例，加之前六项共八项。真实 Gradle `testDebugUnitTest assembleDebug assembleDebugAndroidTest`：**BUILD SUCCESSFUL in 1m 24s**，JVM27项通过；javap确认五项FD/探针方法均编入仪器class（另两项provider/一项fileIPC）。宿主 Node 加实际 Unix FD 继承场景，最终同一脚本 **JUnit27 + Node30 全过**。**新版API26/35设备矩阵尚待观察，物理真机与Android Node/JNI未验证。**
+
 ## 最新：Node 预连接 FD 消费与回调取消
 
 新增 `model-fd-client.mjs`：只消费已有连接 FD，不接收 endpoint/token/Key，不发起连接或写请求。解析有界 HTTP header、强制 native framing/SSE/DONE、字节计数64KiB队列，复用 fetch 路径同一 SSE 消费器；完成/错误/abort/绝对截止均 close。消费回调挂起时取消也能释放流（不能撤销回调内部已发生的副作用）。错误只用稳定代码。

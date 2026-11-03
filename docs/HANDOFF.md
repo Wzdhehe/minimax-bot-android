@@ -1,5 +1,7 @@
 # 最新接手入口（2026-11-03）
 
+**当前候选传输**：native 主进程保留 TCP，向隔离端只传 Unix socketpair 端点；`NativeModelChannels` 最多4通道，每通道单 poll worker/32KiB缓冲，支持容量拒绝、取消、截止与owner关闭。新增仪器用例共八项已编译，API26/35新矩阵待观察。宿主 **JVM27 + Node30 全过**（含真实 Unix FD），组件 Gradle **BUILD SUCCESSFUL in 1m 24s**。不能提前说26兼容已解决。
+
 **最新 FD 结果与后续**：Node FD 消费器、共有SSE消费和回调取消已实现；宿主脚本 **JVM27 + Node29 全过**，供应商/服务10、scope4通过。Android矩阵 `41602011149`：**API35六项成功，API26两项TCP FD传递失败（DeadObjectException）**，总体失败，仍须解决26兼容。API35才有直接文件/网络拒绝与FD流/取消实证，不等于已装入Node。下一步先诊断/修复26传输，再做Android Node/JNI与原生依赖。
 
 **最新 FD 通道**：可信 native 可创建单个已认证模型请求的预连接 FD；只移交 FD，不移交 native endpoint/token/Key。新增测试专用隔离探针，验证直接文件/网络拒绝、通过 Binder 接收 FD 的真实 broker SSE、关闭 FD 取消停滞 provider。六项仪器测试已编译，API26/35 CI 待观察。组件 Gradle **BUILD SUCCESSFUL in 1m 30s**，JVM27项通过。Node FD 消费、runtime 加载、工具协议和正式生命周期仍未接；见 [T-RuntimeBroker 首节](handoff/T-RuntimeBroker.md)。

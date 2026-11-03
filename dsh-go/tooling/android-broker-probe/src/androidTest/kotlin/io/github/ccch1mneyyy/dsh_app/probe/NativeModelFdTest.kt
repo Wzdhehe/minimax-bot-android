@@ -14,9 +14,11 @@ import android.os.Messenger
 import android.os.Process
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.ccch1mneyyy.dsh_app.bot.openNativeModelChannel
+import io.github.ccch1mneyyy.dsh_app.bot.NativeModelChannels
 import io.github.ccch1mneyyy.dsh_app.model.NativeModelBroker
 import io.github.ccch1mneyyy.dsh_app.model.NativeProvider
+import io.github.ccch1mneyyy.dsh_app.model.ModelBrokerCode
+import io.github.ccch1mneyyy.dsh_app.model.ModelBrokerFailure
 import io.github.ccch1mneyyy.dsh_app.model.ProviderCall
 import io.github.ccch1mneyyy.dsh_app.model.ProviderResponse
 import io.github.ccch1mneyyy.dsh_app.model.ProviderTransport
@@ -74,21 +76,23 @@ class NativeModelFdTest {
             }
         }
         NativeModelBroker({ _, _ -> NativeProvider("openai-completions", "https://example.com/v1", secret) }, transport).use { broker ->
-            ProbeConnection(context).use { probe ->
-                val response = openNativeModelChannel(broker.session, request).use { channel ->
-                    // send() has duplicated the FD into Binder before the
-                    // sender's close. Keep no owner copy alive after transfer.
-                    probe.request(IsolationBoundaryProbeService.READ_CHANNEL, Bundle().apply { putParcelable("channel", channel) })
-                }.get(10, TimeUnit.SECONDS)
-                assertNotEquals(Process.myUid(), response.uid)
-                assertTrue(response.data.getBoolean("ok"))
-                val text = response.data.getString("text")!!
-                assertTrue(injected.get())
-                assertTrue(text.startsWith("HTTP/1.1 200 OK"))
-                assertTrue(text.contains("hello"))
-                assertTrue(text.contains("data: [DONE]"))
-                assertFalse(text.contains(secret))
-                assertFalse(text.contains(broker.session.token))
+            NativeModelChannels(broker.session).use { channels ->
+                ProbeConnection(context).use { probe ->
+                    val response = channels.open(request).use { channel ->
+                        // send() has duplicated the FD into Binder before the
+                        // sender's close. Keep no owner copy alive after transfer.
+                        probe.request(IsolationBoundaryProbeService.READ_CHANNEL, Bundle().apply { putParcelable("channel", channel) })
+                    }.get(10, TimeUnit.SECONDS)
+                    assertNotEquals(Process.myUid(), response.uid)
+                    assertTrue(response.data.getBoolean("ok"))
+                    val text = response.data.getString("text")!!
+                    assertTrue(injected.get())
+                    assertTrue(text.startsWith("HTTP/1.1 200 OK"))
+                    assertTrue(text.contains("hello"))
+                    assertTrue(text.contains("data: [DONE]"))
+                    assertFalse(text.contains(secret))
+                    assertFalse(text.contains(broker.session.token))
+                }
             }
         }
     }
@@ -107,18 +111,64 @@ class NativeModelFdTest {
             }
         }
         NativeModelBroker({ _, _ -> NativeProvider("openai-completions", "https://example.com/v1", "test-only") }, transport).use { broker ->
-            ProbeConnection(context).use { probe ->
-                val reply = openNativeModelChannel(broker.session, request).use { channel ->
-                    assertTrue(opened.await(3, TimeUnit.SECONDS))
-                    probe.request(IsolationBoundaryProbeService.READ_CHANNEL, Bundle().apply {
-                        putParcelable("channel", channel)
-                        putBoolean("prefix_only", true)
-                    })
-                }.get(10, TimeUnit.SECONDS)
-                assertTrue(reply.data.getBoolean("ok"))
-                assertNotEquals(Process.myUid(), reply.uid)
-                assertTrue("isolated close did not cancel upstream", cancelled.await(3, TimeUnit.SECONDS))
+            NativeModelChannels(broker.session).use { channels ->
+                ProbeConnection(context).use { probe ->
+                    val reply = channels.open(request).use { channel ->
+                        assertTrue(opened.await(3, TimeUnit.SECONDS))
+                        probe.request(IsolationBoundaryProbeService.READ_CHANNEL, Bundle().apply {
+                            putParcelable("channel", channel)
+                            putBoolean("prefix_only", true)
+                        })
+                    }.get(10, TimeUnit.SECONDS)
+                    assertTrue(reply.data.getBoolean("ok"))
+                    assertNotEquals(Process.myUid(), reply.uid)
+                    assertTrue("isolated close did not cancel upstream", cancelled.await(3, TimeUnit.SECONDS))
+                }
             }
+        }
+    }
+
+    @Test fun ownerCloseAndCapacityLimitBoundNativeModelChannels() {
+        val opened = CountDownLatch(1)
+        val cancelled = CountDownLatch(1)
+        NativeModelBroker({ _, _ -> NativeProvider("openai-completions", "https://example.com/v1", "test-only") },
+            stalledTransport(opened, cancelled)).use { broker ->
+            NativeModelChannels(broker.session, maxChannels = 1).use { channels ->
+                channels.open(request).use {
+                    assertTrue(opened.await(3, TimeUnit.SECONDS))
+                    try { channels.open(request).close(); fail("capacity limit bypassed") }
+                    catch (error: ModelBrokerFailure) { assertEquals(ModelBrokerCode.UNAVAILABLE, error.code) }
+                    channels.close()
+                    assertTrue(cancelled.await(3, TimeUnit.SECONDS))
+                    try { channels.open(request).close(); fail("closed channel owner accepted a request") }
+                    catch (error: ModelBrokerFailure) { assertEquals(ModelBrokerCode.UNAVAILABLE, error.code) }
+                }
+            }
+        }
+    }
+
+    @Test fun channelDeadlineCancelsAProviderWhileTheReceiverKeepsItsFdOpen() {
+        val opened = CountDownLatch(1)
+        val cancelled = CountDownLatch(1)
+        NativeModelBroker({ _, _ -> NativeProvider("openai-completions", "https://example.com/v1", "test-only") },
+            stalledTransport(opened, cancelled)).use { broker ->
+            NativeModelChannels(broker.session, timeoutMs = 500).use { channels ->
+                channels.open(request).use {
+                    assertTrue(opened.await(3, TimeUnit.SECONDS))
+                    assertTrue("channel deadline did not cancel provider", cancelled.await(3, TimeUnit.SECONDS))
+                }
+            }
+        }
+    }
+
+    private fun stalledTransport(opened: CountDownLatch, cancelled: CountDownLatch) = ProviderTransport {
+        opened.countDown()
+        object : ProviderCall {
+            override fun execute() = ProviderResponse(200, "text/event-stream", object : InputStream() {
+                override fun read(): Int { cancelled.await(10, TimeUnit.SECONDS); return -1 }
+            })
+            override fun cancel() { cancelled.countDown() }
+            override fun close() { cancelled.countDown() }
         }
     }
 

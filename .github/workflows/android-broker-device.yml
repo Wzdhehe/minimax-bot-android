@@ -78,7 +78,7 @@ jobs:
               for case in suite.findall('testcase'):
                   print(case.get('classname') + '.' + case.get('name'))
           print(totals)
-          assert totals['tests'] >= 6, 'Expected production boundary and FD probe tests'
+          assert totals['tests'] >= 8, 'Expected production boundary and FD lifecycle tests'
           assert totals['failures'] == totals['errors'] == totals['skipped'] == 0
           PY
       - name: Save device test XML only (never APKs or signing files)

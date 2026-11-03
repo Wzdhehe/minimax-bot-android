@@ -29,10 +29,12 @@ Validated on the development host: AGP 9.1.0 / Gradle 9.3.1 / Temurin 21.0.13,
 platform 36 / Build Tools 36.0.0. `testDebugUnitTest` ran 27 tests with zero
 failures/errors/skips; both debug and instrumentation APKs assembled. The
 compiled manifest retains private services and `isolatedProcess=true`.
-The separate `android-broker-device.yml` workflow runs six instrumentation
+The separate `android-broker-device.yml` workflow runs eight instrumentation
 tests on Android 26 and 35 emulators. The additional private isolated probe
 service exists only in this verification APK, not in the product manifest. This adds device execution to the compilation
 workflow; configuration alone does not prove a pass. Android 35 baseline run `41600336727` passed its three original tests.
-The six-test FD/boundary matrix is pending observation. Physical-device
+The first six-test direct TCP FD matrix passed on API35 but failed two FD
+transfers on API26. The current eight-test matrix uses a bounded Unix socketpair
+relay and adds owner-close/capacity/deadline checks; results are pending. Physical-device
 checks remain unverified. See the latest root
 `docs/handoff/T-RuntimeBroker.md` for the recorded limits.

@@ -17,7 +17,7 @@ const helper = fileURLToPath(new URL('./model-fd-reader.helper.mjs', import.meta
 
 /** A trusted parent authenticates once, then only inherits the connected FD.
  * This is real Node TCP/FD/SSE behavior, not Android/JNI/SELinux evidence. */
-async function run(response, mode = '', { split = false } = {}) {
+async function run(response, mode = '', { split = false, unix = false } = {}) {
   const session = 'parent-only-session-capability';
   let authenticated = false;
   let upstream;
@@ -41,9 +41,12 @@ async function run(response, mode = '', { split = false } = {}) {
       }
     });
   });
-  server.listen(0, '127.0.0.1');
+  const directory = unix ? mkdtempSync(join(tmpdir(), 'mbot-fd-unix-')) : null;
+  const socketPath = directory && join(directory, 'model.sock');
+  if (unix) server.listen(socketPath);
+  else server.listen(0, '127.0.0.1');
   await once(server, 'listening');
-  const owner = connect(server.address().port, '127.0.0.1');
+  const owner = unix ? connect(socketPath) : connect(server.address().port, '127.0.0.1');
   owner.on('error', () => {});
   await once(owner, 'connect');
   owner.pause();
@@ -71,11 +74,18 @@ async function run(response, mode = '', { split = false } = {}) {
     clearTimeout(watchdog);
     child.kill(); owner.destroy(); upstream?.destroy();
     await new Promise((resolve) => server.close(resolve));
+    if (directory) rmSync(directory, { recursive: true, force: true });
   }
 }
 
 test('preconnected FD consumes split HTTP/SSE and awaits each callback', { timeout: 8000 }, async () => {
   const result = await run(ok + frames, 'slow-events', { split: true });
+  assert.equal(result.code, 'done');
+  assert.deepEqual(result.events, [{ delta: 'first' }, { delta: 'second' }]);
+});
+
+test('the same reader consumes an inherited Unix socket FD without a path or endpoint', { timeout: 8000 }, async () => {
+  const result = await run(ok + frames, '', { unix: true });
   assert.equal(result.code, 'done');
   assert.deepEqual(result.events, [{ delta: 'first' }, { delta: 'second' }]);
 });
