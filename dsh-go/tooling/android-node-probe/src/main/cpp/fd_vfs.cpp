@@ -17,7 +17,6 @@ constexpr const char* root = "/mbot-data";
 struct Entry { int fd; bool sidecar; };
 std::map<std::string, Entry> files;
 std::mutex gate;
-int directory = -1;
 sqlite3_vfs adapter{};
 bool registered = false;
 using OpenFunction = int(*)(const char*, int, int);
@@ -45,8 +44,7 @@ int open_file(const char* path, int flags, int) {
   if (path && std::strcmp(path, "/dev/urandom") == 0 && (flags & O_ACCMODE) == O_RDONLY &&
       !(flags & (O_CREAT | O_EXCL | O_TRUNC | O_DIRECTORY))) return original_open(path, flags, 0);
   if (path && std::strcmp(path, root) == 0) {
-    if ((flags & O_ACCMODE) != O_RDONLY) return denied();
-    return fcntl(directory, F_DUPFD_CLOEXEC, 3);
+    return denied(); // A virtual namespace, never a physical directory grant.
   }
   const auto found = files.find(key(path));
   if (found == files.end()) return denied();
@@ -61,7 +59,10 @@ int open_file(const char* path, int flags, int) {
 }
 int stat_file(const char* path, struct stat* info) {
   std::lock_guard<std::mutex> lock(gate);
-  if (path && std::strcmp(path, root) == 0) return fstat(directory, info);
+  if (path && std::strcmp(path, root) == 0) {
+    std::memset(info, 0, sizeof(*info)); info->st_mode = S_IFDIR | 0700; info->st_nlink = 1;
+    return 0;
+  }
   const auto found = files.find(key(path));
   if (found == files.end() || !exists(found->second)) return denied(ENOENT);
   return fstat(found->second.fd, info);
@@ -84,7 +85,12 @@ int unlink_file(const char* path) {
   if (!(name.size() >= 4 && (name.compare(name.size()-4, 4, "-wal") == 0 || name.compare(name.size()-4, 4, "-shm") == 0)) &&
       !(name.size() >= 8 && name.compare(name.size()-8, 8, "-journal") == 0)) return denied();
   if (ftruncate(found->second.fd, 0) != 0) return -1;
-  return 0;
+  // A logical deletion is a file-size change, not an actual unlink. SQLite's
+  // subsequent directory sync cannot persist this truncate: sync the data FD
+  // itself before reporting successful removal of a journal/WAL/SHM sidecar.
+  int result;
+  do { result = fsync(found->second.fd); } while (result < 0 && errno == EINTR);
+  return result;
 }
 int full_path(sqlite3_vfs*, const char* path, int length, char* output) {
   const auto name = key(path);
@@ -95,15 +101,28 @@ int full_path(sqlite3_vfs*, const char* path, int length, char* output) {
   std::memcpy(output, result.c_str(), result.size()+1);
   return SQLITE_OK;
 }
+int no_directory(const char*, int* fd) {
+  // The owner durably creates all physical entries before FD handoff. During
+  // this lease only fixed inodes/lengths change, never directory membership.
+  // unixSync explicitly permits CANTOPEN here after it syncs the data file.
+  *fd = -1; errno = EACCES; return SQLITE_CANTOPEN;
+}
+int delete_precreated(sqlite3_vfs*, const char* path, int) {
+  // A logical delete is a truncate+file fsync, performed by unlink_file.
+  // There is no physical directory entry to remove/sync inside the isolate.
+  if (unlink_file(path) == 0) return SQLITE_OK;
+  return errno == ENOENT ? SQLITE_IOERR_DELETE_NOENT : SQLITE_IOERR_DELETE;
+}
 }  // namespace
 
 // One immutable registry per process. Takes duplicates, never caller ownership.
 // The trusted owner must grant only data files and terminate the isolated
 // process on lease revocation: closing an owner copy cannot revoke a dup FD.
-extern "C" int mbot_register_fd_vfs(int dir_fd, const char* const* names, const int* descriptors, int count) {
+// Precondition: trusted owner has fsynced each precreated file and its containing
+// directory; it must not rename/unlink/replace these inodes while leased.
+extern "C" int mbot_register_precreated_fd_vfs(const char* const* names, const int* descriptors, int count) {
   if (registered || count < 4 || count > 16 || !names || !descriptors) return SQLITE_MISUSE;
   struct stat info{};
-  if (fstat(dir_fd, &info) != 0 || !S_ISDIR(info.st_mode)) return SQLITE_MISUSE;
   std::map<std::string, Entry> staged;
   std::set<std::pair<dev_t, ino_t>> inodes;
   for (int i = 0; i < count; ++i) {
@@ -130,18 +149,17 @@ extern "C" int mbot_register_fd_vfs(int dir_fd, const char* const* names, const 
   struct Hook { const char* name; sqlite3_syscall_ptr function; sqlite3_syscall_ptr previous; };
   Hook hooks[] = {{"open", reinterpret_cast<sqlite3_syscall_ptr>(open_file), nullptr},
     {"stat", reinterpret_cast<sqlite3_syscall_ptr>(stat_file), nullptr}, {"lstat", reinterpret_cast<sqlite3_syscall_ptr>(stat_file), nullptr},
-    {"access", reinterpret_cast<sqlite3_syscall_ptr>(access_file), nullptr}, {"unlink", reinterpret_cast<sqlite3_syscall_ptr>(unlink_file), nullptr}};
+    {"access", reinterpret_cast<sqlite3_syscall_ptr>(access_file), nullptr}, {"unlink", reinterpret_cast<sqlite3_syscall_ptr>(unlink_file), nullptr},
+    {"openDirectory", reinterpret_cast<sqlite3_syscall_ptr>(no_directory), nullptr}};
   for (auto& hook : hooks) {
     hook.previous = original->xGetSystemCall(original, hook.name);
     if (!hook.previous) { for (const auto& entry : staged) close(entry.second.fd); return SQLITE_NOTFOUND; }
   }
-  directory = fcntl(dir_fd, F_DUPFD_CLOEXEC, 3);
-  if (directory < 0) { for (const auto& entry : staged) close(entry.second.fd); return SQLITE_CANTOPEN; }
   files.swap(staged);
   auto rollback = [&]() {
     for (const auto& hook : hooks) original->xSetSystemCall(original, hook.name, hook.previous);
     for (const auto& entry : files) close(entry.second.fd);
-    files.clear(); close(directory); directory = -1;
+    files.clear();
   };
   for (const auto& hook : hooks) {
     const int result = original->xSetSystemCall(original, hook.name, hook.function);
@@ -151,6 +169,7 @@ extern "C" int mbot_register_fd_vfs(int dir_fd, const char* const* names, const 
   adapter.zName = "mbot-fd-prototype";
   adapter.pNext = nullptr;
   adapter.xFullPathname = full_path;
+  adapter.xDelete = delete_precreated;
   const int result = sqlite3_vfs_register(&adapter, 1);
   if (result == SQLITE_OK) registered = true;
   else rollback();

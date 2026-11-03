@@ -119,9 +119,9 @@ jint Start(JNIEnv* env, jobject owner, jstring script, jint normal, jint stalled
       "mbot-node-probe", "--no-warnings", "-e", ReadString(env, script),
       std::to_string(normal), std::to_string(stalled), std::to_string(echo),
       std::to_string(result), ReadString(env, private_path), ReadString(env, native_dir), ReadString(env, provider_id)};
-  if (env->ExceptionCheck() || !data_fds || env->GetArrayLength(data_fds) != 5) return -1;
-  jint descriptors[5];
-  env->GetIntArrayRegion(data_fds, 0, 5, descriptors);
+  if (env->ExceptionCheck() || !data_fds || env->GetArrayLength(data_fds) != 4) return -1;
+  jint descriptors[4];
+  env->GetIntArrayRegion(data_fds, 0, 4, descriptors);
   if (env->ExceptionCheck()) return -1;
   for (int fd : descriptors) { if (fd < 3) return -1; args.push_back(std::to_string(fd)); }
   size_t size = 0;

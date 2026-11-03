@@ -1,6 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Isolated Android Node verification
 
+The current persistence candidate hands off four precreated regular data FDs.
+The owner syncs the files and directory before handoff; no directory FD crosses
+Binder. Sidecar deletion syncs its truncated file, while the physical directory
+entries remain immutable. The earlier five-FD candidate failed at Main's IPC
+send on API26/35 before SQLite ran; the four-FD candidate still needs device
+validation. See [T-Persistence](../../../docs/handoff/T-Persistence.md) for evidence,
+preconditions and the limits of this verification target.
+
 This is a separate instrumentation target with no launcher, not a product runtime.
 It embeds a pinned Node24 candidate in a private `isolatedProcess` service, runs
 one fixed APK script, and consumes production native model channels. Only fake

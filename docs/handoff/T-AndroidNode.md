@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
-> 最新覆盖：b2a32b5/run41693324311 的 FD VFS 验收在 API26/35 均失败，不能视为 WAL/持久化通过。e983424/run41695986670、56390d7/run41698083995 也失败且未取得阶段码；补有限状态artifact元数据通道（19项Python检查过，CI待观察）；续写补XML正文解析/测试行号与新PID干净重启用例（本地APK40s成功、宿主跨进程通过，Android未验证）；详情以 [T-Persistence](T-Persistence.md) 与总 [HANDOFF](../HANDOFF.md) 为准。旧段的“待CI”只记实现当时，不能覆盖后续证据。
+> 最新覆盖：6605508/run41700450899两版本有限artifact元数据均ipc-l252，定位到Main向隔离服务Messenger.send失败，SQLite尚未执行。新候选移除目录FD交接，Main先同步预创建目录项、只交四普通文件FD，Android待验证。以 [T-Persistence](T-Persistence.md) 和 [HANDOFF](../HANDOFF.md) 为准；下文5FD/待CI只记当时实现。
 
 ## full-ICU产物复用入口（待端到端验收）
 
@@ -11,7 +11,7 @@ Node源码构建耗时很长，候选验收workflow现在支持复用已成功�
 
 17项Python检查通过（新增5项覆盖source authority/非法ID不触网/fork等拒绝/未完成producer拒绝/recipe或workflow变更拒绝）。**source产物下载/组合设备验收仍未验证**，当前producer尚未完成；过期/缺失artifact应失败，不能假造SHA。原source job的旧verify仅验它当时commit的固定脚本，不能代替当前SQLite/WAL组合测试。
 
-## 当前：文件FD VFS验收（设备待CI）
+## 历史：五FD VFS候选（IPC失败，四FD候选见顶部）
 
 Main给临时非敏感数据文件/目录的五个FD；JNI传到Node，SQLite addon注册受控VFS，先关输入别名再开文件DB。固定脚本增加WAL、并行只读连接、写入、关闭重开和完整性；Main检查实际文件与无Key。最后APK3m42s成功，JNI/SQLite重编及host1/input8通过；**执行待CI，不是正式持久化/跨进程重启已完成**。原模型链路用例保留。详见T-Persistence。
 

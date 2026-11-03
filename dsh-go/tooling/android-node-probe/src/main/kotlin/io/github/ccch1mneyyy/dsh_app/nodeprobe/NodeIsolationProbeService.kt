@@ -59,7 +59,7 @@ class NodeIsolationProbeService : Service() {
         val data = message.data
         val reply = message.replyTo ?: return
         val id = data.getString("id") ?: return
-        val fds = listOf("normal", "stalled", "echo", "result", "db", "wal", "shm", "journal", "directory").map { descriptor(data, it) }
+        val fds = listOf("normal", "stalled", "echo", "result", "db", "wal", "shm", "journal").map { descriptor(data, it) }
         val privatePath = data.getString("privatePath")
         val host = data.getBinder("model_host")
         val session = data.getString("model_session")

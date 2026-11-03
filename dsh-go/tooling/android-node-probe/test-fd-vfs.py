@@ -31,7 +31,7 @@ def run(archive=None, ndk=None, node_probe=False):
         executable = stage / 'probe'
         adapter = ROOT / 'src/main/cpp/fd_vfs.cpp'
         subprocess.run(['g++', '-std=c++20', '-O0', '-I', str(sqlite), str(adapter), str(ROOT / 'test-fd-vfs.cpp'),
-                        str(obj), '-ldl', '-lpthread', '-lm', '-o', str(executable)], check=True)
+                        str(obj), '-Wl,--wrap=fsync', '-ldl', '-lpthread', '-lm', '-o', str(executable)], check=True)
         subprocess.run([str(executable)], check=True)
         if node_probe:
             # Same verified addon instrumentation, wrapper and Android-prepared

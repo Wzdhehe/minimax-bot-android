@@ -55,7 +55,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
           jsonValue: db.prepare("SELECT json_extract('{\"v\":7}', '$.v') AS v").get().v };
       } finally { restored.close(); }
     } finally { db.close(); }
-    if (dataFds.length === 5) {
+    if (dataFds.length === 4) {
       probePhase = 'vfs_register';
       addon.exports.setFdVfs(...dataFds);
       // Remove input aliases before SQLite creates locks; registry owns dup FDs.
@@ -127,7 +127,8 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
 })().catch((error) => {
   const codes = new Set(['SQLITE_CANTOPEN', 'SQLITE_IOERR', 'SQLITE_IOERR_SHMOPEN', 'SQLITE_BUSY', 'SQLITE_READONLY',
     'SQLITE_ERROR', 'SQLITE_PERM', 'SQLITE_MISUSE', 'SQLITE_NOTFOUND', 'fd_vfs_unavailable', 'fd_vfs_input_invalid']);
-  const code = codes.has(error?.code) ? error.code : codes.has(error?.message) ? error.message : 'unknown';
+  const code = codes.has(error?.code) ? error.code : codes.has(error?.message) ? error.message :
+    error?.message === 'Cannot open database because the directory does not exist' ? 'sqlite_parent_missing' : 'unknown';
   try {
     const resultFd = Number(process.argv.slice(1)[3]);
     fs.writeSync(resultFd, JSON.stringify({ failedPhase: probePhase, failureCode: code }));

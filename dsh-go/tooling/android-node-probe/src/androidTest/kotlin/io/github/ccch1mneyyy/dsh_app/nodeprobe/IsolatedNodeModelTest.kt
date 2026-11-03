@@ -63,10 +63,13 @@ class IsolatedNodeModelTest {
         var previousPid = -1
         try {
             dataFiles.forEach { dataDescriptors.add(ParcelFileDescriptor.open(it, ParcelFileDescriptor.MODE_READ_WRITE)) }
+            // Fixed physical entries remain owned by Main for the whole lease.
+            // Sync their creation here; the isolate receives no directory FD.
+            dataDescriptors.forEach { Os.fsync(it.fileDescriptor) }
             val directoryFd = Os.open(dataDirectory.absolutePath, OsConstants.O_RDONLY, 0)
             try {
                 check((Os.fstat(directoryFd).st_mode and OsConstants.S_IFMT) == OsConstants.S_IFDIR)
-                dataDescriptors.add(ParcelFileDescriptor.dup(directoryFd))
+                Os.fsync(directoryFd)
             } finally { Os.close(directoryFd) }
             store.save(mapOf("name" to "Node test", "baseUrl" to "https://example.invalid/v1",
                 "apiFormat" to "openai-completions", "models" to listOf("normal", "stalled", "echo"), "key" to secret))
@@ -120,7 +123,7 @@ class IsolatedNodeModelTest {
                                     putBinder("model_host", host); putString("model_session", host.session); putString("providerId", providerId)
                                     putParcelable("normal", modelFds[0]); putParcelable("stalled", modelFds[1])
                                     putParcelable("echo", modelFds[2]); putParcelable("result", resultPair[1])
-                                    listOf("db", "wal", "shm", "journal", "directory").forEachIndexed { i, name -> putParcelable(name, dataDescriptors[i]) }
+                                    listOf("db", "wal", "shm", "journal").forEachIndexed { i, name -> putParcelable(name, dataDescriptors[i]) }
                                 }
                                 assertFalse(data.toString().contains(secret))
                                 val completion = probe.run(data)
@@ -149,7 +152,7 @@ class IsolatedNodeModelTest {
                                     val phases = setOf("bootstrap", "sqlite_load", "sqlite_memory", "vfs_register", "vfs_open", "vfs_wal",
                                         "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "model_dynamic", "sdk_route")
                                     val codes = setOf("SQLITE_CANTOPEN", "SQLITE_IOERR", "SQLITE_IOERR_SHMOPEN", "SQLITE_BUSY", "SQLITE_READONLY",
-                                        "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid")
+                                        "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "sqlite_parent_missing")
                                     val phase = report.optString("failedPhase").takeIf { it in phases } ?: "unknown"
                                     val code = report.optString("failureCode").takeIf { it in codes } ?: "unknown"
                                     fail("node_probe_failed_at_${phase}_code_${code}")

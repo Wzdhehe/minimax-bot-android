@@ -1,6 +1,6 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
-> e03b997/run41686820725的SDK route矩阵已API实查API26/35 success；以下待CI是实现当轮状态。正式resolver/启动器仍未接；FD VFS 首轮 Android 41693324311 已失败，不能称持久化已解决。当前重点定位该失败，详见 [T-Persistence](T-Persistence.md)。
+> e03b997/run41686820725的SDK route矩阵已API实查API26/35 success；以下待CI是实现当轮状态。正式resolver/启动器仍未接；FD VFS 的6605508/41700450899已定位Main含目录FD的IPC发送失败，SQLite未执行，不能称持久化已解决。当前四普通文件FD候选待验证，详见 [T-Persistence](T-Persistence.md)。
 
 ## SDK路由接JNI binding
 

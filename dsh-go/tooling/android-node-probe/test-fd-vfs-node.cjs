@@ -14,9 +14,9 @@ if (mode === 'child') {
   assert.ok(start >= 0 && end > start);
   const run = new Function('require', 'fs', 'sqliteWrapper', 'nativeLibraryDir', 'dataFdArgs',
     "let probePhase = 'bootstrap';\n" + source.slice(start, end) + '\nreturn { sqlite, persistent, pid: process.pid };');
-  // Descriptors 3..7 are the only granted data files/directory. The parent
+  // Descriptors 3..6 are the only granted data files. The parent
   // never opens SQLite, so its copies cannot release the child's POSIX locks.
-  const report = run(require, fs, fs.readFileSync(wrapper, 'utf8'), path.dirname(library), ['3', '4', '5', '6', '7']);
+  const report = run(require, fs, fs.readFileSync(wrapper, 'utf8'), path.dirname(library), ['3', '4', '5', '6']);
   process.stdout.write(JSON.stringify(report));
 } else {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'mbot-fd-vfs-node-'));
@@ -24,7 +24,9 @@ if (mode === 'child') {
   const fds = [];
   try {
     files.forEach((file) => fds.push(fs.openSync(file, 'w+')));
-    fds.push(fs.openSync(directory, 'r'));
+    fds.forEach((fd) => fs.fsyncSync(fd));
+    const directoryFd = fs.openSync(directory, 'r');
+    try { fs.fsyncSync(directoryFd); } finally { fs.closeSync(directoryFd); }
     let previousPid;
     for (let attempt = 0; attempt < 2; attempt++) {
       const report = JSON.parse(execFileSync(process.execPath, [__filename, library, wrapper, 'child'], {

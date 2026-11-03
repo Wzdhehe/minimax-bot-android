@@ -1,108 +1,84 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# T-Persistence：明确授予FD的SQLite VFS原型（2026-11-03）
+# T-Persistence：预创建数据FD的SQLite VFS（2026-11-03）
 
-**当前：验收APK已接入并编译，但首轮Android执行失败；产品runtime未接。**
+**当前是独立验收候选，不是正式产品runtime。新4文件FD候选尚未通过Android验证；不要把宿主成功写成Android成功。** 默认App仍DSH，没有完整mcode/官方Bot APK或物理真机/ARM64证据。
 
-## 诊断读取限制与下一步（最新覆盖）
+## 已拿到的实际失败位置
 
-56390d7/run41698083995现已API26/35均失败，Check API仍未取得任何Node阶段/行号。不能据此推断具体异常或说已修好SQLite；原始日志/XML本环境依然不能下载。新报告器补namespace、suite级failure、嵌套堆栈、有限exception类别，**总计19项Python检查通过**。还将仅由计数/白名单阶段或类别/数字行号组成的result_id写入GITHUB_OUTPUT，进入私有XML artifact的name；只读artifact元数据即可定位，即使Azure日志下载受限也不依赖日志正文。用例确认输出/元数据不含测试敏感哨兵。旧提取器为何没给出阶段尚未证实。
-
-看新run后先执行 `gh api repos/Wzdhehe/minimax-bot-android/actions/runs/<run-id>/artifacts --jq '.artifacts[]|{id,name}'`，再读取check annotations；根据有限结果定位，**不要继续猜目录FD/SELinux/SQLite错误**。该artifact metadata通道的真实CI执行仍待本次push，不冒充已取得设备结果。没有放宽Android权限、同UID执行或输出原始异常。
-
-## 宿主并发补验（Android仍待定位）
-
-test-fd-vfs.cpp新增独立只读进程的持有快照：先读两条，另一个进程写第三条，TRUNCATE checkpoint必须BUSY；写者关闭后读者仍读原两条，读者结束后新连接必须见三条且integrity=ok，接着保留原崩溃提交恢复（最终四条）。父/子用有界5秒pipe握手，子进程exec重置SQLite，父在fork前已无连接。避免仅用一个进程的双连接就声称跨进程WAL生命周期正确。
-
-再次执行同一 `test-fd-vfs.py --archive ... --ndk ... --node-probe`，实际输出：
+6605508 / run **41700450899** 的两份artifact元数据：
 
 ```text
-PASS: FD VFS WAL, multiple connections, external writer lock, external reader snapshot/checkpoint contention, rollback, reopen, crash recovery, integrity and ungranted-path refusal
-PASS: exact APK SQLite block, addon and FD VFS preserve data across independent host Node processes; not Android evidence
-PASS: Android API26/x86_64 VFS object compilation only; not Android execution
+API26: node-candidate-results-api-26-t1-f1-e0-s0-ipc-l252
+API35: node-candidate-results-api-35-t1-f1-e0-s0-ipc-l252
 ```
 
-这不是物理真机或Android并发验收；Android仍先看56390d7/run41698083995的有限阶段/行号。full-ICU产物复用已在ee40005落地，producer41680254279仍未完成，不宣称已下载/组合验证。
+Check annotations也确认 `kind=ipc`、`IsolatedNodeModelTest.kt:252`（以及调用行126）。252是ProbeConnection.run的Messenger.send：**Main发送含目录FD的Bundle时失败，Node/SQLite尚未执行**。这不是已证实的WAL/SQLite报错。没有读取到SELinux原始拒绝，不能声称已拿到具体policy原因。
 
-## 续写：跨进程验收与XML诊断
+此前 b2a32b5/41693324311、e983424/41695986670、56390d7/41698083995、ee40005/41699206972 均API26/35失败。旧报告器没有给出可读取阶段；本环境下载Azure-backed日志/XML请求被拒绝，不能输出签名URL或猜异常。6605508才加入有限状态artifact name，突破读取限制。真实metadata ID：API26 `13263417778`、API35 `13262709762`。
 
-第二轮 e983424/run41695986670 的 API26/35 也失败，没有取得有限阶段码。下载日志和XML均被本环境的下载请求拒绝；没有读到原始异常，不能推断SELinux/SQLite的具体原因。发现提取器只读failure.message，未覆盖Android把堆栈放在XML正文的形式，现改为独立report-results.py，合并正文/属性私下匹配，仅输出固定phase/code及本测试行号；未知文本、env/响应/异常原文一律不输出。4项回归覆盖正文/属性、未知/敏感文本不输出、无结果拒绝、skipped拒绝；全部Python构建/报告检查共12项通过。
+既有前提仍成立：d7d65ad/run41683691783的明确授予**普通文件**FD读/写同步/截断/锁/RW映射和按私有路径open拒绝已API26/35通过；bc07b1c/run41663798958的隔离Node内存SQLite/模型/Key边界也通过。不能将普通文件FD的证据推广为目录FD可传递。
 
-固定脚本现在可重入同一数据：首次创建并写两条；第二个新进程必须读回原内容，不能靠重新造两条假装恢复。Android用例重复两次、unbind后等待旧Binder死亡，断言PID不同；每次继续检查Keystore/模型/流/取消/Key边界。两个APK本地离线构建实际输出：
+## 本阶段实现：目录始终留在Main
 
-```text
-BUILD SUCCESSFUL in 40s
-69 actionable tasks: 9 executed, 60 up-to-date
-```
+- Main预创建DB/WAL/SHM/journal四个专用非敏感文件，fsync四文件及其所在目录；只向隔离端传这**四个普通文件FD**，不传目录FD、真实数据路径、Key文件或任意目录解析接口。
+- Native/JNI/Node binding统一四数据FD。`mbot_register_precreated_fd_vfs` 明确要求可信owner已同步创建目录项，且整个lease期间不unlink/rename/替换这些物理inode。一个进程一次不可变注册；最多16个普通文件，Node验收binding固定四个。
+- SQLite仍使用原unix VFS的锁、inode、延迟close和SHM实现。公开xSetSystemCall拦截open/stat/lstat/access/unlink/openDirectory，xFullPathname只允许授予的虚拟basename，虚拟根/mbot-data不对应物理目录。未知路径/穿越拒绝，仅保留固定只读/dev/urandom熵源。
+- 运行期目录成员不变：sidecar存在与否来自实际文件大小，删除用truncate(0)模拟。**必须fsync该数据FD**才能报告逻辑删除成功；目录fsync不能代替文件长度持久化。xDelete只执行受控逻辑删除，原unixSync在完成文件同步后按其公开约定接受openDirectory的CANTOPEN；本lease没有需要隔离端同步的新目录项。
+- 文件sync的EINTR重试，EIO返回SQLite删除错误。此同步是代码契约修复，**没有物理断电验证**。截断不等于完整POSIX unlink/重建语义，不能据此切产品。
+- setFdVfs后、任何文件DB锁产生前关闭隔离进程内输入别名；registry拥有dup。SQLite活跃时关闭同inode任意别名会释放进程POSIX锁。Main只持owner副本，不在Main开SQLite连接。
 
-宿主新增可重复执行的 `--node-probe`：从同一摘要验证的tar编译真正Node addon（复用prepare-sqlite的唯一入口插入函数），用准备好的同源wrapper/Node headers运行APK源码中精确SQLite块；两个独立进程共享Main样式owner持有的五FD。只作宿主ABI/持久化证据，不是Android隔离。
+prepare-sqlite仍从摘要钉死的better-sqlite3 12.11.1 tar提取，唯一NODE_MODULE_INIT入口插入独立AGPL binding调用，原tar/vendor不改；adapter/修改后addon/headers摘要入build-inputs。MIT、SQLite public domain及adapter AGPL声明随验收assets保留，不提交二进制。
+
+## 验证与边界
+
+实际执行：
 
 ```bash
 python3 dsh-go/tooling/android-node-probe/test-fd-vfs.py \
   --archive /tmp/mbot-sqlite-reference/better-sqlite3-12.11.1.tgz \
   --ndk /tmp/mbot-ndk27d --node-probe
+python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_*.py' -v
+node --test dsh-go/tooling/android-node-probe/probe-bundle.test.mjs
 ```
 
-实际输出：
+新4FD候选宿主输出：
 
 ```text
-PASS: FD VFS WAL, multiple connections, external writer lock, rollback, reopen, crash recovery, integrity and ungranted-path refusal
+PASS: FD VFS WAL, multiple connections, external writer lock, external reader snapshot/checkpoint contention, delete sync failure/retry, rollback, reopen, crash recovery, integrity and ungranted-path refusal
 PASS: exact APK SQLite block, addon and FD VFS preserve data across independent host Node processes; not Android evidence
 PASS: Android API26/x86_64 VFS object compilation only; not Android execution
 ```
 
-host固定模型脚本1项、scope4项也通过。**本版Android跨进程执行未验证；先看新CI的有限阶段码/行号修复首个失败，不切产品**。目录同步、真实lease/backup/完整FS与物理真机/ARM64仍未验证。
+C++用同源SQLite和defines.gypi，覆盖独立writer锁、关闭一个连接不能丢锁、另一个只读进程持快照时写入/关闭且checkpoint必须BUSY、读者快照保持、随后新连接见提交、独立进程提交后直接_exit不checkpoint的WAL恢复，以及integrity_check恰好一行ok、未授予路径不创建、拒绝目录冒充普通文件。所有子进程exec重置SQLite状态；父fork前无连接。owner同步创建，目录设CLOEXEC，不给子进程目录能力。
 
-## 当前Android候选
+只在宿主测试可执行文件中用GNU ld --wrap=fsync注入EIO/EINTR，验证删除错误传递/重试；wrapper不进入Android或Node addon。Node host检查使用同一instrument_addon、同源wrapper/准备后的headers及APK源码中精确SQLite块，两个新PID共享四普通文件FD，第二个必须读回原数据。不是重新造数据假装恢复。
 
-SQLite addon增加独立AGPL fd_vfs_node binding；prepare-sqlite从固定tar提取后，仅按唯一NODE_MODULE_INIT入口插入注册调用，再链接适配器。原tar不改，改后addon/两个adapter摘要入build-inputs，MIT/SQLite声明及适配器AGPL许可证都进验收assets。没有改vendor快照或提交二进制。
-
-Main只创建临时非敏感DB/WAL/SHM/journal和专用目录，明确授予五个FD；JNI只传整数数组，不给隔离端物理路径。setFdVfs成功后先关闭输入别名，再创建任何文件DB连接。固定脚本配置WAL、验证同时只读连接、写事务、关闭重开与integrity_check；owner检查实际文件已写入且不含随机测试Key。原模型/SDK/大请求/内存SQLite/Key断言保留。
-
-本地实际准备：JNI和带VFS的SQLite addon编译成功；host1/input拒绝8通过。最后两个APK：
+Python检查19项通过（source/archive/ABI拒绝、有限XML/metadata不泄露、source artifact authority）；固定模型脚本1项通过。新四FD的JNI/SQLite重编及两个APK构建成功，原始输出：
 
 ```text
-BUILD SUCCESSFUL in 3m 42s
-69 actionable tasks: 5 executed, 64 up-to-date
+BUILD SUCCESSFUL in 1m 27s
+69 actionable tasks: 15 executed, 54 up-to-date
 ```
 
-首次因AGPL文本路径定位到不存在的仓库根LICENSE而拒绝，改为实际dsh-go/LICENSE；随后仪器源码用了SDK不公开的O_DIRECTORY而编译失败，改为打开已知临时目录并fstat验证目录类型。没有补隐藏API、宽权限或绕过隔离。
+此前22s构建是仍传目录FD的同步修复版本，以本次新四FD构建为准。
 
-**首轮 b2a32b5/run41693324311 的 API26/35 均失败**，实际API查询确认。日志下载在本环境被403拒绝，暂只有失败步骤/退出码，尚未知道具体阶段，不能声称已定位原因。新增私有结果FD上的固定阶段/错误码，由Main白名单复核后生成有限JUnit断言，再由CI解析为固定注解；不打印异常原文、env、Node报告或响应。诊断版脚本host1及输入拒绝8通过；两个APK离线构建实际输出：`BUILD SUCCESSFUL in 41s`、`69 actionable tasks: 8 executed, 61 up-to-date`。
+Android固定用例计划完整保留模型/SDK/84KB/取消/Key边界，额外WAL/并行只读/重开/integrity及两次不同PID启动；每次unbind等待service Binder死亡。**新四FD的Android执行尚未验证。**
 
-**Android VFS/WAL尚未通过**。同一Node内关闭重开不是跨进程重启；崩溃恢复仍只有下文宿主证据。真实runtime-data lease、完整mcode的mkdir/JSON/history/backup FS、多进程生命周期、物理真机/ARM64未做。不能称正式持久化已经完成。
+## 有限诊断与接手顺序
 
-## 已实现的原型
-
-`tooling/android-node-probe/src/main/cpp/fd_vfs.cpp` 复用固定SQLite的unix VFS，以其公开xSetSystemCall/xFullPathname扩展将白名单虚拟文件名映射到明确授予的FD。保留原锁、inode引用、延迟close和SHM实现，不自行简化成无锁VFS。注册最多16个普通文件和一个仅用于目录同步的目录FD；虚拟根固定/mbot-data，未知路径/穿越拒绝，唯独保留固定只读/dev/urandom以供SQLite熵源。没有任意路径fallback、shell、网络、Key或权限接口。
-
-测试用Main DB/WAL/SHM/journal四个FD。sidecar创建/删除目前用已持有FD的大小与truncate模拟；每次看实际size，不能使用进程本地exists缓存，否则另一进程提交WAL后可能被漏读。**此模拟不是所有POSIX unlink/重建语义的完整替代**；backup目标、替换/重建、临时文件、目录与FS桥、native lease/JNI API均未实现。当前测试设置temp_store=MEMORY；正式方案不能默默改变或忽略上游FS需求。
-
-## 实际验证
-
-用校验摘要后的better-sqlite3 12.11.1内置SQLite源码和同一defines.gypi，从源码编译独立宿主测试：
+新run先读metadata，不依赖被拒绝的日志下载：
 
 ```bash
-python3 dsh-go/tooling/android-node-probe/test-fd-vfs.py \
-  --archive /tmp/mbot-sqlite-reference/better-sqlite3-12.11.1.tgz \
-  --ndk /tmp/mbot-ndk27d
+probe_run=41700450899
+env -u GH_TOKEN -u GITHUB_TOKEN gh api \
+  "repos/Wzdhehe/minimax-bot-android/actions/runs/${probe_run}/artifacts" \
+  --jq '.artifacts[]|{id,name}'
 ```
 
-原始输出：
+report-results.py兼容属性、正文、namespace、suite级failure/嵌套堆栈。只输出白名单阶段/code/异常类别和数字测试行号，以及计数；同一有限result_id进入GITHUB_OUTPUT和artifact name。没有异常原文/env/响应/平台诊断。未知值归一化，不通过通配符将任意error.code输出。XML仍是七天私有测试artifact。Keystore随机测试Key的断言不包含原始报告作为失败信息。
 
-```text
-PASS: FD VFS WAL, multiple connections, external writer lock, rollback, reopen, crash recovery, integrity and ungranted-path refusal
-PASS: Android API26/x86_64 VFS object compilation only; not Android execution
-```
-
-宿主测试覆盖WAL提交、同时只读连接、回滚、关闭一个连接后另一个进程仍被writer lock挡住、关闭重开、独立进程提交后直接_exit（不close/checkpoint）的WAL恢复、实际integrity_check恰好一行ok、拒绝未授予路径且不创建目标文件。还验证无效注册不关闭caller FD。不是单纯“exec返回OK”。独立进程exec重置SQLite状态，不在fork后继续使用父进程连接。当时NDK部分只编译object；此后已链接进验收addon并编译APK，Android执行首轮失败，待定位。
-
-已有设备前提：d7d65ad/run41683691783的API26/35基本FD读/写同步/截断/锁/RW映射与路径拒绝全过（T-SQLite）。**不能据此把本VFS的Android测试也写成通过。** 5428ac7当轮CI仅增加宿主/NDK object检查；b2a32b5才实际编入APK且首次设备执行失败。
-
-## 下一位必须处理
-
-1. 审阅VFS的sidecar生命周期与FD别名生命周期，不能把原型直接切到产品。安装前已预检全部syscall，安装/注册失败会恢复原指针并关闭暂存FD；尚未做故障注入；Android执行首次失败，不能跳过。必须在没有活跃连接时、任何文件数据库连接创建前配置，不支持运行中替换registry。
-2. Native只授予专用runtime-data目录中的数据文件；拒绝Key prefs/Keystore/模型endpoint与token。不得把整个filesDir/workspace或任意路径作为数据文件解析接口。虚拟文件名只是能力映射，不等于权限授权。
-3. **关闭owner副本不能撤销已经dup的FD**。native lease应绑定可信身份/隔离进程生命期；撤销必须停止对应隔离进程。配置前关闭或移交隔离进程内的输入FD别名，之后不要在SQLite活跃期间随意关闭同inode别名，否则POSIX范围锁会被释放。
-4. 临时验收FD handoff/addon初始化已接，先用有限阶段码定位API26/35失败；再接真正runtime-data lease，验证跨进程干净重启、崩溃恢复/完整性、所有FD关闭与Key边界。目录fsync、映射实际写入、物理真机/ARM64也未验证。
-5. 钉点DatabaseClient明确v1/v2双连接，并用独立只读连接验backup；完整online backup、临时文件、mkdirSync/dataDir、JSON/历史/插件FS仍未适配。不要以本原型替代这些验收。
-6. full-ICU独立重跑41680254279仍在构建；没有Intl仍不能启动完整官方Bot。严禁退回同UID任意shell或宽存储权限。
+1. 观察新四FD run，先确认越过Main IPC；若失败，按真实phase/类别/行号修复，不自动退回同UID、宽存储或内存周期快照。
+2. 真正native runtime-data lease尚未实现。只允许专用数据文件，不给Key prefs/Keystore/整个filesDir/workspace；cwd不是权限。owner关闭副本不能撤销dup，撤销需终止隔离执行单元；正式launcher须验证若存在子进程也一起退出。当前仅等service Binder死亡，不证明fork/FD转交场景撤销。
+3. 固定mcode DatabaseClient明确v1/v2双连接，并用独立只读连接验backup。online backup、临时文件、mkdirSync/dataDir、JSON/历史/插件FS与物理inode替换仍缺，不能将本VFS当完整FS桥。
+4. Android设备上的进程崩溃恢复、所有FD关闭、物理真机/ARM64/16KiB页面、断电/存储满尚未验证。宿主crash恢复不能代替它们。
+5. full-ICU producer41680254279仍未完成，默认候选无Intl，完整官方Bot仍不能启动。ee40005已支持经过同repo/branch/精确build inputs验证后的私有产物复用，下载/组合设备路径未验证；见T-AndroidNode。
