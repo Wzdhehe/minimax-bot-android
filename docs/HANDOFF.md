@@ -1,5 +1,7 @@
 # 最新接手入口（2026-11-03）
 
+**最新工作区资源限制**：文件读取改为读取期间最多 1MiB +1 探测字节，不再只信 length；目录改为惰性枚举，最多1000条/128KiB文件名字节预算后才排序，超限拒绝而不返回截断列表。拒绝非普通文件。宿主脚本 **JVM27 + Node22 全过**；组件 Gradle构建再过，XML27项零失败/错误/跳过。这不解决路径检查到打开的 TOCTOU/hardlink 问题，设备结果仍另行观察。
+
 **最新设备验证准备**：增加 Android35/KVM 模拟器 CI，执行复用生产源码的三项仪器测试（Keystore 存储、native HTTP 注入/回显拦截、独立 UID 文件 IPC）。本地仪器 APK 再编译通过：`BUILD SUCCESSFUL in 1m 27s`；**模拟器结果待观察，真机未验证**。验收工程复用生产 localhost-only network security config，不放宽 provider HTTPS。上一阶段 `5af2ed8` 的 GitHub native **41599240875**、host **41599240883**、scope **41599240858** 全部 success。
 
 **最新流式补强**：native/host 增加完整结束标记、异常断流处理、背压、绝对截止时间、reader/call 清理及解析前 JSON 预算；proxy.dispose 会取消并收敛模型请求。最终本地 **JVM24 + Node22 全过**，Gradle组件构建再过、XML24项通过；设备测试仍未运行。说明见 [T-RuntimeBroker 首节](handoff/T-RuntimeBroker.md)。前一提交 `4c3e808` 的 GitHub **41591483093**：native/Android编译两项均 success。

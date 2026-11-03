@@ -44,8 +44,8 @@ internal fun validIsolationRequestId(id: String?): Boolean =
 /** File payloads use bounded Bundles until an FD transport is implemented. */
 internal fun boundedIsolationResponse(response: BrokerResponse): BrokerResponse {
     if ((response.text?.toByteArray(Charsets.UTF_8)?.size ?: 0) > 256 * 1024 ||
-        (response.entries?.size ?: 0) > 1000 ||
-        (response.entries?.sumOf { it.toByteArray(Charsets.UTF_8).size.toLong() + 8 } ?: 0) > 128 * 1024) {
+        (response.entries?.size ?: 0) > WorkspaceBroker.MAX_DIRECTORY_ENTRIES ||
+        (response.entries?.sumOf { it.toByteArray(Charsets.UTF_8).size.toLong() + 8 } ?: 0) > WorkspaceBroker.MAX_DIRECTORY_BYTES) {
         return BrokerResponse.error(BrokerResponse.TOO_LARGE)
     }
     return response

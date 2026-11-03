@@ -1,5 +1,11 @@
 # T-Isolation 交接（独立 UID + broker 最小实证）
 
+## 最新：工作区读取与目录枚举的内存上限
+
+`WorkspaceBroker` 不再用 `readBytes()`/`File.list()` 将不受限内容先读入内存：只读普通文件，真实读取时最多预算+1字节；即使文件在 metadata 检查后增长也拒绝超限。目录用 DirectoryStream 惰性枚举，在1000条/128KiB文件名预算内收集排序，超限不返回截断结果。response Binder 预算复用相同目录常量。没有扩大路径权限/新增操作。
+
+新三项 JVM 测试覆盖无限/增长输入在第33字节停止（32字节限额）、1001条目录拒绝、未满1000条但文件名总字节超限拒绝。原测试和模型回归：**JUnit27 + Node22 全过**。组件 Gradle `testDebugUnitTest assembleDebug assembleDebugAndroidTest`：`BUILD SUCCESSFUL in 1m 59s`，XML27项零失败/错误/跳过。这只是资源上限，TOCTOU、hardlink 与设备取消/回收仍待完成。
+
 **最新补充**：后续验收工程 `tooling/android-broker-probe` 已完成真实 Gradle/AGP 的生产源码、Manifest 和仪器 APK 编译；JVM20项通过，两个设备用例编译通过，**设备执行仍未验证**。这覆盖了下文历史“只做独立 kotlinc”编译层面的缺口，但没有证明系统 UID/权限/生命周期。详情见 [T-RuntimeBroker 最新节](T-RuntimeBroker.md)。
 
 ## 最新同分支续写：IPC 客户端、身份与请求关联
