@@ -53,9 +53,12 @@ test('the exact APK script consumes inherited Unix FDs and reports privately wit
       await new Promise((resolve, reject) => owner.write('owner request', (error) => error ? reject(error) : resolve()));
     }
     await requestsReceived;
-    child = spawn(process.execPath, ['--no-warnings', '-e', script, '3', '4', '5', '6', marker], {
-      stdio: ['ignore', 'pipe', 'pipe', ...owners, 'pipe'], env: buildRuntimeEnv(process.env),
+    // Embedded modules can exceed Linux's per-argument exec limit. Native
+    // node::Start has no kernel exec here; use stdin only in this host fixture.
+    child = spawn(process.execPath, ['--no-warnings', '-e', "eval(require('node:fs').readFileSync(0, 'utf8'))", '3', '4', '5', '6', marker], {
+      stdio: ['pipe', 'pipe', 'pipe', ...owners, 'pipe'], env: buildRuntimeEnv(process.env),
     });
+    child.stdin.end(script);
     const exited = once(child, 'exit');
     let result = '', stdout = '', stderr = '';
     child.stdio[6].setEncoding('utf8').on('data', (chunk) => { result += chunk; });

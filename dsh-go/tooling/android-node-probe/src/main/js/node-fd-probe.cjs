@@ -2,6 +2,7 @@
 // The build embeds the exact production FD/SSE modules using data URLs.
 // This script is packaged in the verification APK, never supplied by an Agent.
 const modelModuleUrl = "__MBOT_FD_MODULE_URL__";
+const nativeRouteModuleUrl = "__MBOT_NATIVE_ROUTE_MODULE_URL__";
 const fs = require('node:fs');
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
 
@@ -70,6 +71,12 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     report.dynamic = await consume(await binding.open(id, request), false);
     const large = JSON.stringify({ providerId, modelId: 'normal', messages: [{ role: 'user', content: 'large-'.repeat(14_000) }] });
     report.dynamicLarge = await consume(await binding.open(require('node:crypto').randomUUID(), large), false);
+    const { createNativeModelRoute } = await import(nativeRouteModuleUrl);
+    const route = createNativeModelRoute({ providerId, modelId: 'normal', apiFormat: 'openai-completions', binding });
+    const sdkResponse = await route.fetch(route.requestUrl, { method: 'POST', body: JSON.stringify({ model: 'normal', stream: true,
+      messages: [{ role: 'user', content: 'tool check' }], tools: [{ type: 'function', function: { name: 'lookup', parameters: { type: 'object' } } }] }) });
+    const sdkBody = await sdkResponse.text();
+    report.sdkRoute = { status: sdkResponse.status, toolCalls: sdkBody.includes('tool_calls'), done: sdkBody.includes('[DONE]') };
     const cancelledId = require('node:crypto').randomUUID();
     binding.cancel(cancelledId);
     try { fs.closeSync(await binding.open(cancelledId, request)); report.dynamicCancelled = false; }

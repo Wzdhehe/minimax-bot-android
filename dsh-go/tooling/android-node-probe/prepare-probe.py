@@ -26,19 +26,32 @@ def digest(path):
 
 def bundle(output_dir=None):
     host = DSH / 'runtime/minimax-bot-host'
-    broker = (host / 'model-broker.mjs').read_text()
-    fd = (host / 'model-fd-client.mjs').read_text()
-    specifier = "'./model-broker.mjs'"
-    assert fd.count(specifier) == 1
-    broker_url = 'data:text/javascript;base64,' + base64.b64encode(broker.encode()).decode()
-    fd = fd.replace(specifier, json.dumps(broker_url))
-    module_url = 'data:text/javascript;base64,' + base64.b64encode(fd.encode()).decode()
+    urls = {}
+    dependencies = {
+        'model-broker.mjs': [],
+        'model-fd-client.mjs': ['model-broker.mjs'],
+        'model-sdk-fetch.mjs': ['model-broker.mjs', 'model-fd-client.mjs'],
+        'native-model-route.mjs': ['model-broker.mjs', 'model-sdk-fetch.mjs'],
+    }
+    def module_url(name):
+        if name not in urls:
+            text = (host / name).read_text()
+            for dependency in dependencies[name]:
+                specifier = "'./" + dependency + "'"
+                assert text.count(specifier) == 1
+                text = text.replace(specifier, json.dumps(module_url(dependency)))
+            urls[name] = 'data:text/javascript;base64,' + base64.b64encode(text.encode()).decode()
+        return urls[name]
     template = (ROOT / 'src/main/js/node-fd-probe.cjs').read_text()
     placeholder = '"__MBOT_FD_MODULE_URL__"'
     assert template.count(placeholder) == 1
     assets = output_dir or ROOT / 'build/verified-assets'
     assets.mkdir(parents=True, exist_ok=True)
-    (assets / 'node-fd-probe.cjs').write_text(template.replace(placeholder, json.dumps(module_url)))
+    template = template.replace(placeholder, json.dumps(module_url('model-fd-client.mjs')))
+    route_placeholder = '"__MBOT_NATIVE_ROUTE_MODULE_URL__"'
+    assert template.count(route_placeholder) == 1
+    template = template.replace(route_placeholder, json.dumps(module_url('native-model-route.mjs')))
+    (assets / 'node-fd-probe.cjs').write_text(template)
 
 
 def prepare(ndk, archive, source_sha=None):

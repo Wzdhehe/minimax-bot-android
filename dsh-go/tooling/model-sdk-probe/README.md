@@ -64,3 +64,9 @@ probe. That is host evidence, not an Android/full mcode runtime acceptance.
 Anthropic beta/affinity headers are not forwarded; advanced header-dependent
 provider behavior still needs native policy. Physical devices, real provider
 APIs and complete runtime persistence remain unverified.
+
+All SDK/pi-ai stream probes now use `createNativeModelRoute`: virtual SDK
+URLs and a fixed nonsecret placeholder, IDs/JSON to a trusted binding, and
+request-ID cancellation. The Android fixed-script target also exercises this
+route over its real JNI binding; its device result must be checked separately.
+The native upstream URL and session never belong in these SDK options.

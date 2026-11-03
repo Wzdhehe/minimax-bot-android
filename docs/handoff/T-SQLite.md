@@ -3,6 +3,12 @@
 
 当前是**隔离Node的内存数据库验收候选**，没有选择持久化方案，不是完整mcode/runtime已运行。默认产品仍DSH。必须继续在feat/t-plugins，不动main/dev/integration。
 
+## 最新：数据FD五项能力也已过
+
+d7d65ad/run **41683691783 success**，API26 job126083684488/API35 job126083684020成功；无方法过滤的整类仪器用例执行，五项均要求已授予FD能力可用且按私有路径open拒绝。包含pread、实际pwrite/fsync、ftruncate、独占范围锁和RW MAP_SHARED/msync/munmap。此轮日志接口返回空，依据run/job API及未过滤runner，不伪造XML计数或日志。下文“设备待CI”是当轮记录。
+
+后续设计必须注意钉点 `local-runtime-v2/src/infra/db/client.ts`：不仅启用WAL，open内注明v1/v2会用**不同连接访问同一DB**；hasValidIntegrity还会开独立只读连接，backup用online API。单连接或省略锁的VFS不能声称兼容。应保留SQLite unix VFS的inode/延迟close/范围锁/SHM语义再适配受控FD，并验证多连接、WAL、重启与崩溃恢复；目前未实现VFS。
+
 ## 当前研究：明确授予的数据文件FD能力（设备待CI）
 
 只在独立broker验收APK增加DataFileFdProbe与五个仪器用例：同一组OS原语先在owner执行，再由隔离UID通过明确授予的单个非敏感文件FD执行pread、pwrite+fsync、ftruncate、独占范围锁、PROT_READ|WRITE/MAP_SHARED+msync/munmap。每项同时要求直接按私有路径open仍拒绝；写入/截断还由owner核对实际结果。map仅证明RW映射/同步调用成功，不宣称已通过Java地址直接写映射内容。

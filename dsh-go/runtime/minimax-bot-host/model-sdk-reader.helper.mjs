@@ -1,25 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { createModelFetchScope } from './model-fetch-scope.mjs';
-import { createNativeModelFetch } from './model-sdk-fetch.mjs';
+import { createNativeModelRoute } from './native-model-route.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 const [format, mode, sdkRoot] = process.argv.slice(2);
-const url = format === 'openai-completions' ? 'https://model.example/v1/chat/completions' :
-  format === 'openai-responses' ? 'https://model.example/v1/responses' :
-  format === 'anthropic-messages' ? 'https://model.example/v1/messages' :
-  'https://model.example/v1/models/m1:streamGenerateContent?alt=sse';
 let payload, channelCount = 0;
 let providerAbort, providerTimer;
-const fetchImpl = createNativeModelFetch({ providerId: 'p1', modelId: 'm1', apiFormat: format, requestUrl: url,
+const route = createNativeModelRoute({ providerId: 'p1', modelId: 'm1', apiFormat: format,
   timeoutMs: mode === 'unconsumed' ? 100 : 2500,
-  openChannel(value) {
-    payload = value; channelCount++;
-    if (mode === 'sdk-failure') throw Error('unsafe-diagnostic');
-    if (mode === 'pi-cancel') providerTimer = setTimeout(() => providerAbort.abort(), 80);
-    return 3;
+  binding: {
+    open(id, body) {
+      payload = JSON.parse(body); channelCount++;
+      if (mode === 'sdk-failure') throw Error('unsafe-diagnostic');
+      if (mode === 'pi-cancel') providerTimer = setTimeout(() => providerAbort.abort(), 80);
+      return 3;
+    },
+    cancel() {},
   },
 });
+const fetchImpl = route.fetch;
+const url = route.requestUrl;
 let result;
 try {
   if (mode.startsWith('pi')) {
@@ -34,7 +35,7 @@ try {
     providerAbort = controller;
     const model = { id: 'm1', name: 'Probe', api: format,
       provider: format === 'google-generative-ai' ? 'google' : format === 'anthropic-messages' ? 'anthropic' : 'openai',
-      baseUrl: format === 'anthropic-messages' ? 'https://model.example' : 'https://model.example/v1',
+      baseUrl: route.baseUrl,
       reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: 8192, maxTokens: 256 };
     const context = { messages: [{ role: 'user', content: 'Hello', timestamp: Date.now() }],
@@ -55,7 +56,7 @@ try {
     // Anthropic appends /v1/messages; OpenAI appends /chat/completions
     // or /responses to a versioned base. These are SDK routing metadata only.
     const client = new module.default({ apiKey: 'native-broker-placeholder',
-      baseURL: format === 'anthropic-messages' ? 'https://model.example' : 'https://model.example/v1', fetch: fetchImpl });
+      baseURL: route.baseUrl, fetch: fetchImpl });
     const options = { model: 'm1', stream: true, messages: [{ role: 'user', content: 'Hello' }] };
     const tool = { name: 'lookup', description: 'Lookup a value', parameters: { type: 'object', properties: {} } };
     const stream = format === 'anthropic-messages' ? await client.messages.create({ ...options, max_tokens: 256,

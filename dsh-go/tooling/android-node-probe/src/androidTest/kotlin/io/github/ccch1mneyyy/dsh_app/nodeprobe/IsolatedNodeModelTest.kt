@@ -74,6 +74,8 @@ class IsolatedNodeModelTest {
                                 override fun read(): Int { cancelled.await(30, TimeUnit.SECONDS); return -1 }
                             }
                             else -> {
+                                if (JSONObject(prepared.body).has("tools")) return ProviderResponse(200, "text/event-stream",
+                                    "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"type\":\"function\",\"function\":{\"name\":\"lookup\",\"arguments\":\"{}\"}}]}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n".byteInputStream())
                                 val event = JSONObject().put("delta", if (model == "echo") secret else "hello")
                                 "data: $event\n\ndata: [DONE]\n\n".byteInputStream()
                             }
@@ -160,7 +162,10 @@ class IsolatedNodeModelTest {
                             assertTrue(report.getBoolean("dynamicCancelled"))
                             assertEquals("done", report.getJSONObject("dynamicLarge").getString("code"))
                             assertEquals("hello", report.getJSONObject("dynamicLarge").getJSONArray("events").getJSONObject(0).getString("delta"))
-                            assertEquals(5, headersInjected.get())
+                            assertEquals(200, report.getJSONObject("sdkRoute").getInt("status"))
+                            assertTrue(report.getJSONObject("sdkRoute").getBoolean("toolCalls"))
+                            assertTrue(report.getJSONObject("sdkRoute").getBoolean("done"))
+                            assertEquals(6, headersInjected.get())
                             assertFalse(store.catalog().toString().contains(secret))
                             assertFalse(logs.any { it.contains(secret) })
                             }

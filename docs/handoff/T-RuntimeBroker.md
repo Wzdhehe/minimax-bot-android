@@ -1,5 +1,15 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+## 当前：SDK路由接JNI binding（设备待CI）
+
+新增 `native-model-route.mjs` 将provider/model/apiFormat和可信binding组合为SDK配置。SDK使用 `https://models.mbot.invalid` 虚拟源与固定placeholder，真实base URL与Key只由native按ID选取，避免Anthropic版本路径与真实base混用。route生成随机request ID，传JSON到binding.open，abort传同ID到binding.cancel；诊断归一化，取消后的成功FD仍交外层ownedChannel关闭，不能在中途throw丢失FD。
+
+实际SDK9/完整钉点pi-ai8现在都经过该route factory与真实继承FD，四种虚拟URL/工具/取消通过；新增route3项验证payload无SDK头、native异常不透传、cancel关联/晚到FD关闭。完整脚本 **JUnit32 + Node44** 通过。native descriptor/session不在route字段中；apiKey字段只是固定非秘密placeholder。
+
+验收Node APK内嵌精确的SDK fetch/route模块，固定脚本经route→JNI→Main原broker发tool-shaped请求，检查SSE工具事件与DONE；原84KB/SQLite/Key断言保留。最后Node两个APK **BUILD SUCCESSFUL in 43s**；host固定脚本1/input拒绝8通过。host使用stdin传大脚本以避Linux exec每参数128KiB限制，Android仍in-process node::Start固定APK脚本，不添加外部代码入口。**新增SDK路由设备执行待CI，正式model resolver仍未装配**。
+
+既有证据：3d99bed的大请求Node run41682351200、broker run41682351421已API26/35全部success。d7d65ad的数据FD能力run41683691783也全部success（见T-SQLite）；不等于持久化/WAL或完整runtime。
+
 ## 当前：大请求pipe协议（2026-11-03，设备待CI）
 
 保留OPEN inline的64KiB上限；增加OPEN_FD，最大1MiB JSON经匿名pipe传送，Binder仅带nonce/id/声明长度/FD，wire144KiB上限不放大。Client全进程最多4个writer，线程可回收；结果/错误/取消都关闭pipe端点。先做字符长度/UTF8字节限制，不因大字符串先分配无界bytes。

@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import { randomUUID } from 'node:crypto';
+import { BrokerError } from './model-broker.mjs';
+import { createNativeModelFetch } from './model-sdk-fetch.mjs';
+
+/** SDK routing uses a virtual HTTPS origin, never the configured upstream URL.
+ * Native resolves the real endpoint/auth from IDs and rechecks authorization.
+ * The nonsecret placeholder merely satisfies SDK constructors. */
+export function createNativeModelRoute({ providerId, modelId, apiFormat, binding, timeoutMs }) {
+  if (!binding || typeof binding.open !== 'function' || typeof binding.cancel !== 'function' ||
+      typeof modelId !== 'string' || !modelId.trim() || modelId.length > 256) throw new BrokerError('broker_request_invalid');
+  const origin = 'https://models.mbot.invalid';
+  const baseUrl = apiFormat === 'anthropic-messages' ? origin :
+    apiFormat === 'google-generative-ai' ? origin + '/v1beta' : origin + '/v1';
+  const suffix = {
+    'openai-completions': '/chat/completions', 'openai-responses': '/responses',
+    'anthropic-messages': '/v1/messages',
+    'google-generative-ai': `/models/${encodeURIComponent(modelId)}:streamGenerateContent?alt=sse`,
+  }[apiFormat];
+  if (!suffix) throw new BrokerError('broker_request_invalid');
+  const requestUrl = baseUrl + suffix;
+  const fetchImpl = createNativeModelFetch({ providerId, modelId, apiFormat, requestUrl, timeoutMs,
+    async openChannel(payload, { signal }) {
+      if (signal.aborted) throw new BrokerError('broker_cancelled');
+      const id = randomUUID();
+      const cancel = () => { try { binding.cancel(id); } catch {} };
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        // On success always return the owned FD, even after abort: the outer
+        // FD adapter closes late results. Throwing here would lose that FD.
+        return await binding.open(id, JSON.stringify(payload));
+      } catch {
+        throw new BrokerError(signal.aborted ? 'broker_cancelled' : 'broker_unavailable');
+      } finally { signal.removeEventListener('abort', cancel); }
+    },
+  });
+  return Object.freeze({ providerId, modelId, apiFormat, baseUrl, requestUrl,
+    apiKey: 'native-broker-placeholder', fetch: fetchImpl });
+}

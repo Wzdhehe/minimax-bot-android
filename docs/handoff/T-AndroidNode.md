@@ -1,6 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+## 当前：SDK route → JNI（设备待CI）
+
+新增纯JS native-model-route，绑定SDK虚拟URL/placeholder/provider/model，将模型JSON和request ID交linked binding，取消关联同ID并保留晚到FD关闭。实际SDK9/pi-ai8、完整JUnit32+Node44通过；验收APK固定脚本新增tool-shaped SDK fetch，JNI→Main broker后恢复SSE工具事件/DONE，Node两个APK43s成功、host1/input8过。设备待新CI，不代表正式model resolver已接。
+
+3d99bed的1MiB pipe在API26/35的Node41682351200与broker41682351421均success；数据文件FD能力d7d65ad/run41683691783也success。旧待CI段落仅作当轮记录。
+
 ## 当前补强：1MiB请求pipe（设备待CI）
 
 Native client/host增加有界请求pipe，JNI允许1MiB；固定Node脚本实际发送84KB请求，Main transport逐字校验，native Key注入总计5次（3个prefd + 2个动态请求）。最后JNI/SQLite重编成功，Node两个APK **BUILD SUCCESSFUL in 2m39s**；host1+input8过。相关协议/取消/截止见T-RuntimeBroker当前节。本阶段设备CI待观察，不使用4f92405的64KiB基线代替。
