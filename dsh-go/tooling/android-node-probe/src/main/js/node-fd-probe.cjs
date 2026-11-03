@@ -67,14 +67,16 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
         probePhase = 'vfs_wal';
         const mode = disk.pragma('journal_mode=WAL', { simple: true });
         disk.pragma('temp_store=MEMORY');
-        disk.exec('CREATE TABLE durable(text TEXT); INSERT INTO durable VALUES (\'你好\')');
+        disk.exec('CREATE TABLE IF NOT EXISTS durable(text TEXT)');
+        const initialRows = disk.prepare('SELECT text FROM durable').all().map((row) => row.text);
+        if (initialRows.length === 0) disk.prepare('INSERT INTO durable VALUES (?)').run('你好');
         probePhase = 'vfs_verify';
         verify = new Database('state.db', { ...options, readonly: true, fileMustExist: true });
         const parallelRows = verify.prepare('SELECT text FROM durable').all();
         verify.close(); verify = null;
         probePhase = 'vfs_write';
-        disk.transaction(() => { disk.prepare('INSERT INTO durable VALUES (?)').run('second'); })();
-        persistent = { mode, parallelRows: parallelRows.map((row) => row.text), count: disk.prepare('SELECT count(*) AS n FROM durable').get().n };
+        if (initialRows.length === 0) disk.transaction(() => { disk.prepare('INSERT INTO durable VALUES (?)').run('second'); })();
+        persistent = { mode, initialRows, parallelRows: parallelRows.map((row) => row.text), count: disk.prepare('SELECT count(*) AS n FROM durable').get().n };
       } finally { verify?.close(); disk.close(); }
       probePhase = 'vfs_reopen';
       const reopened = new Database('state.db', options);
@@ -87,7 +89,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
   dataFds.forEach((fd) => fs.closeSync(fd));
   probePhase = 'model_streams';
   const report = { sqlite, persistent,
-    version: process.versions.node, modules: process.versions.modules,
+    pid: process.pid, version: process.versions.node, modules: process.versions.modules,
     uid: process.getuid(), privateDenied, intlAvailable: typeof Intl !== 'undefined',
     intlSmoke: typeof Intl === 'undefined' ? null : {
       locale: new Intl.DateTimeFormat('zh-CN').resolvedOptions().locale,

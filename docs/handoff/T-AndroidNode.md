@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+> 最新覆盖：b2a32b5/run41693324311 的 FD VFS 验收在 API26/35 均失败，不能视为 WAL/持久化通过。e983424/run41695986670 也失败且未取得阶段码；续写补XML正文解析/测试行号与新PID干净重启用例（本地APK40s成功、宿主跨进程通过，Android未验证）；详情以 [T-Persistence](T-Persistence.md) 与总 [HANDOFF](../HANDOFF.md) 为准。旧段的“待CI”只记实现当时，不能覆盖后续证据。
+
 ## 当前：文件FD VFS验收（设备待CI）
 
 Main给临时非敏感数据文件/目录的五个FD；JNI传到Node，SQLite addon注册受控VFS，先关输入别名再开文件DB。固定脚本增加WAL、并行只读连接、写入、关闭重开和完整性；Main检查实际文件与无Key。最后APK3m42s成功，JNI/SQLite重编及host1/input8通过；**执行待CI，不是正式持久化/跨进程重启已完成**。原模型链路用例保留。详见T-Persistence。

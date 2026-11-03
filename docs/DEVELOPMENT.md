@@ -13,6 +13,7 @@ node dsh-go/tooling/model-sdk-probe/prepare-pi.mjs /path/to/clean/pinned/minimax
 npm test --prefix dsh-go/tooling/model-sdk-probe
 npm run test:pi --prefix dsh-go/tooling/model-sdk-probe
 python3 dsh-go/tooling/android-node-probe/test-fd-vfs.py --ndk /path/to/ndk27d
+# 先prepare Node headers及SQLite wrapper后，可加 --node-probe 验证宿主真实addon跨进程
 ```
 
 Android工具与实际命令见专题卡；`tooling/android-broker-probe`编译真实native源码/测试，`tooling/android-node-probe`另需先prepare-probe、prepare-sqlite（Node archive/NDK/esbuild均钉版本）。后者默认候选无Intl，full-ICU从源码独立CI构建。实际API26/35结果以HANDOFF中的run ID为准；宿主测试和编译不能代替设备执行，物理真机/ARM64未验证。

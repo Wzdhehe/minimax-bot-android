@@ -44,6 +44,18 @@ def extract(archive, output):
                 shutil.copyfileobj(source, target, 1024 * 1024)
 
 
+def instrument_addon(source):
+    addon_source = source / 'src/better_sqlite3.cpp'
+    contents = addon_source.read_text()
+    entry = 'NODE_MODULE_INIT(/* exports, context */) {'
+    if contents.count(entry) != 1:
+        raise RuntimeError('Unexpected addon initialization entry')
+    addon_source.write_text(contents.replace(entry,
+        'extern void MbotInstallFdVfsBinding(v8::Local<v8::Object>, v8::Local<v8::Context>);\n' +
+        entry + '\nMbotInstallFdVfsBinding(exports, context);', 1))
+    return addon_source
+
+
 def prepare(ndk, archive, esbuild):
     if PIN['ndkVersion'] not in (ndk / 'source.properties').read_text():
         raise RuntimeError('Expected pinned NDK27d')
@@ -89,15 +101,7 @@ def prepare(ndk, archive, esbuild):
     engine_version = re.search(r'#define SQLITE_VERSION\s+"([^"]+)"', (sqlite / 'sqlite3.h').read_text())[1]
     subprocess.run([str(compiler), '-std=c99', *flags, *['-D' + value for value in definitions],
                     '-c', str(sqlite / 'sqlite3.c'), '-o', str(build / 'sqlite3.o')], check=True)
-    addon_source = source / 'src/better_sqlite3.cpp'
-    contents = addon_source.read_text()
-    entry = 'NODE_MODULE_INIT(/* exports, context */) {'
-    if contents.count(entry) != 1:
-        raise RuntimeError('Unexpected addon initialization entry')
-    contents = contents.replace(entry,
-        'extern void MbotInstallFdVfsBinding(v8::Local<v8::Object>, v8::Local<v8::Context>);\n' +
-        entry + '\nMbotInstallFdVfsBinding(exports, context);', 1)
-    addon_source.write_text(contents)
+    addon_source = instrument_addon(source)
     adapter_objects = []
     for name in ('fd_vfs.cpp', 'fd_vfs_node.cpp'):
         obj = build / (name + '.o')

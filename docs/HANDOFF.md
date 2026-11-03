@@ -12,7 +12,7 @@
 | 1MiB大请求FD | 64KiB内保持inline；更大JSON走有界pipe，精确长度/EOF/UTF8/截止/取消。broker目标最终2m53s、Node目标2m39s构建成功，host1+输入拒绝8过 | 3d99bed的Node41682351200/broker41682351421已API26/35通过 |
 | 数据文件FD能力（当前研究） | 单个明确授予FD的读/写同步/截断/锁/RW映射五用例已编译，broker目标1m23s成功；按私有路径open必须继续拒绝 | d7d65ad/run41683691783已API26/35通过；不是VFS/持久化已实现 |
 | **SDK→JNI路由（当前阶段）** | 虚拟SDK URL/placeholder→可信binding；JUnit32+Node44、SDK9/pi-ai8通过，Node APK43s构建成功 | e03b997/run41686820725已API26/35通过；正式resolver未装配 |
-| FD SQLite VFS Android候选（当前阶段） | 固定SQLite源码WAL/双连接/独立writer锁/崩溃后恢复/integrity/路径拒绝通过；NDK API26 object编译通过 | 已接验收APK并3m42s构建通过；**b2a32b5/run41693324311的API26/35均失败**，新增有限阶段码定位；见T-Persistence，不能直接切产品 |
+| FD SQLite VFS Android候选（当前阶段） | 固定SQLite源码WAL/双连接/独立writer锁/崩溃后恢复/integrity/路径拒绝通过；NDK API26 object编译通过 | 已接验收APK并3m42s构建通过；**41693324311、41695986670的API26/35均失败**；已补XML正文解析/固定行号和跨进程验收，新结果待CI；见T-Persistence，不能直接切产品 |
 | full-ICU Node | 首轮41630373256被4小时上限取消，check annotation已实查；job360/compile330分钟后重跑 **41680254279** | **重跑进行中**，未取得产物/设备证据。默认候选没有Intl |
 
 正式入口仍DSH；上述都是组件/独立验收APK/假provider，**没有完整mcode/官方Bot产品运行、完整Flutter Bot APK或真实模型验收**。插件变更仍关闭。持久化、可信Bot身份/MCP、工具权限及生产启动器仍缺。不得因组件通过就宣称App已完成。
@@ -66,7 +66,7 @@ dev/integration 891aefa
 
 ## 接下来优先做
 
-1. 首轮Android VFS/WAL矩阵41693324311已API26/35失败；日志下载被环境403拒绝，只知道设备步骤失败。新增固定阶段/错误码注解后继续定位，不猜错误，不将宿主成功写成Android成功；SDK route的Node API26/35已通过；观察full-ICU重跑41680254279。旧41630373256已超时取消，不再等待它。
+1. Android VFS/WAL矩阵41693324311、41695986670均API26/35失败；日志/XML下载被环境拒绝，尚未取得原始错误。新report-results.py覆盖XML正文/属性，仅输出有限阶段码/测试行号，12项Python检查过；另加新PID干净重启验收（APK40s编译过、宿主真实addon跨进程过，Android未验证）。先按新CI实际阶段定位修复，不猜、不将宿主成功写成Android成功；SDK route的Node API26/35已通过；观察full-ICU重跑41680254279。旧41630373256已超时取消，不再等待它。
 2. 明确授予的数据文件FD五项能力已过，下一步接FD支撑的SQLite VFS验收，先读 [T-Persistence](handoff/T-Persistence.md) 的原型与缺口；不要假定目录FD/cwd授予主App路径权限。当前SQLite只有内存验收，不自动选周期快照，不回退同UID任意shell。再接完整pi-ai/model resolver与正式生命周期，不能把JNI固定脚本当成产品启动器。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
