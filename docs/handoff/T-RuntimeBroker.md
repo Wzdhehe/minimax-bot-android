@@ -1,5 +1,8 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-03）
 
+**已验证的当前基线**：`a094a85` 的 Android矩阵 run **41622547971 success**。API26 job125871636255、API35 job125871636043均成功；runner解析XML输出每台 **10 tests / 0 failures / 0 errors / 0 skipped**。实际覆盖Keystore/nativeHTTP、独立UID直接文件/网络拒绝、Unix FD流/取消/容量/截止、IPC启动取消解绑与竞争租约/并发关联。物理真机/硬件Keystore/Android Node/完整runtime仍未验证。后文“待观察”和旧失败是演进记录，以此项覆盖。
+
+
 ## 最新修正：Unix FD 的 socket 选项只能由 owner 设置
 
 `17e7629` run **41604321437 failure**：API26/35均运行八项、各两项隔离读FD用例失败。API26过滤日志进一步确认 `unix_stream_socket setopt` 被拒；FD发送已成功，失败在测试探针对接收FD调用 setsockopt，而不是可以据此宣布Unix传输不可用。API35未收集到相同AVC行，不对其内核原因作超出日志的断言。

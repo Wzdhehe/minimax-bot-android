@@ -1,5 +1,8 @@
 # 最新接手入口（2026-11-03）
 
+**已验证的当前基线**：`a094a85` 的 Android矩阵 run **41622547971 success**。API26 job125871636255、API35 job125871636043均成功；runner解析XML输出每台 **10 tests / 0 failures / 0 errors / 0 skipped**。实际覆盖Keystore/nativeHTTP、独立UID直接文件/网络拒绝、Unix FD流/取消/容量/截止、IPC启动取消解绑与竞争租约/并发关联。物理真机/硬件Keystore/Android Node/完整runtime仍未验证。后文“待观察”和旧失败是演进记录，以此项覆盖。
+
+
 **最新待验修正**：17e7629的Unix矩阵两版本各有两项失败；26日志定位为接收端setopt被拒。现把socket option设置留在主进程，隔离端只读/关闭，并保留完整SSE/Key/cancel断言。另补IPC启动取消解绑、可等待本地close、竞争租约/并发关联用例，总计十项设备用例待新CI；本地组件 Gradle **BUILD SUCCESSFUL in 1m 11s**，JVM27项/仪器编译通过。此前的八项矩阵不能写成通过。
 
 **诊断已定位**：`09faafd`/run41603434315 的26失败有 `binderAlive=true` 和 isolated→app `tcp_socket read write` SELinux拒绝证据。新版17e7629只传Unix socketpair，run41604321437待观察。Android Node源码候选现找到Termux24.22.2（已钉recipe提交、未采用/构建），详见 [runtime计划](ANDROID-RUNTIME-INTEGRATION.md)。数据路径/SQLite/WAL仍是独立关口。

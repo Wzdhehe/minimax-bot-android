@@ -1,5 +1,8 @@
 # T-Isolation 交接（独立 UID + broker 最小实证）
 
+**已验证的当前基线**：`a094a85` 的 Android矩阵 run **41622547971 success**。API26 job125871636255、API35 job125871636043均成功；runner解析XML输出每台 **10 tests / 0 failures / 0 errors / 0 skipped**。实际覆盖Keystore/nativeHTTP、独立UID直接文件/网络拒绝、Unix FD流/取消/容量/截止、IPC启动取消解绑与竞争租约/并发关联。物理真机/硬件Keystore/Android Node/完整runtime仍未验证。后文“待观察”和旧失败是演进记录，以此项覆盖。
+
+
 ## 最新：启动取消、可等待的本地关闭与并发仪器用例
 
 `AgentIsolationClient.connect` future 被取消时自动close；bind前和每次bind前检查closed，已经建立的绑定会解绑，不继续第二个bind。增加 `closeAsync()`：只等待本owner pending清理、revoke发送、unbind与worker退出请求，不代表远端退出ACK或文件写回滚。revoke/unbind的运行时异常不会中断剩余清理。

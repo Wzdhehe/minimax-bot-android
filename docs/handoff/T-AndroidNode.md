@@ -1,0 +1,37 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+# Android Node 加载关口（2026-11-03，正在开发）
+
+当前默认产品仍为 DSH，尚未在 Android 启动 mcode。上一关口：`a094a85` 的 API26/35模拟器各十项通过（run41622547971），native Key/Unix模型FD/IPC已取得组件证据。物理真机、Android Node、better-sqlite3和完整runtime仍未验证。
+
+## 已核对的 Node24 候选
+
+- `RockinChaos/nodejs-mobile@223eec9554b5d344b86d1b411f0255df8cc47f27`，release `v24.22.2`。
+- 官方Node源钉点 `f7f273a9bb6445f6f7fb6349105e7532972045fb`，tree `be3625af068f11bf8288ecf450a36d990cb2294c`；fork按 `patches/series` 重构，不替换mcode钉点。
+- 下载包 `nodejs-mobile-v24.22.2-android.zip`，SHA256 **cde938a9e45ebd3f53d11fbb5f3875df92b4069431677dd5827b68acfaa01847** 已在本地核对。
+- 包内x86_64 `libnode.so` SHA256 **c1c48bf4d6aa2a327986f83a84cc8a7fbf9d401c718081f5eb266e600bbf4dec**；同时有arm64/arm库，但未验证手机。
+- ELF实查SONAME libnode.so；依赖libm/libdl/liblog/libc/libc++_shared；LOAD段16KiB对齐；导出`node::Start`。这些是静态检查，不等于运行或真实16KiB页验证。
+- fork的构建workflow使用NDK r27d；脚本支持AndroidAPI>=24，`--shared --openssl-no-asm --with-intl=none`。**没有Intl**，而官方mbot `i18n.mjs` 顶层直接调用Intl.DateTimeFormat，不能据此把候选直接接进正式Bot。需要后续重建带ICU的版本或明确兼容层并验证。
+- release ZIP含上游完整LICENSE及LICENSE-nodejs-mobile，核心MIT；不得遗漏捆绑第三方许可。二进制只放忽略的build/临时目录，不提交APK/库/签名文件。
+
+源码与构建引用：
+
+- [源码记录](https://github.com/RockinChaos/nodejs-mobile/blob/223eec9554b5d344b86d1b411f0255df8cc47f27/node-source.json)
+- [构建脚本](https://github.com/RockinChaos/nodejs-mobile/blob/223eec9554b5d344b86d1b411f0255df8cc47f27/scripts/build.py)
+- [workflow](https://github.com/RockinChaos/nodejs-mobile/blob/223eec9554b5d344b86d1b411f0255df8cc47f27/.github/workflows/build-mobile.yml)
+- [release](https://github.com/RockinChaos/nodejs-mobile/releases/tag/v24.22.2)
+
+## 本阶段实现/验收顺序
+
+以下是待开发计划，不能当作已实现：
+
+1. 新建独立、无launcher的 `tooling/android-node-probe` 验收工程，固定版本/摘要，包内源/header和license有界提取；用NDK r27d编译小JNI胶水，仅x86_64模拟器。复用生产model/Keystore/NativeModelChannels源码，不维护第二套实现。
+2. 仅测试APK中的private isolatedProcess服务加载libnode/JNI，owner UID校验，固定打包脚本，一进程只初始化一次。没有主UID任意JS/shell入口，不切换产品启动器。
+3. 固定Node脚本消费生产Unix模型FD（真实 `streamNativeModelFd` 模块），分别验证正常SSE、停滞取消、假Key回显拒绝；结果经单独受控结果FD回主进程，只日志测试名/计数。假Key在主进程Keystore生成/保存，不传Node、环境、参数或Agent文件；不用真实账号。
+4. 确认实际Node版本/UID/文件拒绝，记录Intl、SQLite原生依赖和数据目录能力。JNI加载不证明better-sqlite3、WAL或完整mcode。
+5. API26/35模拟器执行、编译/宿主检查通过后阶段push和更新本卡/HANDOFF；未验证项照录。暂不增加全量Flutter/NDK产品构建承诺。
+
+## 后续仍独立的关口
+
+isolated UID没有主App数据路径权限；目录FD/cwd不自动授予SQLite/WAL/JSON创建权限。必须继续设计验证持久化，不能回退main UID执行Agent。
+
+已从钉点mcode实查 `packages/local-runtime-v2/src/service/model-system/resolution/local-model-resolver.ts` 的 `resolveModelFetch`：BYOK支持 `options.fetchImpl`，返回resolved model的fetch字段。可作为以后受控FD fetch adapter入口；现native协议仍仅文本messages，工具调用/高级参数需另行定义、验证与接入。不能只改Base URL或塞dummy Key就宣称mcode已打通。
