@@ -4,6 +4,9 @@
 
 ## 当前状态与证据
 
+- **full-ICU首轮因4小时上限取消**：run41630373256的check annotation明确timeout，verify skipped；没有可用产物。现改job360/compile330分钟重跑，不能再写“首轮仍build”，见T-AndroidNode。
+- **动态Node链路已在API26/35通过**：4f92405/run41667564473 success；d545dc7/run41665743434的Binder矩阵也success。后文“待CI”是当阶段记录，正式产品/runtime与持久化仍未装配。
+
 - **Node动态请求JNI已编译（设备待CI）**：linked binding返回Promise，libuv worker→隔离Kotlin→固定UID/路由native Binder→Unix模型FD；带取消在先检查。Key/endpoint/native token/RPC session不进入Node；64KiB上限，大请求FD待做。JNI/SQLite重编成功，两个APK **BUILD SUCCESSFUL in 1m46s**，host1+输入拒绝8过。新增设备断言待CI，正式启动器仍未装配，见T-AndroidNode。
 - **SQLite设备基线已过**：bc07b1c/run41663798958的API26/35各1项用例通过（0失败/错误/跳过），实读日志确认SQLite源码构建和隔离内存数据库检查均执行。不是持久化/WAL/真机，见T-SQLite。
 

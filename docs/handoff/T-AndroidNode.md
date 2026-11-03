@@ -1,6 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+## full-ICU首轮超时，延长后重跑
+
+run41630373256 / build125898095957已cancelled，verify skipped。实读check-run annotation：`The job has exceeded the maximum execution time of 4h0m0s`。job11:47:41开始、15:49:11结束，未生成可用archive。gh run --log本次返回空，**没有声称读到编译器失败或编译进度**。现在只将job上限改360分钟、编译step330分钟，留诊断/收尾余量；recipe/钉点/ICU断言不变，须观察新run。不是full-ICU已构建通过。
+
+Node动态请求基线则已通过：4f92405/run41667564473 success，API26/35均成功；覆盖动态Promise/JNI/Binder/模型FD、取消在先以及SQLite/Key断言。此次日志读取同样为空，结论来自run/job API，不编造XML计数或新日志。d545dc7/run41665743434的Binder API26/35也已success。
+
 ## 当前：Node Promise → JNI → Binder动态申请（设备待CI）
 
 验收JNI新增linked binding `mbot_model_bridge`，open返回Promise，最多四个libuv worker请求，64KiB body/128字ID上限。worker附加JavaVM并调用隔离侧ModelRequestClient；native主进程按观测UID/单provider/model/会话再授权，返回owned Unix FD，Node现有reader消费。cancel调用有界Binder控制协议，取消早于open被拒；JNI不把Java异常/平台文本发给JS，只用broker_unavailable。Java会话capability留在隔离Kotlin侧，Node只拿providerId和结果FD。

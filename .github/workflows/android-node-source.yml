@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 360
     outputs:
       archive_sha: ${{ steps.build.outputs.archive_sha }}
     steps:
@@ -48,6 +48,7 @@ jobs:
           echo '/usr/lib/llvm-18/bin' >> "$GITHUB_PATH"
           df -h "$GITHUB_WORKSPACE"
       - name: Compile pinned x86_64 Node with full ICU
+        timeout-minutes: 330
         id: build
         run: |
           python3 dsh-go/tooling/android-node-probe/build-source.py \
