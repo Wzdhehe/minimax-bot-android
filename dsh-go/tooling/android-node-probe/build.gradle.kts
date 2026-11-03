@@ -37,6 +37,7 @@ val verifyPreparedInputs by tasks.registering {
             check(file("build/verified-jni/x86_64/$name").isFile) { "Run prepare-probe.py with the pinned Node archive and NDK first" }
         }
         check(file("build/verified-assets/node-fd-probe.cjs").isFile)
+        check(file("build/verified-assets/node-validation.json").isFile)
         check(file("build/verified-assets/third_party/nodejs-mobile/LICENSE").isFile)
         check(file("build/verified-assets/third_party/nodejs-mobile/LICENSE-nodejs-mobile").isFile)
         check(file("build/verified-assets/third_party/ndk/NOTICE").isFile)

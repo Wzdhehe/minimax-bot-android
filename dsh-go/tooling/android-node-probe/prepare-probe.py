@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Prepare a pinned, verification-only Android Node/JNI target, never production."""
 import argparse
+import ast
 import base64
 import hashlib
 import json
+import re
 from pathlib import Path, PurePosixPath
 import shutil
 import stat
@@ -39,14 +41,18 @@ def bundle():
     (assets / 'node-fd-probe.cjs').write_text(template.replace(placeholder, json.dumps(module_url)))
 
 
-def prepare(ndk, archive):
+def prepare(ndk, archive, source_sha=None):
+    if source_sha is not None and not re.fullmatch('[0-9a-f]{64}', source_sha):
+        raise RuntimeError('Expected the trusted build job archive SHA256')
     if not archive.is_file():
+        if source_sha is not None:
+            raise RuntimeError('Source build archive is missing')
         archive.parent.mkdir(parents=True, exist_ok=True)
         partial = archive.with_suffix('.partial')
         with urllib.request.urlopen(PIN['url'], timeout=180) as source, partial.open('wb') as output:
             shutil.copyfileobj(source, output, 1024 * 1024)
         partial.replace(archive)
-    if digest(archive) != PIN['sha256']:
+    if digest(archive) != (source_sha or PIN['sha256']):
         raise RuntimeError('Node archive digest mismatch')
     revision = (ndk / 'source.properties').read_text()
     if f"Pkg.Revision = {PIN['ndkRevision']}" not in revision:
@@ -57,11 +63,23 @@ def prepare(ndk, archive):
     source_dir.mkdir(parents=True, exist_ok=True)
     jni.mkdir(parents=True, exist_ok=True)
     total = 0
+    binary_sha = PIN['binarySha256']
+    config_sha = None
     with zipfile.ZipFile(archive) as package:
         metadata = json.loads(package.read('build-info.json'))
         assert metadata['source']['commit'] == PIN['nodeCommit']
         assert metadata['source']['tree'] == PIN['nodeTree']
         assert metadata['source']['version'] == PIN['version']
+        if source_sha is not None:
+            source_pin = json.loads((ROOT / 'node-source-build.json').read_text())
+            build = metadata.get('mbotSourceBuild', {})
+            if any(build.get(key) != value for key, value in source_pin.items()):
+                raise RuntimeError('Unexpected source build recipe')
+            slices = metadata['slices']
+            if len(slices) != 1 or slices[0]['target'] != PIN['abi']:
+                raise RuntimeError('Unexpected source build ABI')
+            binary_sha = slices[0]['binary_sha256'][f"bin/{PIN['abi']}/libnode.so"]
+            config_sha = slices[0]['config_sha256']
         for info in package.infolist():
             path = PurePosixPath(info.filename)
             if path.is_absolute() or '..' in path.parts or '\\' in info.filename or stat.S_ISLNK(info.external_attr >> 16):
@@ -82,7 +100,12 @@ def prepare(ndk, archive):
             destination.parent.mkdir(parents=True, exist_ok=True)
             with package.open(info) as source, destination.open('wb') as output:
                 shutil.copyfileobj(source, output, 1024 * 1024)
-    assert digest(jni / 'libnode.so') == PIN['binarySha256']
+    assert digest(jni / 'libnode.so') == binary_sha
+    if source_sha is not None:
+        assert digest(source_dir / 'config.gypi') == config_sha
+        variables = ast.literal_eval((source_dir / 'config.gypi').read_text())['variables']
+        if variables.get('v8_enable_i18n_support') not in (1, True, '1', 'true') or variables.get('icu_small') not in (0, False, '0', 'false'):
+            raise RuntimeError('Source build must include full ICU')
     toolchain = ndk / 'toolchains/llvm/prebuilt/linux-x86_64'
     shutil.copyfile(toolchain / 'sysroot/usr/lib/x86_64-linux-android/libc++_shared.so', jni / 'libc++_shared.so')
     (notices / 'ndk').mkdir(parents=True, exist_ok=True)
@@ -93,6 +116,9 @@ def prepare(ndk, archive):
                '-L', str(jni), '-lnode', '-o', str(jni / 'libmbot_node_probe.so')]
     subprocess.run(command, check=True)
     bundle()
+    (ROOT / 'build/verified-assets/node-validation.json').write_text(json.dumps({
+        'requiresIntl': source_sha is not None, 'sourceArchiveSha256': source_sha,
+    }) + '\n')
     print('Prepared pinned Node', PIN['version'], PIN['abi'], 'and JNI verification glue')
 
 
@@ -101,10 +127,11 @@ if __name__ == '__main__':
     parser.add_argument('--ndk', type=Path)
     parser.add_argument('--archive', type=Path, default=ROOT / 'build/downloads/nodejs-mobile.zip')
     parser.add_argument('--bundle-only', action='store_true')
+    parser.add_argument('--source-build-sha', help='Trusted full-ICU build job SHA256; not a runtime override')
     args = parser.parse_args()
     if args.bundle_only:
         bundle()
     elif not args.ndk:
         parser.error('--ndk is required for native preparation')
     else:
-        prepare(args.ndk.resolve(), args.archive.resolve())
+        prepare(args.ndk.resolve(), args.archive.resolve(), args.source_build_sha)

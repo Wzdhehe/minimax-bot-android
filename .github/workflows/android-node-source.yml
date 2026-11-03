@@ -1,0 +1,149 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+name: Android Node full ICU source build
+on:
+  push:
+    paths:
+      - 'dsh-go/tooling/android-node-probe/node-source-build.json'
+      - 'dsh-go/tooling/android-node-probe/build-source.py'
+      - '.github/workflows/android-node-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    outputs:
+      archive_sha: ${{ steps.build.outputs.archive_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read the pinned mobile source
+        id: pin
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          pin = json.loads(Path('dsh-go/tooling/android-node-probe/node-source-build.json').read_text())
+          print('repository=' + pin['mobileRepository'])
+          print('commit=' + pin['mobileCommit'])
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pin.outputs.repository }}
+          ref: ${{ steps.pin.outputs.commit }}
+          submodules: true
+          path: upstream-node-mobile
+          persist-credentials: false
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: false
+      - name: Install the source build toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 ninja-build
+          sdkmanager 'ndk;27.3.13750724'
+          echo '/usr/lib/llvm-18/bin' >> "$GITHUB_PATH"
+          df -h "$GITHUB_WORKSPACE"
+      - name: Compile pinned x86_64 Node with full ICU
+        id: build
+        run: |
+          python3 dsh-go/tooling/android-node-probe/build-source.py \
+            --mobile-source "$GITHUB_WORKSPACE/upstream-node-mobile" \
+            --ndk "$ANDROID_HOME/ndk/27.3.13750724" \
+            --output "$RUNNER_TEMP/node-full-icu.zip"
+      - name: Keep a temporary private build input, not a release or APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-full-icu-verification-input
+          path: ${{ runner.temp }}/node-full-icu.zip
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+  verify:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [26, 35]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - uses: actions/download-artifact@v4
+        with:
+          name: node-full-icu-verification-input
+          path: ${{ runner.temp }}/node-full-icu
+      - name: Verify the source-built archive and compile JNI
+        env:
+          EXPECTED_SOURCE_SHA: ${{ needs.build.outputs.archive_sha }}
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.3.13750724'
+          python3 dsh-go/tooling/android-node-probe/prepare-probe.py \
+            --ndk "$ANDROID_HOME/ndk/27.3.13750724" \
+            --archive "$RUNNER_TEMP/node-full-icu/node-full-icu.zip" \
+            --source-build-sha "$EXPECTED_SOURCE_SHA"
+      - name: Check host bundle and archive refusal cases
+        run: |
+          node --test dsh-go/tooling/android-node-probe/probe-bundle.test.mjs
+          python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_*.py' -v
+      - name: Require KVM
+        run: |
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+      - name: Execute ICU and Key-boundary checks in isolated Android Node
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          ram-size: 2048M
+          heap-size: 256M
+          disk-size: 4096M
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -cores 2
+          script: bash dsh-go/tooling/android-node-probe/run-device-tests.sh
+      - name: Record device test counts without report bodies
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          totals = dict.fromkeys(('tests', 'failures', 'errors', 'skipped'), 0)
+          root = Path('dsh-go/tooling/android-node-probe/build/outputs/androidTest-results/connected')
+          for path in root.rglob('*.xml'):
+              suite = ET.parse(path).getroot()
+              for key in totals:
+                  totals[key] += int(suite.get(key, '0'))
+          print(totals)
+          assert totals['tests'] >= 1
+          assert totals['failures'] == totals['errors'] == totals['skipped'] == 0
+          PY
+      - name: Keep test XML only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-full-icu-results-api-${{ matrix.api-level }}
+          path: dsh-go/tooling/android-node-probe/build/outputs/androidTest-results/connected/**/*.xml
+          retention-days: 7
+          if-no-files-found: ignore

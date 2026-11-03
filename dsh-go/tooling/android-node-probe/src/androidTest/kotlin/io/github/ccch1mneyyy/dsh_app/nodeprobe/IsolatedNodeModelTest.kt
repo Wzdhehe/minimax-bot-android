@@ -124,6 +124,12 @@ class IsolatedNodeModelTest {
                             assertFalse(text.contains(broker.session.token))
                             val report = JSONObject(text)
                             assertEquals("24.22.2", report.getString("version"))
+                            val expected = base.assets.open("node-validation.json").bufferedReader().use { JSONObject(it.readText()) }
+                            if (expected.getBoolean("requiresIntl")) {
+                                assertTrue(report.getBoolean("intlAvailable"))
+                                assertEquals("zh-CN", report.getJSONObject("intlSmoke").getString("locale"))
+                                assertEquals("Asia/Shanghai", report.getJSONObject("intlSmoke").getString("timeZone"))
+                            }
                             assertEquals(reply.uid, report.getInt("uid"))
                             assertTrue(report.getBoolean("privateDenied"))
                             assertEquals("done", report.getJSONObject("normal").getString("code"))

@@ -27,6 +27,10 @@ const fs = require('node:fs');
   const report = {
     version: process.versions.node, modules: process.versions.modules,
     uid: process.getuid(), privateDenied, intlAvailable: typeof Intl !== 'undefined',
+    intlSmoke: typeof Intl === 'undefined' ? null : {
+      locale: new Intl.DateTimeFormat('zh-CN').resolvedOptions().locale,
+      timeZone: new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai' }).resolvedOptions().timeZone,
+    },
     descriptor: { normal: Number(normal), stalled: Number(stalled), echo: Number(echo) },
     environment: process.env,
     normal: await consume(normal, false),

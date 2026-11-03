@@ -1,0 +1,15 @@
+{
+  "_license": "SPDX-License-Identifier: AGPL-3.0-only",
+  "candidateOnly": true,
+  "mobileRepository": "RockinChaos/nodejs-mobile",
+  "mobileCommit": "223eec9554b5d344b86d1b411f0255df8cc47f27",
+  "nodeCommit": "f7f273a9bb6445f6f7fb6349105e7532972045fb",
+  "upstreamTree": "5f62a9f6a645a5391090ed384056e4e06b80c73c",
+  "nodeTree": "be3625af068f11bf8288ecf450a36d990cb2294c",
+  "version": "24.22.2",
+  "buildScriptSha256": "e9aaf40dfca09940ad567f454080693ef0530f00a9cc10da06b0c4c0bd973d68",
+  "ndkRevision": "27.3.13750724",
+  "abi": "x86_64",
+  "androidApi": 26,
+  "intl": "full-icu"
+}

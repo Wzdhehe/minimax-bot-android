@@ -29,3 +29,10 @@ This probe therefore cannot establish full Bot/mcode compatibility. It also does
 not load better-sqlite3, test SQLite/WAL/data persistence, phone ARM64, hardware
 Keystore, physical devices or real 16KiB page behavior. ELF16KiB alignment is a
 static property only. See root `docs/handoff/T-AndroidNode.md` for actual results.
+
+The separate `android-node-source.yml` workflow rebuilds the pinned mobile source
+with full ICU, preserving the upstream checkout. Its temporary private ZIP is
+verified by the build job's SHA256 before JNI preparation and device checks.
+`--source-build-sha` is for that trusted CI input, never an Agent/runtime setting.
+The full-ICU path additionally requires Chinese Intl and Asia/Shanghai time-zone
+checks. A passing default-candidate test does not imply this source build passed.
