@@ -36,6 +36,7 @@ class IsolationBoundaryProbeService : Service() {
         const val READ_CHANNEL = 2
         const val IDENTITY = 3
         const val REQUEST_MODEL = 4
+        const val CHECK_DATA_FD = 5
     }
     private val channels = ConcurrentHashMap.newKeySet<ParcelFileDescriptor>()
     private val workers = ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS, ArrayBlockingQueue(4))
@@ -69,6 +70,7 @@ class IsolationBoundaryProbeService : Service() {
                         READ_CHANNEL -> readChannel(data, channel)
                         IDENTITY -> Bundle().apply { putBoolean("ok", true) }
                         REQUEST_MODEL -> requestModel(data, id)
+                        CHECK_DATA_FD -> checkDataFd(data, channel)
                         else -> Bundle().apply { putBoolean("ok", false) }
                     }
                 } catch (_: Exception) { Bundle().apply { putBoolean("ok", false) } }
@@ -81,6 +83,20 @@ class IsolationBoundaryProbeService : Service() {
             }
         } catch (_: RuntimeException) {
             channel?.let { channels.remove(it); try { it.close() } catch (_: Exception) { } }
+        }
+    }
+    private fun checkDataFd(data: Bundle, channel: ParcelFileDescriptor?): Bundle {
+        if (channel == null) return Bundle()
+        val operation = data.getString("operation") ?: return Bundle()
+        val path = data.getString("path") ?: return Bundle()
+        if (path.length > 4096) return Bundle()
+        val denied = try { File(path).inputStream().use { it.read() }; false } catch (_: Exception) { true }
+        var errno = 0
+        val permitted = try { DataFileFdProbe.perform(channel.fileDescriptor, operation); true }
+            catch (error: android.system.ErrnoException) { errno = error.errno; false }
+        return Bundle().apply {
+            putBoolean("ok", true); putBoolean("permitted", permitted); putInt("errno", errno)
+            putBoolean("path_denied", denied)
         }
     }
     private fun requestModel(data: Bundle, id: String): Bundle {

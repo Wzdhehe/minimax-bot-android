@@ -10,6 +10,7 @@
 | 隔离Node + Keystore + SQLite | bc07b1c/run41663798958：API26/35各1项仪器测试通过，含内存事务/回滚/中文/JSON/serialize及Key边界 | WAL/持久化、ARM64、物理真机 |
 | 动态模型请求 | d545dc7/run41665743434 Binder矩阵成功；4f92405/run41667564473 Node Promise→JNI→Binder→native模型FD在API26/35成功 | 正式model resolver/scope/生命周期装配 |
 | **1MiB大请求FD（当前阶段）** | 64KiB内保持inline；更大JSON走有界pipe，精确长度/EOF/UTF8/截止/取消。broker目标最终2m53s、Node目标2m39s构建成功，host1+输入拒绝8过 | **本阶段大请求设备CI待观察**，前一阶段64KiB实证不能替代 |
+| 数据文件FD能力（当前研究） | 单个明确授予FD的读/写同步/截断/锁/RW映射五用例已编译，broker目标1m23s成功；按私有路径open必须继续拒绝 | **设备待CI**，不是VFS/持久化已实现 |
 | full-ICU Node | 首轮41630373256被4小时上限取消，check annotation已实查；job360/compile330分钟后重跑 **41680254279** | **重跑进行中**，未取得产物/设备证据。默认候选没有Intl |
 
 正式入口仍DSH；上述都是组件/独立验收APK/假provider，**没有完整mcode/官方Bot产品运行、完整Flutter Bot APK或真实模型验收**。插件变更仍关闭。持久化、可信Bot身份/MCP、工具权限及生产启动器仍缺。不得因组件通过就宣称App已完成。
@@ -64,7 +65,7 @@ dev/integration 891aefa
 ## 接下来优先做
 
 1. 查看本阶段大请求API26/35的broker/Node矩阵，失败按真实错误修复；观察full-ICU重跑41680254279。旧41630373256已超时取消，不再等待它。
-2. 验证隔离UID对**明确授予的非敏感数据文件FD**的读写/锁/mmap能力，作为持久化/VFS决策证据；不要假定目录FD/cwd授予主App路径权限。当前SQLite只有内存验收，不自动选周期快照，不回退同UID任意shell。再接完整pi-ai/model resolver与正式生命周期，不能把JNI固定脚本当成产品启动器。
+2. 观察已编译的五项**明确授予的非敏感数据文件FD**的读写/锁/mmap设备结果，作为持久化/VFS决策证据；不要假定目录FD/cwd授予主App路径权限。当前SQLite只有内存验收，不自动选周期快照，不回退同UID任意shell。再接完整pi-ai/model resolver与正式生命周期，不能把JNI固定脚本当成产品启动器。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
 5. 总工作区下实现项目管理与 Bot 绑定，遵守路径防护并分开 cwd 和访问许可；补资料库、附件、群聊/记忆/审批等全量 parity 未完成项。

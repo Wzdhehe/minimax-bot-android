@@ -12,6 +12,8 @@ import android.os.IBinder
 import android.os.Message
 import android.os.Messenger
 import android.os.Process
+import android.os.ParcelFileDescriptor
+import android.system.Os
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.ccch1mneyyy.dsh_app.bot.NativeModelChannels
@@ -43,6 +45,38 @@ import org.junit.runner.RunWith
 class NativeModelFdTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val request = """{"providerId":"p1","modelId":"m1","messages":[{"role":"user","content":"Hi"}]}"""
+
+    @Test fun explicitlyGrantedDataFdCanBeReadWhilePathAccessRemainsDenied() = dataFd("read")
+    @Test fun explicitlyGrantedDataFdCanBeWrittenAndSyncedWhilePathAccessRemainsDenied() = dataFd("write")
+    @Test fun explicitlyGrantedDataFdCanBeTruncatedWhilePathAccessRemainsDenied() = dataFd("truncate")
+    @Test fun explicitlyGrantedDataFdCanHoldAnExclusiveRangeLockWhilePathAccessRemainsDenied() = dataFd("lock")
+    @Test fun explicitlyGrantedDataFdCanBeMappedReadWriteWhilePathAccessRemainsDenied() = dataFd("map")
+
+    private fun dataFd(operation: String) {
+        val marker = File(context.filesDir, "data-fd-${UUID.randomUUID()}")
+        marker.writeText("marker-before")
+        try {
+            ParcelFileDescriptor.open(marker, ParcelFileDescriptor.MODE_READ_WRITE).use { fd ->
+                Os.ftruncate(fd.fileDescriptor, 4096)
+                // Same primitives in the owner prove the file/FS support them.
+                DataFileFdProbe.perform(fd.fileDescriptor, operation)
+                Os.ftruncate(fd.fileDescriptor, 4096)
+                val initial = "marker-before".toByteArray()
+                Os.pwrite(fd.fileDescriptor, initial, 0, initial.size, 0)
+                ProbeConnection(context).use { probe ->
+                    val response = probe.request(IsolationBoundaryProbeService.CHECK_DATA_FD, Bundle().apply {
+                        putParcelable("channel", fd); putString("operation", operation); putString("path", marker.absolutePath)
+                    }).get(10, TimeUnit.SECONDS)
+                    assertNotEquals(Process.myUid(), response.uid)
+                    assertTrue("data FD probe failed", response.data.getBoolean("ok"))
+                    assertTrue("granted FD $operation denied, errno=${response.data.getInt("errno")}", response.data.getBoolean("permitted"))
+                    assertTrue(response.data.getBoolean("path_denied"))
+                    if (operation == "write") assertTrue(marker.readText().startsWith("marker-after"))
+                    if (operation == "truncate") assertEquals(8192L, marker.length())
+                }
+            }
+        } finally { marker.delete() }
+    }
 
     @Test fun isolatedUidCannotReadPrivateFileOrOpenLoopbackEvenThoughOwnerCan() {
         val file = File(context.filesDir, "boundary-probe-${UUID.randomUUID()}")

@@ -3,6 +3,21 @@
 
 当前是**隔离Node的内存数据库验收候选**，没有选择持久化方案，不是完整mcode/runtime已运行。默认产品仍DSH。必须继续在feat/t-plugins，不动main/dev/integration。
 
+## 当前研究：明确授予的数据文件FD能力（设备待CI）
+
+只在独立broker验收APK增加DataFileFdProbe与五个仪器用例：同一组OS原语先在owner执行，再由隔离UID通过明确授予的单个非敏感文件FD执行pread、pwrite+fsync、ftruncate、独占范围锁、PROT_READ|WRITE/MAP_SHARED+msync/munmap。每项同时要求直接按私有路径open仍拒绝；写入/截断还由owner核对实际结果。map仅证明RW映射/同步调用成功，不宣称已通过Java地址直接写映射内容。
+
+测试文件在owner filesDir临时创建、每项结束删除；不授予目录或任意路径解析，不读取Key prefs、日志/内容不外发，不改产品Manifest/存储权限。测试明确期望这些已授予FD操作可用：失败表示方案有阻塞，不能放权限绕过，也不能把失败说成完整沙箱验收。
+
+本地 `testDebugUnitTest assembleDebug assembleDebugAndroidTest`：
+
+```text
+BUILD SUCCESSFUL in 1m 23s
+73 actionable tasks: 12 executed, 61 up-to-date
+```
+
+JVM32项通过、五项新增设备用例编译，**设备结果待API26/35 CI**。这还不是SQLite VFS、WAL/持久化或整个目录权限。待实证后才能选择受控FD VFS/文件broker的持久化设计，不自动采用内存周期快照或双APK。
+
 ## 最新设备证据
 
 bc07b1c / run **41663798958 success**。实读Actions执行日志，两版本均有固定better-sqlite3编译成功；API26：Finished 1 tests on emulator-5554 - 8.0.0；API35：Finished 1 tests on emulator-5554 - 15。每台XML汇总均 `{'tests': 1, 'failures': 0, 'errors': 0, 'skipped': 0}`。用例包含真正隔离Node内的SQLite事务/回滚/中文/JSON/serialize恢复与既有Key边界。下文“待新CI”是实现当时记录，以此覆盖；物理真机/ARM64/WAL/持久化/full-ICU组合仍未验证。
