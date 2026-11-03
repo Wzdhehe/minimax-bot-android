@@ -8,7 +8,7 @@
 
 ## 最新：Android FD 矩阵结果（存在 API26 阻塞）
 
-`ebe339b` 的 run **41602011149 failure**：API35 job **125802739079 success**（六项）；API26 job **125802739439 failure**（六项中两项 FD 发送报 DeadObjectException，另四项通过）。API35 已观察直接私有文件/网络权限/loopback拒绝，预连接 TCP FD 可读 native SSE，关闭 FD 取消假 provider；API26 不能宣称 TCP FD 可用。正在定位传递失败，尚不能仅凭 DeadObjectException 认定具体 SELinux 原因。不得靠增加网络权限/换回主 UID 运行 Agent 绕过。物理真机、硬件 Keystore 和 Node仍未验证。
+`ebe339b` 的 run **41602011149 failure**：API35 job **125802739079 success**（六项）；API26 job **125802739439 failure**（六项中两项 FD 发送报 DeadObjectException，另四项通过）。API35 已观察直接私有文件/网络权限/loopback拒绝，预连接 TCP FD 可读 native SSE，关闭 FD 取消假 provider；API26 不能宣称 TCP FD 可用。正在定位传递失败，尚不能仅凭 DeadObjectException 认定具体 SELinux 原因。后续 CI 在模拟器结束前用 `run-device-tests.sh` 过滤记录 isolated SELinux 拒绝的 permission/domain/class（不输出原始 logcat、路径、响应或凭据），并区分 Binder 仍存活时的 transfer failure；原 Gradle 退出码保留。脚本 bash 语法与过滤器样例检查通过，实际诊断待新 run。不得靠增加网络权限/换回主 UID 运行 Agent 绕过。物理真机、硬件 Keystore 和 Node仍未验证。
 
 ## 单请求模型 FD 初版（历史实现，API26受阻）
 

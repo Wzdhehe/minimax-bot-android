@@ -145,10 +145,15 @@ class NativeModelFdTest {
             val id = UUID.randomUUID().toString()
             val future = CompletableFuture<Reply>()
             pending[id] = future
-            target.send(Message.obtain(null, what).apply {
-                this.data = data.apply { putString("id", id) }
-                replyTo = receiver
-            })
+            try {
+                target.send(Message.obtain(null, what).apply {
+                    this.data = data.apply { putString("id", id) }
+                    replyTo = receiver
+                })
+            } catch (_: android.os.RemoteException) {
+                pending.remove(id)
+                throw IllegalStateException("probe_transfer_failed_alive=${target.binder.isBinderAlive}")
+            }
             return future
         }
         private fun fail() {
