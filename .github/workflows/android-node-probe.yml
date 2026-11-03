@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+name: Isolated Android Node candidate
+on:
+  push:
+    paths:
+      - 'dsh-go/tooling/android-node-probe/**'
+      - '!dsh-go/tooling/android-node-probe/README.md'
+      - 'dsh-go/runtime/minimax-bot-host/model-broker.mjs'
+      - 'dsh-go/runtime/minimax-bot-host/model-fd-client.mjs'
+      - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/model/**'
+      - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/bot/**'
+      - 'dsh-go/app/android/app/src/main/res/xml/network_security_config.xml'
+      - 'dsh-go/tooling/android-broker-probe/report-denials.py'
+      - '.github/workflows/android-node-probe.yml'
+  pull_request:
+    paths:
+      - 'dsh-go/tooling/android-node-probe/**'
+      - '!dsh-go/tooling/android-node-probe/README.md'
+      - 'dsh-go/runtime/minimax-bot-host/model-broker.mjs'
+      - 'dsh-go/runtime/minimax-bot-host/model-fd-client.mjs'
+      - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/model/**'
+      - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/bot/**'
+      - 'dsh-go/app/android/app/src/main/res/xml/network_security_config.xml'
+      - 'dsh-go/tooling/android-broker-probe/report-denials.py'
+      - '.github/workflows/android-node-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [26, 35]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Prepare pinned Node candidate and verification JNI
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.3.13750724'
+          python3 dsh-go/tooling/android-node-probe/prepare-probe.py --ndk "$ANDROID_HOME/ndk/27.3.13750724"
+      - name: Check the exact packaged JS on the host (not isolation evidence)
+        run: node --test dsh-go/tooling/android-node-probe/probe-bundle.test.mjs
+      - name: Require KVM on the ephemeral test runner
+        run: |
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+      - name: Run isolated Node against native fake-provider model streams
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          ram-size: 2048M
+          heap-size: 256M
+          disk-size: 4096M
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -cores 2
+          script: bash dsh-go/tooling/android-node-probe/run-device-tests.sh
+      - name: Record counts only, never Node reports or environment snapshots
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          totals = dict.fromkeys(('tests', 'failures', 'errors', 'skipped'), 0)
+          root = Path('dsh-go/tooling/android-node-probe/build/outputs/androidTest-results/connected')
+          for path in root.rglob('*.xml'):
+              suite = ET.parse(path).getroot()
+              for key in totals:
+                  totals[key] += int(suite.get(key, '0'))
+              for case in suite.findall('testcase'):
+                  print(case.get('classname') + '.' + case.get('name'))
+          print(totals)
+          assert totals['tests'] >= 1
+          assert totals['failures'] == totals['errors'] == totals['skipped'] == 0
+          PY
+      - name: Save test XML only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-candidate-results-api-${{ matrix.api-level }}
+          path: dsh-go/tooling/android-node-probe/build/outputs/androidTest-results/connected/**/*.xml
+          if-no-files-found: ignore
+          retention-days: 7

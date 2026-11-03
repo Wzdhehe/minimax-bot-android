@@ -1,0 +1,16 @@
+{
+  "_license": "SPDX-License-Identifier: AGPL-3.0-only",
+  "candidateOnly": true,
+  "repository": "RockinChaos/nodejs-mobile",
+  "commit": "223eec9554b5d344b86d1b411f0255df8cc47f27",
+  "version": "24.22.2",
+  "nodeCommit": "f7f273a9bb6445f6f7fb6349105e7532972045fb",
+  "nodeTree": "be3625af068f11bf8288ecf450a36d990cb2294c",
+  "url": "https://github.com/RockinChaos/nodejs-mobile/releases/download/v24.22.2/nodejs-mobile-v24.22.2-android.zip",
+  "sha256": "cde938a9e45ebd3f53d11fbb5f3875df92b4069431677dd5827b68acfaa01847",
+  "binarySha256": "c1c48bf4d6aa2a327986f83a84cc8a7fbf9d401c718081f5eb266e600bbf4dec",
+  "abi": "x86_64",
+  "androidApi": 26,
+  "ndkRevision": "27.3.13750724",
+  "intl": "none"
+}

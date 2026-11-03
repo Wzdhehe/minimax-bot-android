@@ -1,5 +1,7 @@
 # 最新接手入口（2026-11-03）
 
+**当前继续项：Android Node**。新增独立Node24验证target/JNI/private isolated服务，真实生产FD模块生成固定脚本；host脚本1项通过，NDK27d JNI编译通过，Gradle两个验收APK **BUILD SUCCESSFUL in 1m 34s**。API26/35实际Node执行待新CI；候选无Intl，尚不能启动完整mbot。源码/版本/命令/限制见 [T-AndroidNode](handoff/T-AndroidNode.md)。下文a094a85基础十项矩阵仍是已观察的设备基线。
+
 **已验证的当前基线**：`a094a85` 的 Android矩阵 run **41622547971 success**。API26 job125871636255、API35 job125871636043均成功；runner解析XML输出每台 **10 tests / 0 failures / 0 errors / 0 skipped**。实际覆盖Keystore/nativeHTTP、独立UID直接文件/网络拒绝、Unix FD流/取消/容量/截止、IPC启动取消解绑与竞争租约/并发关联。物理真机/硬件Keystore/Android Node/完整runtime仍未验证。后文“待观察”和旧失败是演进记录，以此项覆盖。
 
 

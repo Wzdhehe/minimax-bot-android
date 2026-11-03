@@ -36,7 +36,11 @@
 
 不跳过中间关口，也不把 host 模拟模型、JVM 单测或组件测试 APK 当作产品 Android 功能验收。
 
-## Android Node24 源码候选（已核对，未采用/构建）
+## 更新：Node24共享库验证工程
+
+另找到RockinChaos/nodejs-mobile的24.22.2共享库：源码/包/二进制摘要已固定，JNI胶水和仪器APK已本地编译，设备执行待API26/35 CI。它没有Intl，不能直接启动官方Bot。此为隔离进程验证候选，不改变产品runtime选择/启动器；详见 [T-AndroidNode](handoff/T-AndroidNode.md)。后续Node加载与SQLite/持久化仍分别验收。
+
+## Android Node24 源码候选（Termux，已核对，未采用/构建）
 
 继续实查发现较新的维护方案：Termux `nodejs-lts`，固定源码提交 **22bd884a0428cef49cc99230ad94bd76ee5456a6**（2026-11-01）。这补充上面 nodejs-mobile 发行列表的有限调查；不能据其 Node18 发行推断整个 Android 没有新 Node。
 

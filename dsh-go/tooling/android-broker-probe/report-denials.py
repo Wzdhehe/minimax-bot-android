@@ -9,7 +9,7 @@ for line in sys.stdin:
     if not match:
         continue
     permission, source, target, kind = match.groups()
-    if "isolated_app" not in source or kind not in {"fd", "tcp_socket", "unix_stream_socket", "file", "dir"}:
+    if "isolated_app" not in source or kind not in {"fd", "tcp_socket", "unix_stream_socket", "file", "dir", "process", "chr_file"}:
         continue
     summary = (permission.strip(), source, target, kind)
     if summary not in seen:

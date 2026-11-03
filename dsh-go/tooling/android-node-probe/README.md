@@ -1,0 +1,31 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+# Isolated Android Node verification
+
+This is a separate instrumentation target with no launcher, not a product runtime.
+It embeds a pinned Node24 candidate in a private `isolatedProcess` service, runs
+one fixed APK script, and consumes production native model channels. Only fake
+provider keys generated in the owner process are used. No real account/API call,
+main-UID Agent/shell, product launcher switch, APK or library publication occurs.
+
+The authoritative candidate source/version/archive/binary digests are in
+`node-runtime-pin.json`. The archive's complete upstream notices, mobile project
+license and NDK notice are packaged as assets. No binaries belong in Git.
+
+```bash
+python3 dsh-go/tooling/android-node-probe/prepare-probe.py \
+  --ndk /actual/android-ndk-r27d --archive /actual/nodejs-mobile-v24.22.2-android.zip
+gradle --no-daemon -p dsh-go/tooling/android-node-probe assembleDebug assembleDebugAndroidTest
+# With an authorized x86_64 Android device/emulator only:
+bash dsh-go/tooling/android-node-probe/run-device-tests.sh
+```
+
+JDK21/Gradle9.3.1/platform36/BuildTools36 and NDK27.3.13750724 are required.
+Omit `--archive` to download the exact pinned HTTPS archive and verify its digest.
+`--bundle-only` builds just the fixed JS asset for host checks; Gradle refuses to
+build a target without the prepared native libraries and notices.
+
+The release candidate has **no Intl**, which the official Bot i18n module needs.
+This probe therefore cannot establish full Bot/mcode compatibility. It also does
+not load better-sqlite3, test SQLite/WAL/data persistence, phone ARM64, hardware
+Keystore, physical devices or real 16KiB page behavior. ELF16KiB alignment is a
+static property only. See root `docs/handoff/T-AndroidNode.md` for actual results.

@@ -20,9 +20,21 @@
 - [workflow](https://github.com/RockinChaos/nodejs-mobile/blob/223eec9554b5d344b86d1b411f0255df8cc47f27/.github/workflows/build-mobile.yml)
 - [release](https://github.com/RockinChaos/nodejs-mobile/releases/tag/v24.22.2)
 
-## 本阶段实现/验收顺序
+## 本阶段已实现（设备执行待CI）
 
-以下是待开发计划，不能当作已实现：
+新增 `dsh-go/tooling/android-node-probe` 与独立 `android-node-probe.yml`。不是产品启动器。固定版本/摘要在验收工程 `node-runtime-pin.json`；有界提取源码header/指定ABI/完整许可，NDK编译JNI，Gradle缺少库/许可时fail closed。固定脚本由生产FD/SSE模块生成data URL，不在隔离端依赖App私有JS文件。private isolated服务校验owner UID，一进程一次node::Start，不接受外部JS/命令。
+
+真实仪器用例已写：主进程Keystore保存随机假Key，经真实native broker给Node三个模型FD（正常、停滞、回显Key），独立结果FD回传版本/UID/文件拒绝/环境与事件。回传不进日志；测试不在断言信息中打印Key、env或正文。没有真实账号调用。
+
+### 本地实际验证
+
+- 从Google repository XML确认NDK r27d为27.3.13750724，下载ZIP SHA1 `22105e410cf29afcf163760cc95522b9fb981121`吻合。选择提取clang/x86_64 headers/libs到 `/tmp/mbot-ndk27d`，不是完整多ABI NDK。首次裁剪漏libunwind.a，补全x86_64 runtime后编译通过；没有改源代码去绕链接。
+- `python3 .../prepare-probe.py --ndk /tmp/mbot-ndk27d --archive /tmp/mbot-node24-mobile.zip`：`Prepared pinned Node 24.22.2 x86_64 and JNI verification glue`。JNI_OnLoad导出、依赖与16KiB ELF LOAD对齐已静态复核。
+- 精确打包脚本宿主测试 **1 passed**（真实继承Unix FD、流/取消/错误、无stdout/环境凭据传递）。首次失败为父net.Socket预读导致FD中丢响应字节；改测试在继承后才释放替身响应。真实native PFD没有用户态预读，未因此修改生产逻辑。
+- Node验收工程 `assembleDebug assembleDebugAndroidTest`：**BUILD SUCCESSFUL in 1m 34s**，69 tasks executed，两个APK编译打包。首次在JNI尚未准备好时的Gradle失败由输入守卫正常拒绝，未视为代码通过。
+- 无本地KVM/adb，没有本地运行设备。新API26/35 workflow待观察，**Android Node仍未验证**；上述均不是full Flutter Bot APK，不证明Intl、better-sqlite3或持久化。
+
+### 验收流程（设备项仍待完成）
 
 1. 新建独立、无launcher的 `tooling/android-node-probe` 验收工程，固定版本/摘要，包内源/header和license有界提取；用NDK r27d编译小JNI胶水，仅x86_64模拟器。复用生产model/Keystore/NativeModelChannels源码，不维护第二套实现。
 2. 仅测试APK中的private isolatedProcess服务加载libnode/JNI，owner UID校验，固定打包脚本，一进程只初始化一次。没有主UID任意JS/shell入口，不切换产品启动器。
