@@ -28,6 +28,8 @@
 9. **本机未能执行的验收**：真实 fork factory 与真实 host probe 只能在 CI（Linux + esbuild + better-sqlite3 原生件）跑，本机不得声称通过；`runtime-descriptor` 原有 7 项在本机因 Windows 权限位/符号链接限制失败，已在改动前 baseline 复跑确认失败项完全相同。
 10. **CI 回归与修复（如实记录）**：descriptor 加 `catalog` 字段后（commit `b0974c3` 起），`native-model-broker` 的 `native-boundary` job 连续三次 failure（run 41839610040 / 41839956006 / 41840362270）。真因不是产品逻辑，而是既有 `native-model-broker.test.mjs` 断言 descriptor 的**精确键集合**，新增字段使其失配。修复在 commit `9e32d04`：更新该断言并**加强**为同时断言目录不含 `apiKey`/`baseUrl`。最终验收：commit `9e32d04` 的 host 41842253311 / native 41842253222 / scope 41842253245 全部 success，native-boundary Node 段 52/52；真实 fork 验收 run 41840651106（commit 044600c）整体 success。
 
+**后续阶段：native 侧接线闭环（2026-11-04，commit f23775b / 8a52f85）。** 本计划留下的一项待定由实测定位：`runtime-bundle-entry.mjs` **需要改**——`createBuiltinBotRuntime` 改为只收 **descriptor 对象**，目录由 `catalogFromDescriptor` 重新校验后取出，guest 不再能从参数直接拿到目录。native 侧新增 `bot/GuestProviderCatalog.kt`（允许列表产出）与 `runtime/RuntimeDescriptorPayload.kt`（编码时按字段名挡凭据/端点），`BotProviderStore.guestCatalogJson()` 是唯一目录出口。真实 factory 探针改为走「native 写入 descriptor → guest 读回 → 投影」完整链路。仍未做的是 native broker binding 进 guest 进程（依赖尚不存在的 Android 独立 UID 启动器），因此 `nativeBinding` 仍为 `null`、官方连通性测试仍记 `not_run`。
+
 ## Global Constraints
 
 - 只续写 `feat/t-plugins`；不动 `main`/`dev/integration`；不 force push；不建 PR；不发布 APK。

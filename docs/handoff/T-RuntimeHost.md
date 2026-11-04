@@ -100,7 +100,7 @@ PASS: pinned runtime, 40 direct dependency versions, resources and Linux-only SQ
 | `native-model-binding.mjs` | 按轮把模型键解析成 native route，复用既有 `createNativeModelRoute` 与 `createModelFetchScope`；不实现任何 HTTP/SSE |
 | `native-model-runtime.mjs` | **不依赖钉点 gateway** 的装配层：投影 → 建绑定 → 装一次 scoped fetch → 每轮解析模型键 |
 
-改动：`runtime-descriptor.mjs` 携带非密钥目录（`catalog` 字段，冻结，写盘前校验）、`runtime-host-session.mjs` 在 boot 后装配并返回 `providerBinding` 与 `setSessionModel`、`runtime-bundle-entry.mjs` 透传 `catalog/probe/nativeBinding`、`agent-port.mjs` 每轮经 `binding.runForModelKey` 解析并执行。
+改动：`runtime-descriptor.mjs` 携带非密钥目录（`catalog` 字段，冻结，写盘前校验）、`runtime-host-session.mjs` 在 boot 后装配并返回 `providerBinding` 与 `setSessionModel`、`runtime-bundle-entry.mjs` 透传 `catalog/probe/nativeBinding`（**本阶段之后改为只收 descriptor，见下节**）、`agent-port.mjs` 每轮经 `binding.runForModelKey` 解析并执行。
 
 已实现并有断言的边界：
 
@@ -157,7 +157,7 @@ PASS: pinned runtime, 40 direct dependency versions, resources and Linux-only SQ
 
 真实 fork factory（Linux，只能 CI 跑）：真实 factory 用例改为走 descriptor → guest → 投影链路。
 
-**远程验收（commit f23775b）**：host **41847283169** success——`host-contracts` success；`Pin and smoke the upstream runtime fork` success（pin 23/23、构建 4/4、真实 gateway/facade cases 9/9、**真实 factory 1/1**，0 skipped）。真实 factory 用例的输出已是 `PASS: real fork factory cold-start/reopen, **descriptor read-back** with projected non-secret provider catalog with placeholder credential and virtual origin, ...`，即它确实走了「native 写入 descriptor → guest 读回 → 真实 fork 投影」。native **41847283225** success——`native-boundary` success（**JUnit `OK (40 tests)`**，较上一阶段的 32 项新增 8 项；**Node 段 tests 53 / pass 53 / fail 0 / skipped 0**，新增用例 `the guest reads the catalog from the descriptor it validated itself` 为 `ok 43`），`provider-sdk-streams` success，`android-component-compilation` success。scope **41847283180** success。
+**远程验收（commit f23775b / 8a52f85）**：host **41847283169** success——`host-contracts` success；`Pin and smoke the upstream runtime fork` success（pin 23/23、构建 4/4、真实 gateway/facade cases 9/9、**真实 factory 1/1**，0 skipped）。真实 factory 用例的输出已是 `PASS: real fork factory cold-start/reopen, **descriptor read-back** with projected non-secret provider catalog with placeholder credential and virtual origin, ...`，即它确实走了「native 写入 descriptor → guest 读回 → 真实 fork 投影」。native **41847283225**（f23775b）与 **41850609903**（8a52f85）success——`native-boundary` success（**JUnit `OK (40 tests)`**，较上一阶段的 32 项新增 8 项；**Node 段 tests 53 / pass 53 / fail 0 / skipped 0**，新增用例 `the guest reads the catalog from the descriptor it validated itself` 为 `ok 43`），`provider-sdk-streams` success，`android-component-compilation` success。scope **41847283180** / **41850609904** success。设备 **41850609902** success——API26 与 API35 模拟器各 **tests 20 / failures 0 / errors 0 / skipped 0**，其中 `ProviderStorageTest` 3 项（含新增的 `theGuestCatalogCarriesTheProviderButNoEndpointAndNoCredential`）实际执行并通过（结果 artifact 13335566603 / 13336156687）。
 
 ## 剩余主线
 

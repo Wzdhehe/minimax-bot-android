@@ -131,7 +131,7 @@ env -u GH_TOKEN -u GITHUB_TOKEN gh run view 41826964500 --json status,conclusion
 
 **上项已完成**（a2c17d5 / 41831847047，见本节文首更新）。
 
-**本项已完成（2026-11-04，最终提交 9e32d04；真实 fork 验收 run 41840651106 / commit 044600c）**：native 非密钥目录投影与每轮受控绑定已落地，详见第5节与[T-RuntimeHost](T-RuntimeHost.md)。**下一项（目录接线已补齐，2026-11-04，commit f23775b；host 41847283169 / native 41847283225 / scope 41847283180 均 success）**：按[T-RuntimeBroker](T-RuntimeBroker.md)文首的契约，**descriptor 写入「剥离后」的非密钥目录这一半已经落地**——native 侧 `BotProviderStore.guestCatalogJson()` 产出允许列表目录（只有 providerId/name/apiFormat/enabled/models），`RuntimeDescriptorPayload` 编码时按**字段名**再挡一道凭据/端点，`createBuiltinBotRuntime` 改为只收 descriptor、目录由 `catalogFromDescriptor` 取出后交给钉点官方 provider API 投影，真实 factory 探针已走完整「写入→读回→投影」链路。**剩下的一半是 native broker binding 进 guest runtime 进程**：它依赖 Android 独立 UID 启动器（尚不存在），在此之前 `nativeBinding` 仍为 `null`，官方连通性测试仍记 `not_run`、模型请求仍无路由。再往后是每 Bot 可信 MCP caller 绑定与真实 provider 验收。仍不发明跨端协议，不把真实Key写进BYOK yaml/env/descriptor/log，未接broker时明确拒绝模型执行，不加假回答。
+**本项已完成（2026-11-04，最终提交 9e32d04；真实 fork 验收 run 41840651106 / commit 044600c）**：native 非密钥目录投影与每轮受控绑定已落地，详见第5节与[T-RuntimeHost](T-RuntimeHost.md)。**下一项（目录接线已补齐，2026-11-04，commit f23775b / 8a52f85；host 41847283169、native 41847283225 / 41850609903、scope 41847283180 / 41850609904、设备 41850609902 全部 success）**：按[T-RuntimeBroker](T-RuntimeBroker.md)文首的契约，**descriptor 写入「剥离后」的非密钥目录这一半已经落地**——native 侧 `BotProviderStore.guestCatalogJson()` 产出允许列表目录（只有 providerId/name/apiFormat/enabled/models），`RuntimeDescriptorPayload` 编码时按**字段名**再挡一道凭据/端点，`createBuiltinBotRuntime` 改为只收 descriptor、目录由 `catalogFromDescriptor` 取出后交给钉点官方 provider API 投影，真实 factory 探针已走完整「写入→读回→投影」链路。**剩下的一半是 native broker binding 进 guest runtime 进程**：它依赖 Android 独立 UID 启动器（尚不存在），在此之前 `nativeBinding` 仍为 `null`，官方连通性测试仍记 `not_run`、模型请求仍无路由。再往后是每 Bot 可信 MCP caller 绑定与真实 provider 验收。仍不发明跨端协议，不把真实Key写进BYOK yaml/env/descriptor/log，未接broker时明确拒绝模型执行，不加假回答。
 
 收尾只读取得source/candidate日志和API状态；source XML下载遇HTTP403，未本地解析其JUnit明细，故不编造source的f/e/s计数（49是日志启动数）。candidate的t49/f0/e0/s0来自现有结果artifact名称；后续组合验收还须核实际JS分支，而不只计数。
 
@@ -190,7 +190,7 @@ env -u GH_TOKEN -u GITHUB_TOKEN gh run view 41826964500 --json status,conclusion
 | Kotlin isolation/ModelRequestClient.kt、RuntimeFileCommit* | 独立UID控制IPC、逐操作scope及有界pipe |
 | Kotlin isolation/RuntimePrivateDirectory.kt、RuntimeAtomicPublisher.kt | Main-held目录/独立dup/shared inode gate/原子语义 |
 | Kotlin isolation/RuntimeDatabaseFiles.kt | 四普通SQLite FD owner；close非撤销 |
-| Kotlin runtime/RuntimeDescriptor.kt | Main路径型writer，非完成的跨UID交接 |
+| Kotlin runtime/RuntimeDescriptor.kt + runtime/RuntimeDescriptorPayload.kt | Main路径型writer与descriptor编码（含非密钥目录，字段名级守卫）；非完成的跨UID交接 |
 | dsh-go/tooling/android-node-probe/src/main/cpp/node_probe.cpp | linked binding/libuv JNI验收，不是正式launcher |
 | 同工程src/main/kotlin/.../nodeprobe/NodeIsolationProbeService.kt | NodeProbeRuntime在这个文件里，别找不存在的同名单文件 |
 | 同工程src/main/js/node-fd-probe.cjs | 固定验收脚本，不是mbot/mcode产品入口 |

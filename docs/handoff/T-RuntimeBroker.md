@@ -14,13 +14,13 @@
 
 仍然**未做**：native broker binding 进 guest 进程（需要 Android 独立 UID 启动器先存在）、真实 provider 调用、每 Bot 可信 MCP caller 绑定、ARM64/真机、产品 APK。
 
-**远程验收（commit f23775b）**：host **41847283169** success（真实 factory 1/1，日志含 `descriptor read-back`）；native **41847283225** success（`native-boundary` 的 JUnit `OK (40 tests)`、Node 段 53/53/0/0，`provider-sdk-streams` 与 `android-component-compilation` 同 success）；scope **41847283180** success。本机可跑部分：Kotlin 8 项全过、Node 新用例通过、host-contracts 73 项里 64 过 9 失败（失败项与 baseline 完全相同，Windows POSIX 权限位/符号链接限制）。
+**远程验收（commit f23775b / 8a52f85）**：host **41847283169** success（真实 factory 1/1，日志含 `descriptor read-back`）；native **41847283225** / **41850609903** success（`native-boundary` 的 JUnit `OK (40 tests)`、Node 段 53/53/0/0，`provider-sdk-streams` 与 `android-component-compilation` 同 success）；scope **41847283180** / **41850609904** success；设备 **41850609902** success（API26/35 各 20/0/0/0，含新增的 guest 目录设备用例）。本机可跑部分：Kotlin 8 项全过、Node 新用例通过、host-contracts 73 项里 64 过 9 失败（失败项与 baseline 完全相同，Windows POSIX 权限位/符号链接限制）。
 
 ## native 侧待接线的目录契约（2026-11-04，第 1、2 条已实现，见上节）
 
 runtime 侧已完成「native 非密钥目录 → 钉点官方 provider API」的投影与每轮绑定（见 [T-RuntimeHost](T-RuntimeHost.md)）。本节契约的**第 1、2 条已按此实现**（见上节），**第 4 条仍待接线**；继续按下述契约补齐，不要另发明协议：
 
-**1. descriptor 要带 `catalog`。** 现有 Kotlin `RuntimeDescriptorSession` / `RuntimeDescriptor.encode()` 只写 `entryPath/pinCommit/port/token/broker`。需新增一个**非密钥目录**字段并原样写进 `<dataDir>/runtime-descriptor.json`；Node 侧 `createRuntimeDescriptor` 已接受 `catalog` 并在写盘前校验（凭据类字段 → `descriptor_catalog_contains_credential`，端点类字段 → `descriptor_catalog_forbidden_field`）。
+**1. descriptor 要带 `catalog`（已实现）。** Kotlin 侧的目录与 descriptor 编码现由 `runtime/RuntimeDescriptorPayload.kt` 负责，写进 `<dataDir>/runtime-descriptor.json` 的字段是 `entryPath/pinCommit/port/token/broker` 加一个**非密钥目录**；Node 侧 `createRuntimeDescriptor` 接受 `catalog` 并在写盘前校验（凭据类字段 → `descriptor_catalog_contains_credential`，端点类字段 → `descriptor_catalog_forbidden_field`）。
 
 **2. 目录必须先剥掉端点与 Key。** `BotProviderStore.catalog()` 当前返回的每项含 `baseUrl` 与 `maskedApiKey`，**这两个字段都不允许进 descriptor**：`baseUrl` 会把真实供应商端点带进 guest，`maskedApiKey` 属于 Key 类字段。native 侧需要单独产出一份「guest 目录」，字段只允许：
 
