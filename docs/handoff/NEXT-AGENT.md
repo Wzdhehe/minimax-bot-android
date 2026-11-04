@@ -241,6 +241,18 @@ fork 钉在 `mcode-webui/minimax-code@97818b2`（MIT）。上游契约别名见 
 
 尚未定的一处：宿主需要的 Mini App presenter（`miniAppSurface` 选项在 upstream 是 host-owned port，浏览器实现是 `server/miniapp/presenter.ts`）。手机端没有浏览器视图，要决定是给个 no-op presenter（`open` 动作报 `OPEN_UNAVAILABLE`）还是接 Flutter 侧视图。
 
+### 卡点：当前 pin 不允许把 fork 的 runtime 打进 bundle
+
+`upstream-runtime-pin-check.mjs` 第 304 行明确：**"the bundle consumed an upstream file that is not pinned" 是 error**。也就是说 bundle 里只能出现 `UPSTREAM_RUNTIME_BUNDLE_SHA256` 列出的那几个文件（目前就是 4 个契约文件：`agent/gateway.ts`、`agent/contracts.ts`、`agent/model-selection.ts`、`process-local-miniapp-agent-application.ts`、`shared/miniapp-surface.ts`）。
+
+而**插件市场与 Mini App 进程目录不在这个集合里**：它们在 `packages/webui/src/runtime/assembly.ts`、`packages/local-runtime-v2/**`、`packages/agent-*/**`。所以：
+
+- 只按当前 pin 打包 → 只能用那 4 个契约文件 → **我们得自己实现那 17 个端口，插件市场与 Mini App 进程不成立**。
+- 要让插件市场成立 → 必须把 fork 的 runtime 打进 guest → **必须扩展 pin 的可打包文件集合**。pin 文件自己写了："Bumping the pin is a deliberate act: update the constants, update docs/UPSTREAM-RUNTIME.md, then re-run the acceptance commands."
+
+可行的扩展方式（下一位可评估）：**用已有的整树 pin 代替手工逐文件指纹**。`UPSTREAM_RUNTIME_TREE = 5d79407ffcd54715567b49e0fac46c8ccc6e2ec8` 已经钉住整棵树；把"bundle 的每个 input 必须在该树的对应 blob 里"作为校验，就不必手工维护成百上千个文件指纹，同时仍然能证明"进 bundle 的字节就是钉住的那棵树的字节"。这属于改**验收工具**，不是放宽安全边界：checkout 仍是树级钉住，bundle 输入仍逐个按 blob 校验。
+
+
 
 ## 12. 本轮环境（D 盘，Windows）与两处平台限制
 
