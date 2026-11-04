@@ -256,6 +256,9 @@ fork 钉在 `mcode-webui/minimax-code@97818b2`（MIT）。上游契约别名见 
 
 可行的扩展方式（下一位可评估）：**用已有的整树 pin 代替手工逐文件指纹**。`UPSTREAM_RUNTIME_TREE = 5d79407ffcd54715567b49e0fac46c8ccc6e2ec8` 已经钉住整棵树；把"bundle 的每个 input 必须在该树的对应 blob 里"作为校验，就不必手工维护成百上千个文件指纹，同时仍然能证明"进 bundle 的字节就是钉住的那棵树的字节"。这属于改**验收工具**，不是放宽安全边界：checkout 仍是树级钉住，bundle 输入仍逐个按 blob 校验。
 
+**本轮已实现这一条**（`b0d570c`）：`upstream-runtime-pin-check.mjs` 新增导出函数 `pinnedTreeFileError({ source, tree, path })`，用 `git rev-parse <tree>:<path>` 的 blob id 对比 `git hash-object` 的结果；检查器第 7 步对**不在手工指纹列表里**的上游输入改为按钉住的树逐个校验，通过即放行。性质没有放宽：进 bundle 的每个上游文件都必须与钉住那棵树的 blob 逐字节一致，commit 与 tree 仍是原值。新增 4 条用例（命中树/不在树/字节被改/无 checkout）；本地 Windows 跑 21/23，**失败的 2 条在 HEAD 原版同样失败**（已用原地 HEAD 对照验证：17/19），属平台差异。
+
+
 
 
 ## 12. 本轮环境（D 盘，Windows）与两处平台限制
@@ -266,7 +269,26 @@ fork 钉在 `mcode-webui/minimax-code@97818b2`（MIT）。上游契约别名见 
 
 **平台限制二：Windows 的权限模型让 descriptor 的权限断言失真。** `runtime-descriptor.test.mjs` 在 Windows 上 HEAD 原版即 3/6 失败（`chmod` 不改变 mode，所有"读回 descriptor"的用例都被 `descriptor_permissions` 分支拦下），Linux 上全绿。本轮新增 1 项后是 4/7，同因，**不是回归**。
 
-**网络：** 代理节点时通时不通。`git push`/`git ls-remote` 稳定可用；`api.github.com` 常 TLS 握手超时，节点恢复后 CI 查询正常。**不要**用第三方 GitHub API 镜像：私有仓库的 token 会一并发给第三方。
+**网络：** 代理节点时通时不通。`git push`/`git ls-remote` 稳定可用；`api.github.com` 常 TLS 握手超时，节点恢复后 CI 查询正常。**不要**用第三方 GitHub API 镜像：私有仓库的 token 会一并发给第三方。本轮收尾时远端 `git-receive-pack` 一度返回 `Internal Server Error`（读正常、`gh api user` 正常），推送失败但本地提交完好，恢复后重推即可。
+
+### C 盘卫生（本轮按用户要求处理）
+
+所有缓存与临时文件已落到 D 盘，并写进**用户级环境变量**（新终端也生效）：`ANDROID_AVD_HOME=D:\android-setup\avd`、`PUB_CACHE=D:\android-setup\pub-cache`、`TEMP=TMP=D:\android-setup\tmp`、`GRADLE_USER_HOME=D:\android-setup\gradle-home`。AVD `mbot-api35` 已从 `C:\Users\mjc39\.android\avd` 搬到 `D:\android-setup\avd`，C 盘上原有的 pub 缓存已删除。C 盘 SDK 路径下仍有 `cmdline-tools/emulator/ndk/cmake/system-images/build-tools\36.0.0` 这些**目录联接**（字节在 D 盘，只是入口在 C）；`platform-tools` 与 `platforms/android-36` 是用户原有的真实安装。
+
+## 13. 产品 APK 的构建现状（本轮实跑，尚未产出 APK）
+
+目标是把 **Bot App** 交付成可用 APK。环境已就绪（Flutter 3.47.9 / Android SDK / Gradle 9.3.1 / API35 模拟器），`dsh-go/app` 已 `flutter pub get` 成功。`flutter build apk --debug` 实跑 **13m21s 后失败**：
+
+```text
+Execution failed for task ':android_file_picker:compileDebugKotlin'.
+> Could not close incremental caches in ...\android_file_picker\kotlin\compileDebugKotlin\cacheable\caches-jvm\jvm\kotlin:
+  class-fq-name-to-source.tab, source-to-classes.tab, internal-name-to-source.tab
+```
+
+这是 **Windows 上 Kotlin 增量编译缓存的 `.tab` 映射文件关不掉**，不是源码错误（前面的依赖解析、插件编译、Flutter 资产打包都已过去）。下一位可直接试：`kotlin.incremental=false`（或清掉该插件的 `build/**/kotlin` 缓存目录）后重编。
+
+另一处必须知道：app 的 Android 构建会引入 `dsh-go/runtime/out/<abi>/assets` 与 `jniLibs`（Linux rootfs + proot + Node + DSH 引擎），它们由 `runtime/build-runtime.sh` 产出，而**该脚本是 Linux 宿主专用**（bash + curl + xz + python3 + Ubuntu base 解包）。Windows 上编出来的 APK 因此**没有引擎**：能装、能启动、能看界面，但装不了 runtime。真正的"可用"还要等 rootfs 里有 mcode fork + 官方 Bot + host adapter（第 11 节那三处缺口）。
+
 
 ## 可直接给下一位的简短提示
 
@@ -274,10 +296,14 @@ fork 钉在 `mcode-webui/minimax-code@97818b2`（MIT）。上游契约别名见 
 接手Wzdhehe/minimax-bot-android现有feat/t-plugins，不另起分支。
 先读AGENTS.md、docs/HANDOFF.md、docs/handoff/NEXT-AGENT.md与T-RuntimeFiles/T-RuntimeBroker。
 产品是Bot App：mbot业务在前，mcode runtime做底座（插件市场兼容靠mcode）。
-runtime接线有三处硬缺口（NEXT-AGENT第11节）：rootfs没装mcode/Bot/host、descriptor的Kotlin半边本轮已补、设备侧无人启动Bot服务。
-下一步先定"mbot同进程createBotAgentPort"还是"走webui本机WebSocket当MiniApp"，再写guest入口。
-现Native/Node文件组件在78d49f5的API26/35各44项通过；正式App仍DSH引擎，完整Bot/runtime未接。
+runtime接线三处缺口（NEXT-AGENT第11节）：descriptor的Kotlin半边本轮已补（设备已验）；
+rootfs仍没装mcode/Bot/host、设备侧仍无人启动Bot服务 —— 这两件是主线。
+架构已定：guest入口用fork自己的createWebuiRuntimeHost起runtime宿主（它才有插件市场目录），
+内置Bot以宿主注册的caller身份接进（身份不来自Bot请求）。
+pin已扩展为按整树blob校验（b0d570c），fork runtime现在可以进bundle。
+APK现状：flutter build apk --debug 在Windows上13分钟后挂在Kotlin增量缓存.tab（NEXT-AGENT第13节），
+可用 kotlin.incremental=false 重试；rootfs缺失，编出来的APK还没有引擎。
 目录FD留Main；不加同UID任意shell、宽存储、明文Key、MiniApp容器或远控。
 阶段验证后更新交接并及时push；不动main/dev、不force、不PR、不发布APK。
-工具链按本文件实查（D盘Windows环境+两处平台限制）；没有真机的内容写未验证，不编造。
+工具链按本文件实查（D盘Windows环境+平台限制）；没有真机的内容写未验证，不编造。
 ```
