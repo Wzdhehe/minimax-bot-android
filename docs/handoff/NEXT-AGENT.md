@@ -207,15 +207,47 @@ Flash的检查器原交付38测试/9坏链接已复现，修复后39测试；新
 
 [Nyral调研](../research/nyral.md)：Kotlin自研引擎/SQLite链更直接，可参考epoch、pending事务与轻量交互，但没有证明mcode/mbot兼容；不搬其同UID shell、宽存储、手机操控、系统闹钟。两份参考均固定commit/MIT，未复制业务代码或素材。
 
+## 11. 设备端 runtime 接线：已查清的三处硬缺口（本轮实查，2026-11-04）
+
+本轮按用户指示把重点从"组件验收"转到"把 Bot App 做完"。读官方 Bot 源码、钉死的 mcode fork 与 fork 的 webui 服务端后，**设备端 runtime 接线有三处硬缺口**，都还没有代码：
+
+1. **rootfs 里没有 Bot 与 mcode。** `dsh-go/runtime/build-runtime.sh` 只打包 Ubuntu Base + Node v24.22.1 + `@deepseek-ai/dsh` 引擎 + proot（产物 `runtime/out/<abi>/assets/runtime/rootfs-<abi>.tar.xz` + `manifest.json`，`manifest.launch.argv` 才是启动命令模板）。**mcode fork、官方 Bot（`runtime/vendor/minimax-bot`）、host adapter（`runtime/minimax-bot-host`）都没有进 guest**。引擎切换 = 往 rootfs 里装这三样 + 改 `launch.argv`。
+2. **descriptor 只有 Node 一半。** `runtime/minimax-bot-host/runtime-descriptor.mjs` 一直宣称"由 Android 宿主写入 0600 的 `runtime-descriptor.json`，runtime 读回"，但**Kotlin 侧此前完全没有实现**。本轮补上 `app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/RuntimeDescriptor.kt`：写入 app 私有目录（即 guest 的 HOME，PRoot 侧 `env["HOME"]=context.filesDir`），`O_EXCL|O_NOFOLLOW` + rename，落地后校验是 owner-only 普通文件；Node 侧契约同步扩展为可选 `broker: {baseUrl, token}`（native model broker 会话，guest 发模型请求要用）。设备用例在 `app/android/app/src/androidTest/.../runtime/RuntimeDescriptorTest.kt`。
+3. **设备侧没有任何东西启动 Bot 服务。** `startBotService`（`runtime/minimax-bot-host/service.mjs`）目前**只有宿主测试在调用**。它是官方 Bot 的 HTTP 服务入口（自带 `authorizeRequest` 要求的 `Bearer <token>` 鉴权、workspace 解析、provider broker），Dart 侧 `MiniMaxBotApi` 本来就支持自定义头，dev 入口 `lib/dev/minimax_bot_main.dart` 只是硬编码 `http://127.0.0.1:8788` 且**不带 token**，所以连真实服务都连不上。
+
+### mbot 跑在 mcode 上的接缝（已读上游源码确认）
+
+fork 钉在 `mcode-webui/minimax-code@97818b2`（MIT）。上游契约别名见 `runtime/minimax-bot-host/upstream-runtime-pin.mjs`：
+
+- `@mcode-test/agent-gateway` → `packages/local-runtime-v2/src/service/miniapp/agent/gateway.ts`
+- `@mcode-test/process-local` → `packages/local-runtime-v2/src/application/session/process-local-miniapp-agent-application.ts`
+
+宿主适配层是 `createBotAgentPort({agent, caller})`（`runtime/minimax-bot-host/agent-port.mjs`）：它把 mcode 的 agent 契约包成官方 Bot 期待的 `run/models/reply/answer`，并**在创建时固化身份**（`pluginId`/`runId` 来自宿主注册，Bot 请求改不了）。宿主侧参考实现是 `runtime/minimax-bot-host/upstream-gateway-smoke.mjs`（真 gateway + 真 Bot 服务，模型/会话端口打桩）——**它是 host-only 契约冒烟，不是完整 runtime**。
+
+`gateway.bind()` 要实现的端口比冒烟脚本多：`createSession / defaultSessionModel / resolveModel / listModels / listAgents / listUserSessions / readUserSession / readMiniAppSession / readSessionModel / setSessionModel / getOwner / resolveMiniAppRoot / resolveHostSession / runTurn / answerQuestion / replyPermission / subscribePermissionAsks`（签名见 `packages/local-runtime-v2/src/service/miniapp/agent/contracts.ts` 的 `MiniAppAgentSessionPorts`）。其中**模型族要接 native broker**（Main 的 `NativeModelBroker` 在 `127.0.0.1` 起 `POST /v1/model/stream` + 64hex token，guest 侧客户端是 `createModelBrokerClient`），**会话族要绑定可信 Bot 身份**，**权限族要桥到 UI 审批** —— 这三项正是交接里"正式 model resolver / 可信 Bot 身份 / 审批桥"缺口的落点。
+
+另注：fork 的 `packages/webui/src/server` 自带 `http-server / frame-handler / access-policy / credentials`，即**本机 WebSocket + 有界消息协议**宿主，`packages/local-runtime-v2` 就跑在同一 Node 进程里。mbot 走"同进程 `createBotAgentPort`"还是"走 webui 的 WebSocket 协议当 Mini App"，是下一步要定的架构选择；前者改动小、可测性好，后者更贴上游。
+
+## 12. 本轮环境（D 盘，Windows）与两处平台限制
+
+本机是全新 Windows 主机，按用户要求把环境装在 D 盘：`D:\android-sdk`（cmdline-tools 19.0 / platform-36 / build-tools 36.0.0 / NDK 27.3.13750724 / CMake 3.22.1 / emulator 37.2.13 / system-images API26+API35 x86_64）、`D:\toolchains\flutter`（3.47.9，Dart 3.13.7，sha256 与官方 releases 一致）、`D:\toolchains\gradle-9.3.1`、`D:\android-setup\gradle-home`。为让 android-emulator 插件找到 D 盘的字节，在 `C:\Users\mjc39\AppData\Local\Android\Sdk` 下建了 `cmdline-tools/emulator/ndk/cmake/system-images/build-tools\36.0.0` 目录联接（字节仍在 D 盘）。API35 AVD 名 `mbot-api35`（API26 那台已删，老版本矩阵由 CI 覆盖）。
+
+**平台限制一：钉死的验收脚本假设 Linux 宿主。** `prepare-probe.py` / `prepare-sqlite.py` / `check-native-files.py` / `test-fd-vfs.py` / `smoke-compiler-cache.py` 都硬编码 `ndk/toolchains/llvm/prebuilt/linux-x86_64`。Windows 上该目录不存在（本机是 `windows-x86_64`），且 NDK 的 `x86_64-linux-android26-clang++` 在 Windows 是 `.cmd`/`.exe` 包装，Python `subprocess` 直接 exec 会报 `WinError 193`。本轮用目录联接 `linux-x86_64 → windows-x86_64` 绕过前者，**没有改这些脚本**（`smoke-compiler-cache.py` 属钉死 producer 的五个输入，改了会让旧 producer 失去复用资格）；后者仍需改脚本才能本地跑，因此**本地 probe APK 未构建成功**，设备验证仍以 CI 为准。
+
+**平台限制二：Windows 的权限模型让 descriptor 的权限断言失真。** `runtime-descriptor.test.mjs` 在 Windows 上 HEAD 原版即 3/6 失败（`chmod` 不改变 mode，所有"读回 descriptor"的用例都被 `descriptor_permissions` 分支拦下），Linux 上全绿。本轮新增 1 项后是 4/7，同因，**不是回归**。
+
+**网络：** 代理节点时通时不通。`git push`/`git ls-remote` 稳定可用；`api.github.com` 常 TLS 握手超时，节点恢复后 CI 查询正常。**不要**用第三方 GitHub API 镜像：私有仓库的 token 会一并发给第三方。
+
 ## 可直接给下一位的简短提示
 
 ```text
 接手Wzdhehe/minimax-bot-android现有feat/t-plugins，不另起分支。
 先读AGENTS.md、docs/HANDOFF.md、docs/handoff/NEXT-AGENT.md与T-RuntimeFiles/T-RuntimeBroker。
-先查full-ICU run41757171111的compile/cache-save/progress artifact实际状态。
-现Native/Node文件组件在78d49f5的API26/35各44项通过；正式App仍DSH，完整Bot/runtime未接。
-下一阶段优先Main-held子目录cap到publisher/子scope broker的真实装配，保留原Key/WAL/两PID/unknown测试。
-目录FD留Main；不加同UID任意shell、宽存储、明文Key、MiniApp或远控。
+产品是Bot App：mbot业务在前，mcode runtime做底座（插件市场兼容靠mcode）。
+runtime接线有三处硬缺口（NEXT-AGENT第11节）：rootfs没装mcode/Bot/host、descriptor的Kotlin半边本轮已补、设备侧无人启动Bot服务。
+下一步先定"mbot同进程createBotAgentPort"还是"走webui本机WebSocket当MiniApp"，再写guest入口。
+现Native/Node文件组件在78d49f5的API26/35各44项通过；正式App仍DSH引擎，完整Bot/runtime未接。
+目录FD留Main；不加同UID任意shell、宽存储、明文Key、MiniApp容器或远控。
 阶段验证后更新交接并及时push；不动main/dev、不force、不PR、不发布APK。
-工具链按本文件实查；没有真机的内容写未验证，不编造。
+工具链按本文件实查（D盘Windows环境+两处平台限制）；没有真机的内容写未验证，不编造。
 ```

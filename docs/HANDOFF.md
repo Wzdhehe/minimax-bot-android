@@ -28,6 +28,7 @@
 | Node move/rename/remove | 新固定异步JNI→隔离Kotlin→Main cap；两新PID必需移动/冲突/替换/删除/拒绝与原Key/WAL断言，钉点JNI/SQLite与Python28/host1通过 | **c8e702d/41779493946 API26/35各35项通过**；不是完整FS/正式launcher，见T-RuntimeFiles |
 | 有界append/目录协调 | Main按目录FD inode协调publish/replace/move/remove/append；新增APPEND显式权限与Node JNI，五新增设备用例、原Key/WAL回归保留，两个验收APK2m34s、Python29/host1/scope4/actionlint过 | 888aa77首次API26 t40 f1保留；后续**c8e506e与78d49f5各自API26/35均44项通过**（含追加、目录与夹具修正）；O(文件大小)整文件原子追加/总量1MiB，不是O_APPEND/FileHandle/大JSONL或跨进程锁，见T-RuntimeFiles |
 | Main子目录cap | 固定openat/mkdirat、私有0700/owner/NOFOLLOW、8级上限；四新增用例、两个验收APK1m33s、Python30/scope4及双ABI JNI/16KiB过 | **c8e506e/41781117518及78d49f5/41781774323均API26/35各44项通过**；只Main API，未给Agent目录FD/IPC/Node，不是完整FS，见T-RuntimeFiles |
+| **设备端 runtime 接线（当前阶段）** | 已查清三处硬缺口并补其一：Kotlin 侧 descriptor 写入（0600/O_EXCL/O_NOFOLLOW/rename/owner-only 校验）+ Node 契约同步扩展 broker 会话 + 设备用例 | rootfs 仍只装 DSH 引擎，mcode fork/官方 Bot/host adapter 未进 guest；设备侧无人启动 Bot 服务；mbot↔mcode 接缝架构待定；见 NEXT-AGENT 第11节 |
 | full-ICU Node | 首轮41630373256超4小时取消；**重跑41680254279也因compile 330分钟超时而失败**，check annotation实查，verify skipped | 无产物/ICU设备证据；已补ccache/300分钟预算+失败也保存cache，host/NDK真实hits2+group-timeout smoke过、Python21过；首推41756717823因job-env的runner上下文不合法未创建job，已用actionlint复现并移到step env；Python21过，修后CI/cache保存恢复/完整编译待验证。默认候选没有Intl |
 
 正式入口仍DSH；上述都是组件/独立验收APK/假provider，**没有完整mcode/官方Bot产品运行、完整Flutter Bot APK或真实模型验收**。插件变更仍关闭。持久化、可信Bot身份/MCP、工具权限及生产启动器仍缺。不得因组件通过就宣称App已完成。
