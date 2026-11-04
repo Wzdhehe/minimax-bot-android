@@ -3,15 +3,25 @@ import { randomUUID } from 'node:crypto';
 import { BrokerError } from './model-broker.mjs';
 import { createNativeModelFetch } from './model-sdk-fetch.mjs';
 
+/** The virtual HTTPS origin every native route is addressed through. */
+const VIRTUAL_ORIGIN = 'https://models.mbot.invalid';
+
+/** The base URL a native route exposes for one api format. The upstream
+ * provider configuration must address exactly this origin so the guest never
+ * learns the real endpoint. */
+export function nativeVirtualBaseUrl(apiFormat) {
+  if (apiFormat === 'anthropic-messages') return VIRTUAL_ORIGIN;
+  if (apiFormat === 'google-generative-ai') return `${VIRTUAL_ORIGIN}/v1beta`;
+  return `${VIRTUAL_ORIGIN}/v1`;
+}
+
 /** SDK routing uses a virtual HTTPS origin, never the configured upstream URL.
  * Native resolves the real endpoint/auth from IDs and rechecks authorization.
  * The nonsecret placeholder merely satisfies SDK constructors. */
 export function createNativeModelRoute({ providerId, modelId, apiFormat, binding, timeoutMs }) {
   if (!binding || typeof binding.open !== 'function' || typeof binding.cancel !== 'function' ||
       typeof modelId !== 'string' || !modelId.trim() || modelId.length > 256) throw new BrokerError('broker_request_invalid');
-  const origin = 'https://models.mbot.invalid';
-  const baseUrl = apiFormat === 'anthropic-messages' ? origin :
-    apiFormat === 'google-generative-ai' ? origin + '/v1beta' : origin + '/v1';
+  const baseUrl = nativeVirtualBaseUrl(apiFormat);
   const suffix = {
     'openai-completions': '/chat/completions', 'openai-responses': '/responses',
     'anthropic-messages': '/v1/messages',
