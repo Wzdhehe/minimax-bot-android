@@ -91,7 +91,7 @@ env -u GH_TOKEN -u GITHUB_TOKEN gh api \
 report-results.py兼容属性、正文、namespace、suite级failure/嵌套堆栈。只输出白名单阶段/code/异常类别和数字测试行号，以及计数；同一有限result_id进入GITHUB_OUTPUT和artifact name。没有异常原文/env/响应/平台诊断。未知值归一化，不通过通配符将任意error.code输出。XML仍是七天私有测试artifact。Keystore随机测试Key的断言不包含原始报告作为失败信息。
 
 1. 四FD已过API26/35，不必重新猜旧IPC失败；先做正式native数据lease/完整FS与ICU进度复用，保留这些断言。
-2. Main持久文件owner已落生产源码并接验收，设备待新CI，见[T-NativeDataFiles](T-NativeDataFiles.md)；它不等于真正native runtime-data lease，后者尚未实现。只允许专用数据文件，不给Key prefs/Keystore/整个filesDir/workspace；cwd不是权限。owner关闭副本不能撤销dup，撤销需终止隔离执行单元；正式launcher须验证若存在子进程也一起退出。当前仅等service Binder死亡，不证明fork/FD转交场景撤销。
+2. Main持久文件owner已落生产源码，44c0190/41760010243的API26/35各7项过；见[T-NativeDataFiles](T-NativeDataFiles.md)；它不等于真正native runtime-data lease，后者尚未实现。只允许专用数据文件，不给Key prefs/Keystore/整个filesDir/workspace；cwd不是权限。owner关闭副本不能撤销dup，撤销需终止隔离执行单元；正式launcher须验证若存在子进程也一起退出。当前仅等service Binder死亡，不证明fork/FD转交场景撤销。
 3. 固定mcode DatabaseClient明确v1/v2双连接，并用独立只读连接验backup。online backup、临时文件、mkdirSync/dataDir、JSON/历史/插件FS与物理inode替换仍缺，不能将本VFS当完整FS桥。
 4. Android设备上的进程崩溃恢复、所有FD关闭、物理真机/ARM64/16KiB页面、断电/存储满尚未验证。宿主crash恢复不能代替它们。
 5. full-ICU producer41680254279已在330分钟编译超时失败，无产物、verify skipped；默认候选无Intl，完整官方Bot仍不能启动。ee40005已支持经过同repo/branch/精确build inputs验证后的私有产物复用，下载/组合设备路径未验证；见T-AndroidNode。

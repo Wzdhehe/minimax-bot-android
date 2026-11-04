@@ -93,3 +93,13 @@ class ResultReportingTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.module.report(self.root, status)
         self.assertEqual(status.read_text(), 't1-f1-e0-s0-native_data-ld31\n')
+
+    def test_publication_probe_reports_only_errno_and_fixed_source_location(self):
+        code, output = self.run_report('private-sentinel publication_errno_38 at x(FilePublicationProbeTest.kt:52)')
+        self.assertEqual(code, 1)
+        self.assertIn('publication errno=38', output)
+        self.assertNotIn('private-sentinel', output)
+        status = self.root / 'status.txt'
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.module.report(self.root, status)
+        self.assertEqual(status.read_text(), 't1-f1-e0-s0-publication_errno38-lp52\n')

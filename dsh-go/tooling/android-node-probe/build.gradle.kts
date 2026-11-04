@@ -34,7 +34,7 @@ val productionResources by tasks.registering(SharedModelSources::class) {
 }
 val verifyPreparedInputs by tasks.registering {
     doLast {
-        for (name in listOf("libnode.so", "libc++_shared.so", "libmbot_node_probe.so")) {
+        for (name in listOf("libnode.so", "libc++_shared.so", "libmbot_node_probe.so", "libmbot_file_publication_probe.so")) {
             check(file("build/verified-jni/x86_64/$name").isFile) { "Run prepare-probe.py with the pinned Node archive and NDK first" }
         }
         check(file("build/verified-assets/node-fd-probe.cjs").isFile)

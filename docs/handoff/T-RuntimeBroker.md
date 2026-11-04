@@ -2,7 +2,7 @@
 
 > e03b997/run41686820725的SDK route矩阵已API实查API26/35 success；以下待CI是实现当轮状态。正式resolver/启动器仍未接；FD VFS 的6605508/41700450899已定位Main含目录FD的IPC发送失败，SQLite未执行，不能称持久化已解决。后续46c1c07/run41703671145的四普通文件FD方案已API26/35通过（含WAL、两新PID与既有Key/模型断言）；仍无完整产品runtime，详见 [T-Persistence](T-Persistence.md)。
 
-Main持久数据库文件owner本阶段已加入生产源码，验收Node直接使用；固定四数据FD且不截断已有文件，隔离UID必须拒绝调用owner。两个APK43s构建、Python22过，新的API26/35设备用例待CI；完整lease/进程撤销、model resolver/启动器仍缺，见[T-NativeDataFiles](T-NativeDataFiles.md)。
+Main持久数据库文件owner本阶段已加入生产源码，验收Node直接使用；固定四数据FD且不截断已有文件，隔离UID必须拒绝调用owner。两个APK43s构建、Python22过；44c0190/run41760010243的API26/35已各7项通过（hardlink按平台/owner分支边界记录）；完整lease/进程撤销、model resolver/启动器仍缺，见[T-NativeDataFiles](T-NativeDataFiles.md)。
 
 ## SDK路由接JNI binding
 

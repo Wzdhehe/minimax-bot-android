@@ -1,7 +1,18 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-NativeDataFiles：Main持久数据库文件所有权（2026-11-04）
 
-当前为生产源码中的低层文件组件及独立验收接入，**不是完整runtime-data lease/撤销机制，不是正式App启动器已切换**。API26/35新设备结果待本阶段CI；上一版46c1c07只证明临时四FD方案已过。
+当前为生产源码中的低层文件组件及独立验收接入，**不是完整runtime-data lease/撤销机制，不是正式App启动器已切换**。**44c0190/run41760010243已API26/35各7项通过、0失败/错误/跳过**；仍不是完整lease/撤销。
+
+## 设备结果（最新）
+
+44c0190 / run41760010243：
+
+```text
+API26 id13290621046: node-candidate-results-api-26-t7-f0-e0-s0-passed-l0
+API35 id13290685317: node-candidate-results-api-35-t7-f0-e0-s0-passed-l0
+```
+
+原模型/Key/WAL两PID用例+六owner用例全通过。hardlink用例的保证按下一段边界描述，不能把平台权限拒绝自动描述为owner自身nlink分支在设备上跑过。
 
 ## 首次设备结果与hardlink测试边界
 
@@ -9,7 +20,7 @@ a62530d/run41758485389 的API26/35均真实返回`t7-f1-e0-s0-unclassified-ld97`
 
 修正用例为“平台或owner不能被hardlink绕过”：如果Os.link以EPERM/EACCES拒绝，必须确认目标未创建、原始私有哨兵不变；其他错误仍失败。如果平台允许创建，则先确认nlink=2，再必须由生产owner拒绝且原内容不变。**不启用宽权限、root或shell去绕过平台限制，不使用Assume/skip冒充验证。两个模拟器上owner自身的nlink拒绝分支尚未证实实际触发**，后续不能据七项passed擅自扩大这一点。
 
-仅调整设备测试，生产校验保持不变。两个APK实际输出：`BUILD SUCCESSFUL in 36s`，`69 actionable tasks: 6 executed, 63 up-to-date`；新设备结果待CI。
+仅调整设备测试，生产校验保持不变。两个APK实际输出：`BUILD SUCCESSFUL in 36s`，`69 actionable tasks: 6 executed, 63 up-to-date`；此后44c0190设备结果见顶部。
 
 ## 实现
 
@@ -42,10 +53,10 @@ BUILD SUCCESSFUL in 43s
 69 actionable tasks: 6 executed, 63 up-to-date
 ```
 
-设备执行未验证，不能将编译视为六项已通过。
+六项owner用例已随顶部run执行；这不覆盖完整产品或物理真机。
 
 ## 下一步
 
-1. 查新Node run的API26/35 artifact name；应为原完整用例1项+owner6项，**以真实CI计数为准，不能在未运行前写7项通过**。
+1. 当前owner版真实计数为API26/35各7项通过。后续新增原子发布探测见T-RuntimeFS，不能根据旧7项推断新probe已运行。
 2. 取得实际结果后，再将owner绑定正式launcher的身份/退出生命周期，不把close描述为撤销。固定JS的虚拟state.db仍映射同一FD；整个mcode路径/模块适配尚未装配。
 3. 完整FS、online backup/替换、新文件创建、JSON/history、Key文件拒绝与可信Bot/MCP身份仍另做。不得把本组件暴露为Agent任意路径open接口。
