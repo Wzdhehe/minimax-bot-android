@@ -15,11 +15,15 @@ import java.util.UUID
  */
 internal fun interface RuntimePublicationKernel {
     fun publishNoReplace(directory: Int, source: String, target: String): Int
+    /** Injected publication-only kernels must explicitly opt into replacement. */
+    fun replace(directory: Int, source: String, target: String): Int = OsConstants.ENOSYS
 }
 internal enum class RuntimePublicationResult { PUBLISHED, ALREADY_EXISTS, OUTCOME_UNKNOWN }
 
-/** Bounded complete-file publication in a trusted private directory. No replace,
- * no generic POSIX link emulation, and no directory capability leaves Main.
+/** Bounded complete-file commits in a trusted private directory. Exclusive
+ * publication and replacement are distinct operations, never generic POSIX link
+ * emulation. No directory capability leaves Main. Do not use replacement for
+ * SQLite files with outstanding leases: those physical inodes must stay fixed.
  * Closing this owner does not revoke other descriptors or stop an Agent.
  */
 internal class RuntimeAtomicPublisher private constructor(
@@ -28,7 +32,16 @@ internal class RuntimeAtomicPublisher private constructor(
     private val maxBytes: Int,
     private val syncDirectory: (FileDescriptor) -> Unit,
 ) : Closeable {
-    @Synchronized fun publishIfAbsent(name: String, bytes: ByteArray): RuntimePublicationResult {
+    @Synchronized fun publishIfAbsent(name: String, bytes: ByteArray): RuntimePublicationResult =
+        commit(name, bytes, replace = false)
+
+    /** Atomically create/replace a complete JSON/history file. An unknown result
+     * must be reconciled by the caller; never automatically retry a new payload.
+     */
+    @Synchronized fun replace(name: String, bytes: ByteArray): RuntimePublicationResult =
+        commit(name, bytes, replace = true)
+
+    private fun commit(name: String, bytes: ByteArray, replace: Boolean): RuntimePublicationResult {
         directory.requireWorker()
         if (!RuntimePrivateDirectory.validName(name) || name.startsWith(STAGE_PREFIX) || bytes.size > maxBytes) {
             throw RuntimeDataFailure(RuntimeDataCode.INVALID)
@@ -55,9 +68,10 @@ internal class RuntimeAtomicPublisher private constructor(
             } finally { Os.close(fd) }
             val directoryFd = directory.descriptor.fd
             kernelEntered = true
-            val result = kernel.publishNoReplace(directoryFd, stage, name)
+            val result = if (replace) kernel.replace(directoryFd, stage, name)
+                else kernel.publishNoReplace(directoryFd, stage, name)
             kernelReturned = true
-            if (result == OsConstants.EEXIST) return RuntimePublicationResult.ALREADY_EXISTS
+            if (!replace && result == OsConstants.EEXIST) return RuntimePublicationResult.ALREADY_EXISTS
             if (result != 0) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
             published = true
             syncDirectory(directory.descriptor.fileDescriptor)

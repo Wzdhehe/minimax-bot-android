@@ -8,4 +8,5 @@ package io.github.ccch1mneyyy.dsh_app.isolation
 internal object NativeRuntimePublication : RuntimePublicationKernel {
     init { System.loadLibrary("mbot_runtime_files") }
     override external fun publishNoReplace(directory: Int, source: String, target: String): Int
+    override external fun replace(directory: Int, source: String, target: String): Int
 }

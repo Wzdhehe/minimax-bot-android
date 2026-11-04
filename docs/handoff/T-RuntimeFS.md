@@ -3,7 +3,22 @@
 
 **尚未实现完整runtime FS。** 当前WAL/两进程读取、Main四文件owner已有各自设备证据，不能代替本卡。Mini App可视化程序仍不适配；下述官方Bot的miniapp/node目录是复用其业务后端，不新增Mini App浏览器。
 
-## 生产native构建接入（最新，设备执行待CI）
+## 原子替换（最新新增，设备待CI）
+
+真实调用方store.mjs的state.json和memory.mjs的pending/文档更新使用rename替换；备份/初始JSONL则必须目标不存在。现生产`RuntimeAtomicPublisher.replace`与`publishIfAbsent`显式分开，共用同一有界stage写入/fsync/目录sync和结果未知处理；production JNI以固定入口选择renameat2 flags=0或NOREPLACE，未开放任意flags/syscall。publication-only注入内核默认以ENOSYS拒绝replace，不把不支持操作悄悄降为覆盖。
+
+replace可创建新目标或替换完整旧文件，成功仍返回PUBLISHED；native结果丢失/rename后sync失败返回OUTCOME_UNKNOWN。**替换的未知结果必须由上层revision/operationId恢复协调，不能自动用不同payload重试**。本组件不是CAS/事务或完整JSONL append恢复。
+
+新增四项设备用例：创建/完整替换/空文件/私有权限与旧FD继续读原inode；实际replace后异常及目录sync故障均unknown；publication-only内核拒绝且原内容保持；两个owner并发替换时读者只见完整旧/新文档。原17项保留，预期21项，但新设备结果未取得前不算通过。
+
+**不得用于替换正在授予FD的SQLite物理文件**：它们的inode在lease期间必须不变；当前只是可信Main内部方法，无Agent IPC。完整FS的根/操作授权、只读备份区和可替换状态区仍需绑定。原子替换不撤销旧FD（用例故意验证），不证明断电/Android crash恢复。x86_64/arm64-v8a的生产CMake/JNI/16KiB交叉编译已再次通过，两个验收APK构建原始结果：
+
+```text
+BUILD SUCCESSFUL in 2m 40s
+71 actionable tasks: 16 executed, 55 up-to-date
+```
+
+## 生产native构建接入（8d65ac0，设备执行待CI）
 
 原验收`file_publication_probe.cpp`已移到App `src/main/cpp/runtime_publication.cpp`，同一renameat2算法注册生产`NativeRuntimePublication.publishNoReplace`。App与Node验收目标均指向同一CMakeLists，NDK27.3.13750724/CMake3.22.1，静态C++ runtime避免增加共享STL冲突，库LOAD为16KiB对齐；R8显式保留JNI类/方法。原probe类与独立probe库删除，prepare会删除旧的生成库。
 
@@ -119,7 +134,7 @@ report-results允许固定FilePublicationProbeTest位置（artifact后缀lpN）�
 
 ## 接着做
 
-1. 132273a组件17项已API26/35通过；同一内核现纳入生产native构建并有双ABI交叉编译证据，先查迁移后的新CI，再绑定受控FS能力；保留输入/冲突/并发/结果未知测试，不开放泛化syscall。
+1. 132273a组件17项已API26/35通过；生产native迁移8d65ac0/run41766746821及新增replace的21项候选须分别查CI。接着绑定Main选择的根/操作权限和真实isolated caller，再做完整FS；保留输入/冲突/并发/结果未知测试，不开放泛化syscall。
 2. 然后设计Main持有的专用runtime-data FS能力与提交/恢复语义，再适配固定JSONL/MemoryStore调用并跑原实现测试。还需明确读写预算、流、原子替换、exclusive publication、所有写者同步和退出生命周期；目前没有这些生产接口。
 3. 完整online backup、JSON/history、uploads/assets与模型配置安全投影都仍缺；不能因数据库owner或本探测通过就切正式入口。
 4. 官方server.mjs确实创建HTTP server并listen；isolated UID的UI传输也需独立native桥接（未实现）。只在宿主临时验证过HTTP server可通过connection事件处理已连接Unix FD而不listen，不是Android或完整官方后端已接通。

@@ -2,6 +2,7 @@
 package io.github.ccch1mneyyy.dsh_app.nodeprobe
 
 import android.content.ContextWrapper
+import android.os.ParcelFileDescriptor
 import android.system.Os
 import android.system.OsConstants
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -131,6 +132,94 @@ class RuntimeAtomicPublisherTest {
                     val actual = results.map { it.get(5, TimeUnit.SECONDS) }
                     assertEquals(1, actual.count { it == RuntimePublicationResult.PUBLISHED })
                     assertEquals(1, actual.count { it == RuntimePublicationResult.ALREADY_EXISTS })
+                    val bytes = File(root, "document.json").readBytes()
+                    assertTrue(a.contentEquals(bytes) || b.contentEquals(bytes))
+                    assertEquals(listOf("document.json"), root.list()!!.sorted())
+                } finally { workers.shutdownNow(); check(workers.awaitTermination(5, TimeUnit.SECONDS)) }
+            }
+        }
+    }
+
+    @Test fun atomicReplacementCreatesCompleteFilesAndKeepsExistingReadersOnTheOldInode() = fixture { context, root ->
+        RuntimeAtomicPublisher.open(context, segments).use { publisher ->
+            val before = "old-document".toByteArray()
+            val after = "new-document".repeat(8192).toByteArray()
+            assertEquals(RuntimePublicationResult.PUBLISHED, publisher.replace("document.json", before))
+            ParcelFileDescriptor.open(File(root, "document.json"), ParcelFileDescriptor.MODE_READ_ONLY).use { reader ->
+                assertEquals(RuntimePublicationResult.PUBLISHED, publisher.replace("document.json", after))
+                assertTrue(after.contentEquals(File(root, "document.json").readBytes()))
+                val old = ByteArray(before.size)
+                assertEquals(old.size, Os.pread(reader.fileDescriptor, old, 0, old.size, 0L))
+                assertTrue(before.contentEquals(old))
+            }
+            assertEquals(RuntimePublicationResult.ALREADY_EXISTS, publisher.publishIfAbsent("document.json", before))
+            assertTrue(after.contentEquals(File(root, "document.json").readBytes()))
+            assertEquals(RuntimePublicationResult.PUBLISHED, publisher.replace("document.json", byteArrayOf()))
+            assertEquals(0L, File(root, "document.json").length())
+            assertEquals(0, Os.stat(File(root, "document.json").path).st_mode and 63)
+            assertEquals(listOf("document.json"), root.list()!!.sorted())
+        }
+    }
+
+    @Test fun replacementLosingItsKernelOrDirectorySyncResultIsUnknown() = fixture { context, root ->
+        RuntimeAtomicPublisher.open(context, segments).use { publisher ->
+            publisher.replace("lost.json", "original".toByteArray())
+            publisher.replace("sync.json", "original".toByteArray())
+        }
+        val uncertain = object : RuntimePublicationKernel {
+            override fun publishNoReplace(directory: Int, source: String, target: String) =
+                NativeRuntimePublication.publishNoReplace(directory, source, target)
+            override fun replace(directory: Int, source: String, target: String): Int {
+                val result = NativeRuntimePublication.replace(directory, source, target)
+                if (result == 0) throw IOException("private-fault-sentinel")
+                return result
+            }
+        }
+        RuntimeAtomicPublisher.open(context, segments, uncertain).use { publisher ->
+            assertEquals(RuntimePublicationResult.OUTCOME_UNKNOWN, publisher.replace("lost.json", "complete".toByteArray()))
+        }
+        RuntimeAtomicPublisher.open(context, segments, syncDirectory = { throw IOException("private-fault-sentinel") }).use { publisher ->
+            assertEquals(RuntimePublicationResult.OUTCOME_UNKNOWN, publisher.replace("sync.json", "complete".toByteArray()))
+        }
+        for (name in listOf("lost.json", "sync.json")) assertEquals("complete", File(root, name).readText())
+        assertEquals(listOf("lost.json", "sync.json"), root.list()!!.sorted())
+    }
+
+    @Test fun aPublicationOnlyKernelCannotSilentlyReplaceAnExistingDocument() = fixture { context, root ->
+        RuntimeAtomicPublisher.open(context, segments).use { publisher ->
+            assertEquals(RuntimePublicationResult.PUBLISHED, publisher.publishIfAbsent("document.json", "original".toByteArray()))
+        }
+        // A trusted injected kernel that only implements exclusive publication
+        // explicitly refuses replacement; it must never fall back to overwrite.
+        RuntimeAtomicPublisher.open(context, segments, kernel).use { publisher ->
+            expectFailure(RuntimeDataCode.UNAVAILABLE) { publisher.replace("document.json", "new".toByteArray()) }
+            assertEquals("original", File(root, "document.json").readText())
+            assertEquals(listOf("document.json"), root.list()!!.sorted())
+        }
+    }
+
+    @Test fun concurrentReplacementReadersObserveWholeOldOrNewDocuments() = fixture { context, root ->
+        RuntimeAtomicPublisher.open(context, segments).use { first ->
+            RuntimeAtomicPublisher.open(context, segments).use { second ->
+                val a = "first-document".repeat(8192).toByteArray()
+                val b = "second-document".repeat(8192).toByteArray()
+                first.replace("document.json", a)
+                val workers = Executors.newFixedThreadPool(2)
+                val go = CountDownLatch(1)
+                try {
+                    val jobs = listOf(first to a, second to b).map { (publisher, bytes) ->
+                        workers.submit {
+                            check(go.await(5, TimeUnit.SECONDS))
+                            repeat(8) { assertEquals(RuntimePublicationResult.PUBLISHED, publisher.replace("document.json", bytes)) }
+                        }
+                    }
+                    go.countDown()
+                    repeat(64) {
+                        val bytes = File(root, "document.json").readBytes()
+                        assertTrue(a.contentEquals(bytes) || b.contentEquals(bytes))
+                        Thread.yield()
+                    }
+                    jobs.forEach { it.get(15, TimeUnit.SECONDS) }
                     val bytes = File(root, "document.json").readBytes()
                     assertTrue(a.contentEquals(bytes) || b.contentEquals(bytes))
                     assertEquals(listOf("document.json"), root.list()!!.sorted())
