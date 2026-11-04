@@ -6,6 +6,8 @@
 
 接着新增生产RuntimeFileCommitHost/Client：Main固定files/<scope>，UID/nonce/peer与replace授权，1MiB二进制pipe、有限admission/close drain；隔离Kotlin验收新增四项（含active close），25项候选待CI，Node文件JNI/完整FS/launcher仍未接。原模型pipe循环抽到共享BoundedPipeReader，仍保留严格UTF8/JSON/provider/model与取消映射；本地宿主JUnit32/Node44、Python25及broker组件回归通过，Node APK最终1m8s。详情见[T-RuntimeFiles](T-RuntimeFiles.md)。
 
+上述文件broker **10be45f/41769936256已API26/35各25项过**，native/broker设备也success。后续新增Node异步文件JNI，仍走同一Main host；新Key断言覆盖三份实际提交文件与file session不入报告/环境。新候选仍25项，设备待新CI（不能套用旧run），两个APK1m47s、Python26/host1过；完整FS/正式launcher仍未接，见T-RuntimeFiles最新节。
+
 > e03b997/run41686820725的SDK route矩阵已API实查API26/35 success；以下待CI是实现当轮状态。正式resolver/启动器仍未接；FD VFS 的6605508/41700450899已定位Main含目录FD的IPC发送失败，SQLite未执行，不能称持久化已解决。后续46c1c07/run41703671145的四普通文件FD方案已API26/35通过（含WAL、两新PID与既有Key/模型断言）；仍无完整产品runtime，详见 [T-Persistence](T-Persistence.md)。
 
 Main持久数据库文件owner本阶段已加入生产源码，验收Node直接使用；固定四数据FD且不截断已有文件，隔离UID必须拒绝调用owner。两个APK43s构建、Python22过；44c0190/run41760010243的API26/35已各7项通过（hardlink按平台/owner分支边界记录）；完整lease/进程撤销、model resolver/启动器仍缺，见[T-NativeDataFiles](T-NativeDataFiles.md)。

@@ -17,7 +17,8 @@
 | Main独占文件发布探测 | 新独立JNI在Main用私有目录FD+严格basename做renameat2(NOREPLACE)，4用例已编译；APK2m7s、Python23/host1过 | **7406bb3/41761635832 API26/35各11项通过**，含原七项；仍仅验收，不是完整FS/通用link替代；见T-RuntimeFS |
 | Main原子发布结果语义 | **132273a/41765512240 API26/35各17项通过**；生产JNI迁移**8d65ac0/41766746821也各17项通过**，双ABI编译/JNI/16KiB过；见T-RuntimeFS | 不是完整FS/launcher；不能用close撤销SQLite FD |
 | Main原子替换 | **30b5249/41767469341 API26/35各21项通过**，含四新增替换/旧FD/并发/unknown和旧回归；同期native/broker设备均success | 未绑定原JSONL/MemoryStore，不得替换leased SQLite inode，unknown须上层恢复；见T-RuntimeFS |
-| Main范围/操作文件broker | 生产RuntimeFileCommitHost/Client固定files/<Main scope>，UID/nonce/peer与覆盖权限，1MiB二进制pipe；共享reader保留模型UTF8；四新增用例（含active close/drain），APK1m8s，Python25/JUnit32/Node44过 | 新25项候选设备待CI；当前仅隔离Kotlin矩阵，未接Node文件JNI/完整FS/launcher；见T-RuntimeFiles |
+| Main范围/操作文件broker | **10be45f/41769936256 API26/35各25项通过**；真实UID/nonce/范围/覆盖权限、84KiB二进制、active close/drain及原模型pipe/Key/WAL回归；native与broker设备也success | 不等于完整FS或SQLite撤销；该基线仍是隔离Kotlin矩阵，见T-RuntimeFiles |
+| Node文件commit JNI | 固定JS Promise→有界JNI→生产文件broker；offset view快照、重复不覆盖/replace/空文件/非法buffers、两PID与新增文件Key检查已编译，APK1m47s、Python26/host1过 | 新25项设备候选待CI，须核对新commit不能混用10be45f；JNI仍验收，未接原FS/正式launcher；见T-RuntimeFiles |
 | full-ICU Node | 首轮41630373256超4小时取消；**重跑41680254279也因compile 330分钟超时而失败**，check annotation实查，verify skipped | 无产物/ICU设备证据；已补ccache/300分钟预算+失败也保存cache，host/NDK真实hits2+group-timeout smoke过、Python21过；首推41756717823因job-env的runner上下文不合法未创建job，已用actionlint复现并移到step env；Python21过，修后CI/cache保存恢复/完整编译待验证。默认候选没有Intl |
 
 正式入口仍DSH；上述都是组件/独立验收APK/假provider，**没有完整mcode/官方Bot产品运行、完整Flutter Bot APK或真实模型验收**。插件变更仍关闭。持久化、可信Bot身份/MCP、工具权限及生产启动器仍缺。不得因组件通过就宣称App已完成。
@@ -72,7 +73,7 @@ dev/integration 891aefa
 ## 接下来优先做
 
 1. 四普通文件FD候选46c1c07/run41703671145已API26/35通过，artifact分别13264018422/13263928937，name均`t1-f0-e0-s0-passed-l0`。ICU producer41680254279在330分钟超时、无库、verify跳过；新ccache+300分钟预算/always-save待CI，先查progress artifact/cache save outcome，不能仅凭smoke说长编译已解决。见T-AndroidNode。
-2. 原子提交组件已30b5249/41767469341两版本各21项通过（T-RuntimeFS）。新增RuntimeFileCommitHost绑定Main范围/操作与真实UID，先查25项候选及原模型pipe回归（T-RuntimeFiles），再给固定Node接同一host的commit binding，继续设计完整FS/原JSONL/MemoryStore适配。SQLite owner的close不撤销已发FD；身份/进程退出绑定的真正lease/backup（T-Persistence）、pi-ai/model resolver与正式生命周期仍需装配。目录留在Main，owner同步预创建目录项；不传目录FD/cwd当权限，不选周期快照，不回退同UID任意shell。固定JNI脚本仍不是产品启动器。
+2. Main原子组件已30b5249/41767469341各21项过；文件broker10be45f/41769936256各25项过。新增Node commit JNI已编译，先查新commit的独立25项设备结果（T-RuntimeFiles），再补受控读取/metadata与完整FS、原JSONL/MemoryStore适配。SQLite owner的close不撤销已发FD；身份/进程退出绑定的真正lease/backup（T-Persistence）、pi-ai/model resolver与正式生命周期仍需装配。目录留在Main，owner同步预创建目录项；不传目录FD/cwd当权限，不选周期快照，不回退同UID任意shell。固定JNI脚本仍不是产品启动器。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
 5. 总工作区下实现项目管理与 Bot 绑定，遵守路径防护并分开 cwd 和访问许可；补资料库、附件、群聊/记忆/审批等全量 parity 未完成项。

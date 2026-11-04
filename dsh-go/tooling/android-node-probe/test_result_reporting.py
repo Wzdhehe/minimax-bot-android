@@ -127,3 +127,11 @@ class ResultReportingTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.module.report(self.root, status)
         self.assertEqual(status.read_text(), 't1-f1-e0-s0-file_truncated-lc62\n')
+
+    def test_node_file_bridge_diagnostics_never_include_native_capabilities(self):
+        code, output = self.run_report('private-capability-marker '
+            'node_probe_failed_at_file_commit_code_runtime_data_unavailable '
+            'at x(IsolatedNodeModelTest.kt:161)')
+        self.assertEqual(code, 1)
+        self.assertIn('phase=file_commit code=runtime_data_unavailable', output)
+        self.assertNotIn('private-capability-marker', output)

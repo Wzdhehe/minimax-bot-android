@@ -23,6 +23,7 @@ import io.github.ccch1mneyyy.dsh_app.bot.BotProviderStore
 import io.github.ccch1mneyyy.dsh_app.bot.NativeModelRequestHost
 import io.github.ccch1mneyyy.dsh_app.bot.NativeModelChannels
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDatabaseFiles
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitHost
 import io.github.ccch1mneyyy.dsh_app.model.NativeModelBroker
 import io.github.ccch1mneyyy.dsh_app.model.ProviderCall
 import io.github.ccch1mneyyy.dsh_app.model.ProviderResponse
@@ -115,11 +116,13 @@ class IsolatedNodeModelTest {
                                 assertTrue(identity.data.getBoolean("database_owner_denied"))
                                 assertTrue(identity.data.getBoolean("publication_owner_denied"))
                                 NativeModelRequestHost(identity.uid, providerId!!, "normal", probe.peerBinder(), channels::open, channels::close).use { host ->
+                                RuntimeFileCommitHost.open(context, "node-state", identity.uid, probe.peerBinder(), allowReplace = true).use { fileHost ->
                                 val id = UUID.randomUUID().toString()
                                 val data = Bundle().apply {
                                     putString("id", id)
                                     putString("privatePath", marker.absolutePath)
                                     putBinder("model_host", host); putString("model_session", host.session); putString("providerId", providerId)
+                                    putBinder("file_host", fileHost); putString("file_session", fileHost.session)
                                     putParcelable("normal", modelFds[0]); putParcelable("stalled", modelFds[1])
                                     putParcelable("echo", modelFds[2]); putParcelable("result", resultPair[1])
                                     listOf("db", "wal", "shm", "journal").forEachIndexed { i, name -> putParcelable(name, dataDescriptors[i]) }
@@ -146,12 +149,14 @@ class IsolatedNodeModelTest {
                                 assertFalse(text.contains(secret))
                                 assertFalse(text.contains(broker.session.token))
                                 assertFalse(text.contains(host.session))
+                                assertFalse(text.contains(fileHost.session))
                                 val report = if (text.isBlank()) JSONObject() else JSONObject(text)
                                 if (reply.data.getString("code") != "ok") {
                                     val phases = setOf("bootstrap", "sqlite_load", "sqlite_memory", "vfs_register", "vfs_open", "vfs_wal",
-                                        "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "model_dynamic", "sdk_route")
+                                        "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "model_dynamic", "sdk_route", "file_commit")
                                     val codes = setOf("SQLITE_CANTOPEN", "SQLITE_IOERR", "SQLITE_IOERR_SHMOPEN", "SQLITE_BUSY", "SQLITE_READONLY",
-                                        "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "sqlite_parent_missing")
+                                        "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "sqlite_parent_missing",
+                                        "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable")
                                     val phase = report.optString("failedPhase").takeIf { it in phases } ?: "unknown"
                                     val code = report.optString("failureCode").takeIf { it in codes } ?: "unknown"
                                     fail("node_probe_failed_at_${phase}_code_${code}")
@@ -204,9 +209,23 @@ class IsolatedNodeModelTest {
                                 assertEquals(200, report.getJSONObject("sdkRoute").getInt("status"))
                                 assertTrue(report.getJSONObject("sdkRoute").getBoolean("toolCalls"))
                                 assertTrue(report.getJSONObject("sdkRoute").getBoolean("done"))
+                                val fileCommits = report.getJSONObject("fileCommits")
+                                for (name in listOf("snapshot", "initial", "empty")) {
+                                    assertEquals(if (attempt == 0) "published" else "already_exists", fileCommits.getString(name))
+                                }
+                                assertEquals("published", fileCommits.getString("replaced"))
+                                assertEquals(6, fileCommits.getJSONArray("rejected").length())
+                                repeat(6) { assertTrue(fileCommits.getJSONArray("rejected").getBoolean(it)) }
+                                val committed = File(dataDirectory, "minimax-bot-runtime/files/node-state")
+                                assertEquals(listOf("node-empty.bin", "node-snapshot.bin", "node-state.bin"), committed.list()!!.sorted())
+                                assertTrue(fileProbeBytes(false).contentEquals(File(committed, "node-snapshot.bin").readBytes()))
+                                assertTrue(fileProbeBytes(true).contentEquals(File(committed, "node-state.bin").readBytes()))
+                                assertEquals(0L, File(committed, "node-empty.bin").length())
+                                assertTrue(committed.listFiles()!!.none { it.readBytes().toString(Charsets.UTF_8).contains(secret) })
                                 assertEquals(6, headersInjected.get())
                                 assertFalse(store.catalog().toString().contains(secret))
                                 assertFalse(logs.any { it.contains(secret) })
+                                }
                                 }
                             }
                         } finally {

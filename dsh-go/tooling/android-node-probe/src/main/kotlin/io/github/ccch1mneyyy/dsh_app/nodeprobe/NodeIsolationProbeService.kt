@@ -15,6 +15,8 @@ import android.os.Process
 import io.github.ccch1mneyyy.dsh_app.isolation.ModelRequestClient
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDatabaseFiles
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeAtomicPublisher
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitClient
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimePublicationResult
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataCode
 import java.util.concurrent.Executors
@@ -22,7 +24,21 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 internal object NodeProbeRuntime {
     @Volatile private var modelClient: ModelRequestClient? = null
+    @Volatile private var fileClient: RuntimeFileCommitClient? = null
     fun configureModelBroker(host: IBinder, session: String) { modelClient = ModelRequestClient(host, session) }
+    fun configureFileBroker(host: IBinder, session: String) { fileClient = RuntimeFileCommitClient(host, session) }
+    fun commitRuntimeFile(name: String, bytes: ByteArray, replace: Boolean): Int {
+        val client = fileClient ?: return 6
+        return try {
+            when (if (replace) client.replace(name, bytes) else client.publishIfAbsent(name, bytes)) {
+                RuntimePublicationResult.PUBLISHED -> 0
+                RuntimePublicationResult.ALREADY_EXISTS -> 1
+                RuntimePublicationResult.OUTCOME_UNKNOWN -> 2
+            }
+        } catch (error: RuntimeDataFailure) {
+            when (error.code) { RuntimeDataCode.INVALID -> 3; RuntimeDataCode.DENIED -> 4; RuntimeDataCode.CLOSED -> 5; else -> 6 }
+        } catch (_: Exception) { 2 }
+    }
     fun openModelFd(id: String, body: String): Int = try { modelClient?.open(id, body)?.detachFd() ?: -1 } catch (_: Exception) { -1 }
     fun cancelModelFd(id: String) { try { modelClient?.cancel(id) } catch (_: Exception) { } }
     fun load() { System.loadLibrary("mbot_node_probe") }
@@ -90,10 +106,13 @@ class NodeIsolationProbeService : Service() {
         val privatePath = data.getString("privatePath")
         val host = data.getBinder("model_host")
         val session = data.getString("model_session")
+        val fileHost = data.getBinder("file_host")
+        val fileSession = data.getString("file_session")
         val providerId = data.getString("providerId")
         if (!id.matches(Regex("[a-zA-Z0-9_-]{1,128}")) || fds.any { it == null } ||
             privatePath == null || privatePath.length > 4096 || host == null || session == null ||
-            !session.matches(Regex("[0-9a-f]{64}")) || providerId == null || providerId.length !in 1..200 || !started.compareAndSet(false, true)) {
+            !session.matches(Regex("[0-9a-f]{64}")) || fileHost == null || fileSession == null || !fileSession.matches(Regex("[0-9a-f]{64}")) ||
+            providerId == null || providerId.length !in 1..200 || !started.compareAndSet(false, true)) {
             fds.forEach { try { it?.close() } catch (_: Exception) { } }
             return
         }
@@ -102,6 +121,7 @@ class NodeIsolationProbeService : Service() {
             try {
                 val script = assets.open("node-fd-probe.cjs").bufferedReader(Charsets.UTF_8).use { it.readText() }
                 NodeProbeRuntime.configureModelBroker(host, session)
+                NodeProbeRuntime.configureFileBroker(fileHost, fileSession)
                 NodeProbeRuntime.load()
                 // Ownership goes to the fixed Node script. It closes model
                 // FDs on every stream path and the result FD after writing.

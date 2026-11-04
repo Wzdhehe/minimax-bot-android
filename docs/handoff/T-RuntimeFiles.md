@@ -1,7 +1,35 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-RuntimeFiles：Main授予的有界文件提交能力（2026-11-04）
 
-**目前是生产Kotlin组件与独立验收接入，设备待CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 原子发布/替换内核及21项设备基线见[T-RuntimeFS](T-RuntimeFS.md)。不修改vendor，不回退同UID Agent/shell。
+**生产Kotlin组件10be45f已API26/35各25项通过；新增Node文件JNI验收已编译，设备结果待新CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 原子发布/替换内核及21项设备基线见[T-RuntimeFS](T-RuntimeFS.md)。不修改vendor，不回退同UID Agent/shell。
+
+## Node文件提交JNI（最新，设备待CI）
+
+验收APK新增固定linked binding `mbot_files_bridge` 的publish/replace；从JS异步Promise→最多4个libuv任务→隔离Kotlin RuntimeFileCommitClient→原生产Main host。JNI只接basename与Uint8Array，不接根、Key、nonce、URL或命令；Main分配的capability/session只留在隔离Kotlin，不进argv/env/JS descriptor。结果与稳定错误有限映射，Java异常正文从不回JS；JNI调用已发生但结果丢失则unknown。
+
+native在异步排队前复制view的精确offset/长度，1MiB上限；拒绝SharedArrayBuffer/resizable/detached buffer及错误类型，避免后台读取可变共享内存。验收仍是固定APK脚本，不把此JNI描述为正式生产Node启动器；线程池/退出行为需要未来launcher一并装配。
+
+原Node/Key/WAL用例现在每个新PID必须执行文件branch：84KiB offset view提交后立即改原数组，Main必须读回修改前快照；创建/重复不覆盖/替换/空文件；第二PID仍见同一三文件且发布返回already_exists。Main检查精确内容、无额外stage/非法文件，并扩展Key检查到新文件，Node报告不得含file session、native model session、Key；原descriptor/env/log/SQLite文件断言全部保留。六种非法view/路径必须拒绝。
+
+仪器测试数仍25，**不能仅凭旧10be45f的t25就说新Node branch已过**，须核对新commit/run。C++初轮因两个NODE_MODULE_LINKED宏在同namespace生成同名_module而编译失败，已按实际钉点node.h将第二个注册隔到namespace，未更改模块名或上游header；重准备JNI/SQLite成功。Python26/精确APK host1/actionlint通过；最终两个验收APK原始结尾：
+
+```text
+BUILD SUCCESSFUL in 1m 47s
+71 actionable tasks: 17 executed, 54 up-to-date
+```
+
+本地无adb/KVM，不伪造Node文件设备执行或ARM64/真机结果。完整FS、原JSONL/MemoryStore、read/stat/list/append、Bot/MCP身份、model resolver、正式launcher仍缺。
+
+## 10be45f设备基线（Kotlin文件broker）
+
+**10be45f/run41769936256 success**，实查artifact：
+
+```text
+API26 id13295035591: node-candidate-results-api-26-t25-f0-e0-s0-passed-l0
+API35 id13294617445: node-candidate-results-api-35-t25-f0-e0-s0-passed-l0
+```
+
+四项新broker用例与旧21项均通过；包括active close/drain、84KiB二进制、身份/权限/输入拒绝与原Key/模型/SQLite回归。同期native41769936291、broker设备41769936352均success。该版本尚未接Node文件JNI，旧pending文字为实现过程记录。
 
 ## 授权边界
 
@@ -13,7 +41,7 @@ context.noBackupFilesDir/minimax-bot-runtime/files/<Main选择的scopeId>/
 
 即使scopeId为v2也不会覆盖`v2/sqlite`，Key prefs/Keystore及workspace均不在此子树。scopeId不是Agent参数，目录FD/真实根路径不传隔离端。客户端只提交严格basename；不支持子目录/绝对路径/穿越/保留stage前缀。Main默认仅授予目标不存在发布，必须显式allowReplace才可替换；备份区不能因为Agent选了REPLACE就获得覆盖权限。
 
-每个host绑定真实Binder callingUid、随机64hex会话和peer死亡。不信任请求中的UID、root或scope，也没有这些协议字段；session仅交隔离Kotlin客户端，不进Node环境/argv。当前验收只接隔离Kotlin固定矩阵，**Node JNI文件binding尚未接入**，也没有正式launcher分配这些host。
+每个host绑定真实Binder callingUid、随机64hex会话和peer死亡。不信任请求中的UID、root或scope，也没有这些协议字段；session仅交隔离Kotlin客户端，不进Node环境/argv。10be45f验收只接隔离Kotlin矩阵；新增Node文件JNI见顶部，仍没有正式launcher分配这些host。
 
 ## v1协议与结果
 
@@ -74,7 +102,7 @@ OK (32 tests)
 
 ## 后续
 
-1. 查新API26/35候选25项及原broker设备矩阵，尤其共享模型pipe循环的读取/取消回归。
-2. 给固定隔离Node接文件commit JNI binding，先走同一生产host，保证Key/nonce仍不出现在JS环境/报告/文件；不是直接运行完整Bot。
+1. 10be45f已API26/35各25项过，模型pipe回归也过；接着查新增Node文件JNI那一commit的独立25项结果，不能混用同计数的旧run。
+2. Node commit通过后补真正的受控文件读取/metadata，仍不授予目录FD或整个filesDir；保持身份/范围/预算和关闭语义。
 3. 再扩展真正受控FS所需的read/stat/list/mkdir/append/FileHandle与全写者协调，适配原JSONL/MemoryStore并运行原恢复测试；不要全局把link改成rename。
 4. full-ICU/正式launcher/model resolver、可信Bot身份与SQLite lease另见HANDOFF，仍未完成。

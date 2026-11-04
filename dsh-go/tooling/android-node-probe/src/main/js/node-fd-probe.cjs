@@ -120,13 +120,43 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     binding.cancel(cancelledId);
     try { fs.closeSync(await binding.open(cancelledId, request)); report.dynamicCancelled = false; }
     catch (error) { report.dynamicCancelled = error.message === 'broker_unavailable'; }
+    probePhase = 'file_commit';
+    const files = process._linkedBinding('mbot_files_bridge');
+    const storage = new Uint8Array(84 * 1024 + 16).fill(99);
+    const body = storage.subarray(8, -8);
+    for (let i = 0; i < body.length; i++) body[i] = i % 251;
+    // Native must snapshot the exact view before scheduling asynchronous JNI.
+    const snapshotPromise = files.publish('node-snapshot.bin', body);
+    body.fill(0);
+    const snapshot = await snapshotPromise;
+    const initial = await files.publish('node-state.bin', body);
+    for (let i = 0; i < body.length; i++) body[i] = 255 - i % 251;
+    const replaced = await files.replace('node-state.bin', body);
+    const empty = await files.publish('node-empty.bin', new Uint8Array());
+    async function refused(name, value) {
+      try { await files.publish(name, value); return false; }
+      catch (error) { return error.code === 'runtime_data_invalid'; }
+    }
+    const detached = new ArrayBuffer(8);
+    const detachedView = new Uint8Array(detached);
+    structuredClone(detached, { transfer: [detached] });
+    const rejected = [
+      await refused('../outside', new Uint8Array()),
+      await refused('never.bin', {}),
+      await refused('never.bin', new Uint8Array(1024 * 1024 + 1)),
+      await refused('never.bin', new Uint8Array(new SharedArrayBuffer(8))),
+      await refused('never.bin', new Uint8Array(new ArrayBuffer(8, { maxByteLength: 16 }))),
+      await refused('never.bin', detachedView),
+    ];
+    report.fileCommits = { snapshot, initial, replaced, empty, rejected };
   }
   // Owner inspects the bounded result privately. No console/log response dump.
   fs.writeSync(Number(result), JSON.stringify(report));
   fs.closeSync(Number(result));
 })().catch((error) => {
   const codes = new Set(['SQLITE_CANTOPEN', 'SQLITE_IOERR', 'SQLITE_IOERR_SHMOPEN', 'SQLITE_BUSY', 'SQLITE_READONLY',
-    'SQLITE_ERROR', 'SQLITE_PERM', 'SQLITE_MISUSE', 'SQLITE_NOTFOUND', 'fd_vfs_unavailable', 'fd_vfs_input_invalid']);
+    'SQLITE_ERROR', 'SQLITE_PERM', 'SQLITE_MISUSE', 'SQLITE_NOTFOUND', 'fd_vfs_unavailable', 'fd_vfs_input_invalid',
+    'runtime_data_invalid', 'runtime_data_denied', 'runtime_data_closed', 'runtime_data_unavailable']);
   const code = codes.has(error?.code) ? error.code : codes.has(error?.message) ? error.message :
     error?.message === 'Cannot open database because the directory does not exist' ? 'sqlite_parent_missing' : 'unknown';
   try {

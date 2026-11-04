@@ -15,6 +15,16 @@ one fixed APK script, and consumes production native model channels. Only fake
 provider keys generated in the owner process are used. No real account/API call,
 main-UID Agent/shell, product launcher switch, APK or library publication occurs.
 
+The current fixed Node script also uses an asynchronous linked file-commit
+binding backed by the production Main `RuntimeFileCommitHost`. Main selects a
+private scope and replacement rights; no directory, real root or session is
+exposed to JS. It checks an 84KiB offset-view snapshot, exclusive publication,
+replacement, empty files and rejection of shared/resizable/detached buffers.
+The owner verifies exact files across both Node PIDs and extends Key assertions
+to these files and the file capability. This is still not a complete `node:fs`
+adapter or the official Bot backend. Device results for this revision must be
+checked separately from the earlier 25-test Kotlin-only run41769936256.
+
 The authoritative candidate source/version/archive/binary digests are in
 `node-runtime-pin.json`. The archive's complete upstream notices, mobile project
 license and NDK notice are packaged as assets. No binaries belong in Git.
