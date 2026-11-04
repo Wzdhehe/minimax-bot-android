@@ -11,3 +11,5 @@ T-Sandbox adds an optional host-only `resolveMediaPath` hook before media `stat`
 T-Providers adds `/api/providers/test`, protected by the same host authorizer. It accepts provider/model identifiers only and calls an optional host-owned broker; request keys are rejected. Without a broker it reports unavailable, and responses contain only probe status, never saved credentials or upstream response text. This is a built-in Bot host extension, not an upstream provider-management implementation.
 
 T-Usage adds an authenticated `/api/usage-quota` read-only route and an optional host-owned quota capability. The wrapper projects only public plan/quota fields. No capability means no OAuth account integration and produces signed-out state; account errors are not converted to zero usage. API keys are not used for this account capability.
+
+The host may optionally supply `listenServer` to serve already-connected, explicitly granted socket FDs without a guest listener. With no hook the upstream TCP listen behavior remains. Authentication, routes and Bot business logic remain unchanged. This is a transport seam, not a complete Android launcher.

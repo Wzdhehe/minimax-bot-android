@@ -110,7 +110,7 @@ function chatReferences(messages, src) {
 
 /**
  * @param {MiniAppContext} context
- * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean, resolveMediaPath?: (path: string) => Promise<string>, testProvider?: (id: string, model: string) => Promise<{ok: boolean, code?: string, status?: number}>, getUsageQuota?: (force: boolean) => Promise<object> }} [hostOptions]
+ * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean, resolveMediaPath?: (path: string) => Promise<string>, testProvider?: (id: string, model: string) => Promise<{ok: boolean, code?: string, status?: number}>, getUsageQuota?: (force: boolean) => Promise<object>, listenServer?: (server: import('node:http').Server) => Promise<void> }} [hostOptions]
  * @returns {Promise<MiniAppLifecycle>}
  */
 export async function start(context, hostOptions = {}) {
@@ -748,13 +748,19 @@ export async function start(context, hostOptions = {}) {
   server.requestTimeout = 0;
   server.headersTimeout = 60_000;
 
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(context.listen.port, context.listen.host, () => {
-      server.off('error', reject);
-      resolve(undefined);
+  // Android host extension: an isolated guest can consume owner-granted
+  // connected sockets without opening a listening socket of its own.
+  if (hostOptions.listenServer) {
+    await hostOptions.listenServer(server);
+  } else {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(context.listen.port, context.listen.host, () => {
+        server.off('error', reject);
+        resolve(undefined);
+      });
     });
-  });
+  }
   engine.startScheduler();
   engine.tasks.start();
   context.logger.info('minimax_bot.listening', { agent: Boolean(context.agent) });

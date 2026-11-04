@@ -3,6 +3,13 @@
 
 2026-11-04，续写 `feat/t-plugins`。本阶段是可信宿主装配组件，**不是 Android runtime 已启动或每 Bot MCP 身份全部完成**。总体状态见 [HANDOFF](../HANDOFF.md)、[NEXT-AGENT](NEXT-AGENT.md)。
 
+
+## 继续开发：Bot HTTP通过已连接FD（宿主验证）
+
+`createBotFdTransport`接收可信启动器显式交付的已连接socket FD，检查socket类型、限制64个活动连接、禁止重复FD、按所有权关闭；它把连接送入真实官方Bot的HTTP server，guest本身不listen。`server.mjs`只新增可选`listenServer` host hook，原TCP方式和全部鉴权、路径/Origin/Host检查保留，变更记录见[vendor来源](../../dsh-go/runtime/vendor/UPSTREAM.md)。关闭transport立即销毁连接，活跃SSE可能看到中断，调用方须处理。
+
+本机Linux宿主：实际跨进程继承Unix连接，真实Bot验证匿名、错误Origin和错误Host均403，带token状态读取/创建Bot成功，SSE收到hello与state.changed，重复FD不杀旧连接；未打开Bot TCP监听（父进程预先占住逻辑端口）。host-contracts 84/84、官方gateway smoke、完整pin 2124输入/780资源图及真实fork/Bot重开1项通过。**没有Android侧传输/正式launcher/Flutter接线，也没有完整隔离文件系统或真实provider**。下一步须复用现有独立UID/UID握手与Binder FD通道，在API26/35实际验双向socket及取消/关闭，然后才接真正产品入口。
+
 ## 问题与实现
 
 钉点 `createWebuiRuntimeHost` 返回的 `host.application.miniAppAgent` 是应用 facade，没有 `registerArena`。另造一个 gateway 或手写17个 session ports 会脱离真实 runtime。现在通过 esbuild 的**一个精确 import 边**接入原 gateway 的创建：
