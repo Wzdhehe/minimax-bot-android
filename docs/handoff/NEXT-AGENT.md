@@ -7,6 +7,14 @@
 
 本轮从远端 **7967b9d** 快进接手，仍在 `feat/t-plugins`。本节覆盖后文第6/7/8/11节中已过时的「下一步」「正在编译」「源码不存在」描述；Windows环境记录只描述上轮主机。
 
+### 最新：f937a3e全部CI过；Android full-ICU故障已定位并修收尾
+
+实际远端f937a3e0de9319df49d76b0139cb9db786fc4d7b的host41824727445/native41824727414/docs41824727413/scope41824727426均success。已取host日志：新资源4、原身份8 cases、真实factory+Bot API重开1均0 skipped；真实host CI约3.18秒，不能提升成设备/模型证据。
+
+41757171111 attempt2**已失败、不是仍在编译**，日志确认5885/5885已SOLINK、strip110.72MiB和headers已完成，失败是原versions.py拒绝full-ICU配置；progress13317826081 failed-cache-success。实际cache3211 hits/5749（55.85%），证明恢复有效。已只修build-source.py/test_source_recipe.py两个执行输入，生成受SHA钉住的full-ICU版本reporter，真实ICU/Unicode头读取、full配置检查、不伪装none，metadata预检移到Ninja前；source JSON/workflow/smoke/编译flags/cache namespace未改。原producer authority守卫保留，旧失败run不可复用，新producer需修复commit自动触发。详见[T-AndroidNode](T-AndroidNode.md)文首。
+
+本地Python32过；两份真实钉点helper摘要核验+生成AST过；真实头文件parser smoke（模拟full配置）读到24.22.2/ICU78.3/Unicode17.0，非实际本地Android编译/Intl结果。新CI待push后记录，先看新producer配置与预检/实际cache/产物，**不要rerun旧commit，也不要同时启动多个长编译**。
+
 ### 最新主线推进：780资源pin + 真实host/Bot API冷启动重开
 
 内置身份阶段已推**d31b37908e7b51dd1ae82b2ceecfdded8b0208df**，host41821502362/native41821502190/docs41821502197/scope41821502161全success。后续新增资源/真实host验收，以本节与[T-RuntimeHost](T-RuntimeHost.md)「后续阶段」为准；旧「完整factory未启动」现在只代表此前阶段。

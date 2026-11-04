@@ -1,6 +1,22 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+## 最新：第二次编译已链接成功，修复末尾版本报告（2026-11-04）
+
+**41757171111 attempt2实际failure，不再运行中**。已取得完整失败step日志：09:49开始，11:27:36到`[5885/5885] SOLINK lib/libnode.so`，完成strip后110.72MiB和headers安装；随后原`scripts/versions.py`抛出`Build-time version reporting requires --with-intl=none.`，导致record/build-info/归档未完成，verify跳过。不是新的编译超时、内存或磁盘错误。progress artifact13317826081为`node-full-icu-progress-failed-cache-success`，cache保存success；统计**3211/5749命中（55.85%）、2538 miss，cache约0.3/3.0GB**，实际证明第一次保存/第二次复用已生效。
+
+修复仅改`build-source.py`与`test_source_recipe.py`这两个producer执行输入：
+
+- 对同一mobile commit的versions.py新增SHA256钉点`31727e9c467a5d2ea68ffc17e76cbe5603539cd48d32e454b4e2844d8feafb58`；只在`.build`生成新reporter，不改上游checkout。
+- 替换「只允许none」检查为明确要求**真实配置full-ICU且icu_small=false**，从原ICU头读取icu/unicode版本，保留所有其他版本/共享依赖检查；不把真实配置伪造成none，不编造CLDR/tz版本。
+- 生成recipe导入该reporter，在configure后、Ninja前先验版本报告，避免再花数小时后才发现metadata不支持；record时仍再次报告。
+- archive的mbotSourceBuild增加原/生成reporter摘要，原库/config SHA与full-ICU检查继续保留。`node-source-build.json`、workflow、smoke helper与编译flags均未改，原ccache namespace因此保留。
+
+本地完整Python **32项通过**（source recipe现4项），py_compile/diff通过。真正下载并核验原build.py和versions.py的摘要，生成的两个脚本AST解析成功。另以钉点Node原头文件、已校验archive的mobile头和**模拟full-ICU配置**执行真实生成reporter，得到Node24.22.2、ICU78.3、Unicode17.0、26个字段；这是header/parser smoke，**不是本地新Android编译或Intl执行证据**。
+
+producer权威五输入的校验**没有放宽**。其中两输入发生合理修复，旧失败run当然不能作为当前可复用的成功producer；必须等待新push触发的新producer build/upload成功，再按原verify-source-run校验复用。当前仍没有可下载的成功full-ICU归档或新的Intl设备结果；不要再次rerun旧commit来期待修复生效。
+
+
 > 最新API实查（2026-11-04 Linux续写）：full-ICU producer **41757171111 attempt1失败**，progress artifact13302870059为`node-full-icu-progress-budget_exhausted-cache-success`，cache-save success但无完整库，verify skipped。已执行`gh run rerun 41757171111 --failed`，**attempt2正在compile**；其cache restore/preflight step成功，不代表已确认cache hits。五个producer权威输入未改，仍无完整full-ICU产物/Intl设备证据；默认候选无Intl。后续先核对attempt2最终产物/cache结果，不重复启动并行长编译。
 
 

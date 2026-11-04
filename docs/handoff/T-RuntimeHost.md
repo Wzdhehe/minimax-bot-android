@@ -85,3 +85,7 @@ PASS: pinned runtime, 40 direct dependency versions, resources and Linux-only SQ
 3. 内置服务ID不等于每个Bot的可信caller_bot_id/MCP绑定；仍须将真实Agent会话绑定到Bot并验自主同源定时任务/通知。
 4. Android独立UID启动器/正式Flutter transport和rootfs（如果仍需要它）；不得用DSH同UID/PRoot执行完整Agent来省事。
 5. 插件宿主政策仍强制关闭变更；完整APK、真实provider、ARM64/真机、布局/后台/profile仍未验证。
+
+## 远程验收：f937a3e
+
+本阶段已推f937a3e0de9319df49d76b0139cb9db786fc4d7b。host41824727445、native41824727414、docs41824727413、scope41824727426全部success；host日志已取得，真实factory/Bot重开用例3.18秒、0 skipped，资源4项与身份8 cases均通过。仍没有模型turn或Android执行；下一主线是native metadata/model resolver/FD。Android full-ICU收尾故障另见[T-AndroidNode最新节](T-AndroidNode.md)。
