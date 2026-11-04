@@ -147,3 +147,14 @@ class ResultReportingTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.module.report(self.root, status)
         self.assertEqual(status.read_text(), 't1-f1-e0-s0-missing_data-ls50\n')
+
+    def test_mutation_failure_has_only_a_fixed_filename_and_rejection_code(self):
+        code, output = self.run_report('private-sentinel runtime_data_denied '
+            'at x(RuntimeFileMutationTest.kt:103)')
+        self.assertEqual(code, 1)
+        self.assertIn('kind=denied_data', output)
+        self.assertNotIn('private-sentinel', output)
+        status = self.root / 'status.txt'
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.module.report(self.root, status)
+        self.assertEqual(status.read_text(), 't1-f1-e0-s0-denied_data-lm103\n')

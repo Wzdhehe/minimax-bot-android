@@ -17,8 +17,10 @@ internal fun interface RuntimePublicationKernel {
     fun publishNoReplace(directory: Int, source: String, target: String): Int
     /** Injected publication-only kernels must explicitly opt into replacement. */
     fun replace(directory: Int, source: String, target: String): Int = OsConstants.ENOSYS
+    fun remove(directory: Int, name: String): Int = OsConstants.ENOSYS
 }
 internal enum class RuntimePublicationResult { PUBLISHED, ALREADY_EXISTS, OUTCOME_UNKNOWN }
+internal enum class RuntimeDeletionResult { REMOVED, OUTCOME_UNKNOWN }
 
 /** Bounded complete-file commits in a trusted private directory. Exclusive
  * publication and replacement are distinct operations, never generic POSIX link
@@ -41,9 +43,68 @@ internal class RuntimeAtomicPublisher private constructor(
     @Synchronized fun replace(name: String, bytes: ByteArray): RuntimePublicationResult =
         commit(name, bytes, replace = true)
 
+    /** Same-directory regular-file move, not POSIX link or directory rename.
+     * Main must separately grant source removal and optional target replacement.
+     */
+    @Synchronized fun move(source: String, target: String, replace: Boolean): RuntimePublicationResult {
+        directory.requireWorker()
+        if (!validTarget(source) || !validTarget(target) || source == target) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+        runtimeFileSize(directory, source) // Openat/private regular-file admission, no root paths.
+        var entered = false
+        var returned = false
+        var moved = false
+        try {
+            val fd = directory.descriptor.fd
+            entered = true
+            val result = if (replace) kernel.replace(fd, source, target) else kernel.publishNoReplace(fd, source, target)
+            returned = true
+            if (!replace && result == OsConstants.EEXIST) return RuntimePublicationResult.ALREADY_EXISTS
+            if (result == OsConstants.ENOENT) throw RuntimeDataFailure(RuntimeDataCode.NOT_FOUND)
+            if (result != 0) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+            moved = true
+            syncDirectory(directory.descriptor.fileDescriptor)
+            return RuntimePublicationResult.PUBLISHED
+        } catch (error: Exception) {
+            if (moved || (entered && !returned)) return RuntimePublicationResult.OUTCOME_UNKNOWN
+            throw if (error is RuntimeDataFailure) error else RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        } catch (_: LinkageError) {
+            if (entered) return RuntimePublicationResult.OUTCOME_UNKNOWN
+            throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        }
+    }
+
+    /** Removes only a Main-owned private regular file. No directory recursion. */
+    @Synchronized fun remove(name: String): RuntimeDeletionResult {
+        directory.requireWorker()
+        if (!validTarget(name)) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+        var entered = false
+        var returned = false
+        var removed = false
+        try {
+            val fd = directory.descriptor.fd
+            entered = true
+            val result = kernel.remove(fd, name)
+            returned = true
+            if (result != 0) throw RuntimeDataFailure(when (result) {
+                OsConstants.ENOENT -> RuntimeDataCode.NOT_FOUND
+                OsConstants.EACCES, OsConstants.EPERM -> RuntimeDataCode.DENIED
+                else -> RuntimeDataCode.UNAVAILABLE
+            })
+            removed = true
+            syncDirectory(directory.descriptor.fileDescriptor)
+            return RuntimeDeletionResult.REMOVED
+        } catch (error: Exception) {
+            if (removed || (entered && !returned)) return RuntimeDeletionResult.OUTCOME_UNKNOWN
+            throw if (error is RuntimeDataFailure) error else RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        } catch (_: LinkageError) {
+            if (entered) return RuntimeDeletionResult.OUTCOME_UNKNOWN
+            throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        }
+    }
+
     private fun commit(name: String, bytes: ByteArray, replace: Boolean): RuntimePublicationResult {
         directory.requireWorker()
-        if (!RuntimePrivateDirectory.validName(name) || name.startsWith(STAGE_PREFIX) || bytes.size > maxBytes) {
+        if (!validTarget(name) || bytes.size > maxBytes) {
             throw RuntimeDataFailure(RuntimeDataCode.INVALID)
         }
         val snapshot = bytes.copyOf()
@@ -98,6 +159,7 @@ internal class RuntimeAtomicPublisher private constructor(
     override fun toString() = "RuntimeAtomicPublisher(REDACTED)"
     companion object {
         private const val STAGE_PREFIX = ".native-publish-"
+        private fun validTarget(name: String) = RuntimePrivateDirectory.validName(name) && !name.startsWith(STAGE_PREFIX)
         fun open(context: Context, relativeSegments: List<String>, kernel: RuntimePublicationKernel? = null,
                  maxBytes: Int = 1024 * 1024, syncDirectory: (FileDescriptor) -> Unit = { Os.fsync(it) }): RuntimeAtomicPublisher {
             RuntimePrivateDirectory.requireOwnerWorker(context)

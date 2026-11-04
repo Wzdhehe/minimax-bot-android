@@ -1,7 +1,28 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-RuntimeFiles：Main授予的有界文件提交能力（2026-11-04）
 
-**Node读取/size已585f082在API26/35各30项通过；新增stage目录FD改造已编译，31项设备候选待CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 原子发布/替换内核及21项设备基线见[T-RuntimeFS](T-RuntimeFS.md)。不修改vendor，不回退同UID Agent/shell。
+**Node读取/size已585f082在API26/35各30项通过；stage FD改造c78faca已API26各31项过、API35首次0结果失败并已重跑。新增Main move/remove已编译，35项设备候选待新CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 不修改vendor，不回退同UID Agent/shell。
+
+## Main普通文件move/remove（最新，尚未暴露IPC，设备待CI）
+
+原Store/MemoryStore/JSONL真正需要rename与rm，不能只靠完整byte-array发布。Main组件增加同目录move（独占或替换）和普通文件remove：严格basename/保留前缀拒绝，Main目录cap与worker，source必须私有REG/Main-owned，symlink/目录/宽权限拒绝。remove内核用fstatat(AT_SYMLINK_NOFOLLOW)检查，unlinkat固定flags=0，不递归、不删目录；publication-only注入内核默认ENOSYS，不隐式授权删除/覆盖。
+
+move成功后source消失、target完整；独占冲突保留双方。remove成功为REMOVED，已知缺失为NOT_FOUND；native结果丢失/操作后目录fsync失败均OUTCOME_UNKNOWN，不自动重试/回滚。这些方法**尚无Agent IPC/Node入口**，需后续Main显式授予移动/删除权限，不能从PUBLISH权限推导source删除权。所有此类mutation不得作用于leased SQLite物理inode。
+
+新增四项设备用例：move冲突/替换/旧读FD/删除/缺失；实际mutation后结果丢失与sync故障；symlink/目录/宽权限/非法名拒绝且外部哨兵不变；publication-only kernel不能覆盖/删除。原31项保留，新候选35项未获结果前不算通过。reporter新增固定RuntimeFileMutationTest/lmN，源位置枚举集中为固定字典，不打印异常正文；Python28及双ABI生产CMake/JNI/16KiB通过。
+
+```text
+BUILD SUCCESSFUL in 2m 25s
+71 actionable tasks: 16 executed, 55 up-to-date
+```
+
+不是完整POSIX rename：同名输入拒绝、目录不支持；通用跨目录、append/FileHandle/多写者协调及原调用方恢复测试另做。
+
+## c78faca设备结果（stage目录FD）
+
+run41776354659首次attempt：API26已success，artifact13297083049 `node-candidate-results-api-26-t31-f0-e0-s0-passed-l0`。API35 **failure**，artifact13297635503 `node-candidate-results-api-35-t0-f0-e0-s0-unclassified-l0`；不能说31项失败，也不能说通过。emulator step05:00:35→05:01:08、没有XML；check126397527852只给exit1/sh failed与计数0，没有足够原因，**不推断是代码、模拟器、Ubuntu迁移或flaky**。
+
+已执行`gh run rerun 41776354659 --failed`，只重跑失败job；结果须另查。原signed Azure日志下载受限，不回显签名URL；先看job/check/有限artifact元数据。后续35项也保留所有stage测试，可提供另一个commit的证据，不能涂掉本次失败。
 
 ## stage创建/清理改用Main目录FD（最新，设备待CI）
 
@@ -184,7 +205,7 @@ OK (32 tests)
 
 ## 后续
 
-1. Node读取585f082已API26/35各30项过；先查新stage目录FD候选31项，不混用旧run。
-2. 读写stage都对Main目录cap后，继续实现原模块真正需要的受控rename/remove/append/目录与FileHandle，逐项绑定Main权限/预算并跑原调用方恢复测试；不能把通用fs.link替换为移动，也不开放目录FD/任意flags或路径。
+1. 查c78faca失败job重跑与本轮Main mutation35项结果，分别记录；不能混用旧run或把0结果说成测试通过。
+2. move/remove组件通过后，才在文件broker显式加入Main的移动/删除权限及有限事务，补真实isolated UID/关闭/结果未知断言，再接Node与原模块；不能从PUBLISH推导删除权或把通用fs.link替换为移动。
 3. 再扩展真正受控FS所需的read/stat/list/mkdir/append/FileHandle与全写者协调，适配原JSONL/MemoryStore并运行原恢复测试；不要全局把link改成rename。
 4. full-ICU/正式launcher/model resolver、可信Bot身份与SQLite lease另见HANDOFF，仍未完成。

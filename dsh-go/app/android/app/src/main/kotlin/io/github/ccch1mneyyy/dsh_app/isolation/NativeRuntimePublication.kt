@@ -14,4 +14,5 @@ internal object NativeRuntimePublication : RuntimePublicationKernel {
     /** Internal reserved-stage operations; no caller-provided flags or paths. */
     external fun openStage(directory: Int, name: String): Int
     external fun removeStage(directory: Int, name: String): Int
+    override external fun remove(directory: Int, name: String): Int
 }

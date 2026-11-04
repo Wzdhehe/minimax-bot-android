@@ -71,6 +71,16 @@ jint RemoveStage(JNIEnv* env, jobject, jint directory, jstring name) {
   if (error) return error;
   return unlinkat(directory, file.c_str(), 0) == 0 ? 0 : errno;
 }
+jint RemoveRegular(JNIEnv* env, jobject, jint directory, jstring name) {
+  const auto file = basename(env, name);
+  if (env->ExceptionCheck() || file.empty() || file.rfind(".native-publish-", 0) == 0) return EINVAL;
+  const int error = directory_error(directory);
+  if (error) return error;
+  struct stat info{};
+  if (fstatat(directory, file.c_str(), &info, AT_SYMLINK_NOFOLLOW) != 0) return errno;
+  if (!S_ISREG(info.st_mode) || info.st_uid != getuid() || info.st_nlink != 1 || (info.st_mode & 077) != 0) return EACCES;
+  return unlinkat(directory, file.c_str(), 0) == 0 ? 0 : errno;
+}
 }
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
@@ -84,7 +94,8 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     {const_cast<char*>("openRead"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(OpenRead)},
     {const_cast<char*>("openStage"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(OpenStage)},
     {const_cast<char*>("removeStage"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(RemoveStage)},
+    {const_cast<char*>("remove"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(RemoveRegular)},
   };
-  if (env->RegisterNatives(type, methods, 5) != JNI_OK) return JNI_ERR;
+  if (env->RegisterNatives(type, methods, 6) != JNI_OK) return JNI_ERR;
   return JNI_VERSION_1_6;
 }

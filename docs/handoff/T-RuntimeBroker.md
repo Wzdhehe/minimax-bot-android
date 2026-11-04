@@ -14,6 +14,8 @@ Main读取已**a96d916/41774204029 API26/35各30项通过**；新Node READ/SIZE 
 
 Node读取已**585f082/41775322136 API26/35各30项通过**。再将Main stage创建/清理移到同一目录cap的固定openat/unlinkat，新增父目录替换写入用例与普通文件不可被stage helper删除断言；APK35s、双ABI/Python27过，新31项设备待CI。完整FS/原模块恢复/正式launcher仍未完成。
 
+c78faca/41776354659首次API26已31项过，API35在33秒内exit1且没有测试XML（t0），原因未取得；已`gh run rerun --failed`，待实查，不改写成通过。Main另新增普通文件move/remove及四项用例，APK2m25s、双ABI/Python28过，35项设备待新CI；未暴露IPC，后续须显式移动/删除授权。详见T-RuntimeFiles。
+
 > e03b997/run41686820725的SDK route矩阵已API实查API26/35 success；以下待CI是实现当轮状态。正式resolver/启动器仍未接；FD VFS 的6605508/41700450899已定位Main含目录FD的IPC发送失败，SQLite未执行，不能称持久化已解决。后续46c1c07/run41703671145的四普通文件FD方案已API26/35通过（含WAL、两新PID与既有Key/模型断言）；仍无完整产品runtime，详见 [T-Persistence](T-Persistence.md)。
 
 Main持久数据库文件owner本阶段已加入生产源码，验收Node直接使用；固定四数据FD且不截断已有文件，隔离UID必须拒绝调用owner。两个APK43s构建、Python22过；44c0190/run41760010243的API26/35已各7项通过（hardlink按平台/owner分支边界记录）；完整lease/进程撤销、model resolver/启动器仍缺，见[T-NativeDataFiles](T-NativeDataFiles.md)。
