@@ -135,3 +135,14 @@ class ResultReportingTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('phase=file_commit code=runtime_data_unavailable', output)
         self.assertNotIn('private-capability-marker', output)
+
+    def test_snapshot_failure_never_emits_its_private_source_path(self):
+        code, output = self.run_report('/private/marker runtime_data_not_found '
+            'at x(RuntimeFileSnapshotTest.kt:50)')
+        self.assertEqual(code, 1)
+        self.assertIn('kind=missing_data', output)
+        self.assertNotIn('/private', output)
+        status = self.root / 'status.txt'
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.module.report(self.root, status)
+        self.assertEqual(status.read_text(), 't1-f1-e0-s0-missing_data-ls50\n')

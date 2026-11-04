@@ -40,7 +40,7 @@ internal class ProbeConnection(private val context: Context) : java.io.Closeable
     }
     init { check(context.bindService(Intent(context, NodeIsolationProbeService::class.java), connection, Context.BIND_AUTO_CREATE)) }
     fun run(data: Bundle, what: Int = 1): CompletableFuture<Reply> {
-        check(what == 1 || what in 4..5)
+        check(what == 1 || what in 4..6)
         expectedId = data.getString("id")
         connected.get(10, TimeUnit.SECONDS).send(Message.obtain(null, what).apply { this.data = data; replyTo = receiver })
         return result

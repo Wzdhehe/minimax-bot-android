@@ -5,6 +5,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <cerrno>
+#include <fcntl.h>
 #include <string>
 
 namespace {
@@ -41,6 +42,17 @@ jint Publish(JNIEnv* env, jobject, jint directory, jstring source, jstring targe
 jint Replace(JNIEnv* env, jobject, jint directory, jstring source, jstring target) {
   return Commit(env, directory, source, target, 0U);
 }
+jint OpenRead(JNIEnv* env, jobject, jint directory, jstring name) {
+  const auto file = basename(env, name);
+  if (env->ExceptionCheck() || directory < 3 || file.empty()) return -EINVAL;
+  struct stat info{};
+  if (fstat(directory, &info) != 0) return -errno;
+  if (!S_ISDIR(info.st_mode)) return -ENOTDIR;
+  if (info.st_uid != getuid()) return -EACCES;
+  // Only the trusted Main directory capability, never a parent pathname.
+  const int fd = openat(directory, file.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
+  return fd >= 0 ? fd : -errno;
+}
 }
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
@@ -51,7 +63,8 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   JNINativeMethod methods[] = {
     {const_cast<char*>("publishNoReplace"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Publish)},
     {const_cast<char*>("replace"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Replace)},
+    {const_cast<char*>("openRead"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(OpenRead)},
   };
-  if (env->RegisterNatives(type, methods, 2) != JNI_OK) return JNI_ERR;
+  if (env->RegisterNatives(type, methods, 3) != JNI_OK) return JNI_ERR;
   return JNI_VERSION_1_6;
 }

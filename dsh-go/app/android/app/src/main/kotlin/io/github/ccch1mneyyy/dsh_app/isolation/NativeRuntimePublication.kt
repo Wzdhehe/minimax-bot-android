@@ -9,4 +9,6 @@ internal object NativeRuntimePublication : RuntimePublicationKernel {
     init { System.loadLibrary("mbot_runtime_files") }
     override external fun publishNoReplace(directory: Int, source: String, target: String): Int
     override external fun replace(directory: Int, source: String, target: String): Int
+    /** Main-only owned file FD or negative errno, never parcelled to Agent. */
+    external fun openRead(directory: Int, name: String): Int
 }

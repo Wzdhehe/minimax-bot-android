@@ -14,6 +14,8 @@ internal object RuntimeFileCommitWire {
     const val DESCRIPTOR = "io.github.ccch1mneyyy.dsh_app.RuntimeFileCommit.v1"
     const val PUBLISH = IBinder.FIRST_CALL_TRANSACTION
     const val REPLACE = IBinder.FIRST_CALL_TRANSACTION + 1
+    const val READ = IBinder.FIRST_CALL_TRANSACTION + 2
+    const val SIZE = IBinder.FIRST_CALL_TRANSACTION + 3
     const val MAX_BYTES = 1024 * 1024
     const val MAX_WIRE_BYTES = 8 * 1024
     fun validTarget(name: String) = RuntimePrivateDirectory.validName(name) && !name.startsWith(".native-publish-")
@@ -31,10 +33,45 @@ internal class RuntimeFileCommitClient(private val host: IBinder, private val se
     }
     fun publishIfAbsent(name: String, bytes: ByteArray) = commit(RuntimeFileCommitWire.PUBLISH, name, bytes)
     fun replace(name: String, bytes: ByteArray) = commit(RuntimeFileCommitWire.REPLACE, name, bytes)
+    fun read(name: String): ByteArray = query(RuntimeFileCommitWire.READ, name) { reply ->
+        if (reply.dataAvail() < 4) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        val length = reply.readInt()
+        if (length !in 0..RuntimeFileCommitWire.MAX_BYTES) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        ParcelFileDescriptor.CREATOR.createFromParcel(reply).use { input ->
+            if (reply.dataAvail() != 0) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+            readBoundedRequestPipe(input, length, RuntimeFileCommitWire.MAX_BYTES, 5_000) { false }
+        }
+    }
+    fun size(name: String): Long = query(RuntimeFileCommitWire.SIZE, name) { reply ->
+        if (reply.dataAvail() != 8) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        reply.readLong().also { if (it < 0) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }
+    }
+
+    private fun validate(name: String) {
+        if (Looper.myLooper() == Looper.getMainLooper()) throw RuntimeDataFailure(RuntimeDataCode.WORKER_REQUIRED)
+        if (!session.matches(Regex("[0-9a-f]{64}")) || !RuntimeFileCommitWire.validTarget(name)) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+    }
+    private fun <T> query(op: Int, name: String, decode: (Parcel) -> T): T {
+        validate(name)
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(RuntimeFileCommitWire.DESCRIPTOR)
+            data.writeString(session); data.writeString(name)
+            if (!host.transact(op, data, reply, 0) || reply.dataSize() > RuntimeFileCommitWire.MAX_WIRE_BYTES) {
+                throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+            }
+            val code = reply.readString()
+            if (code != "ok") throw RuntimeDataFailure(RuntimeDataCode.entries.firstOrNull { it.wire == code } ?: RuntimeDataCode.UNAVAILABLE)
+            return decode(reply)
+        } catch (error: Exception) {
+            throw if (error is RuntimeDataFailure) error else RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        } finally { data.recycle(); reply.recycle() }
+    }
 
     private fun commit(op: Int, name: String, bytes: ByteArray): RuntimePublicationResult {
-        if (Looper.myLooper() == Looper.getMainLooper()) throw RuntimeDataFailure(RuntimeDataCode.WORKER_REQUIRED)
-        if (!session.matches(Regex("[0-9a-f]{64}")) || !RuntimeFileCommitWire.validTarget(name) || bytes.size > RuntimeFileCommitWire.MAX_BYTES) {
+        validate(name)
+        if (bytes.size > RuntimeFileCommitWire.MAX_BYTES) {
             throw RuntimeDataFailure(RuntimeDataCode.INVALID)
         }
         if (!slots.tryAcquire()) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)

@@ -1,9 +1,39 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-RuntimeFiles：Main授予的有界文件提交能力（2026-11-04）
 
-**生产Kotlin组件10be45f已API26/35各25项通过；新增Node文件JNI验收已编译，设备结果待新CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 原子发布/替换内核及21项设备基线见[T-RuntimeFS](T-RuntimeFS.md)。不修改vendor，不回退同UID Agent/shell。
+**文件提交Node JNI已a49d79b在API26/35各25项通过；新增受控读取/size已编译，30项设备候选待CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 原子发布/替换内核及21项设备基线见[T-RuntimeFS](T-RuntimeFS.md)。不修改vendor，不回退同UID Agent/shell。
 
-## Node文件提交JNI（最新，设备待CI）
+## 有界读取与文件大小（最新，设备待CI）
+
+v1追加READ/SIZE，Main factory必须显式`allowRead=true`，默认关闭，且不能由请求扩大权限。仍只在files/<Main scope>内接受单个严格basename，不读stage、Key prefs、workspace或SQLite目录。SIZE仅返回已授权普通文件的长度，不是通用stat/realpath，不返回inode/UID/真实路径；目录/特殊对象拒绝。
+
+Main `RuntimeFileSnapshot`通过生产JNI `openat`以**持有的Main目录FD**相对打开，固定O_RDONLY/CLOEXEC/NOFOLLOW/NONBLOCK，绝不按父目录路径重新解析；目录cap的withDescriptor锁防止close期间FD被回收复用。文件必须REG/Main owner/无group-world权限/nlink<=1；允许已经打开后被原子替换而unlink的旧inode，保证完整旧/新版本，不把旧FD说成被撤销。新增missing/too_large稳定code，异常无cause/路径/正文。Main可读上限由可信policy给出；wire仍最多1MiB。
+
+READ只向隔离端传**匿名pipe读端**与长度，不传原文件或目录FD。Main快照producer全进程最多4个，有界executor，nonblocking poll与绝对截止/close检查；不消费的接收方不能永远卡住writer。Main先设置接收pipe的NONBLOCK，接收端仅在尚未设置时才改flags。client按声明长度/EOF读取并拒绝截断/多余，不返回部分成功。close/drain同时等待已admit调用与outgoing producer；已经交付/缓存的授权字节不能“收回”。普通磁盘read/fsync本身卡死仍不是可即时打断的保证。
+
+新增五项设备测试（原25项保留，预期30但不能提前算过）：四个Main snapshot测试覆盖二进制/空/缺失、symlink/private mode/目录/上限、**目录被改名并由外部symlink替代后仍只读原cap**、并发原子替换下只见完整版本；一个跨实际isolated UID的未消费输出测试分别验证close与自然deadline释放sender资源。原Kotlin矩阵扩展84KiB读回/size/空/权限与缺失拒绝。硬链接nlink拒绝为实现检查，本轮没有构造成功hardlink的新增证据。
+
+Node文件**读取**JNI尚未接，当前Node用例仍只提交文件。生产native x86_64/arm64-v8a API26、JNI导出及16KiB检查通过；Python27/actionlint通过。两个验收APK实际构建：
+
+```text
+BUILD SUCCESSFUL in 2m 11s
+71 actionable tasks: 20 executed, 51 up-to-date
+```
+
+不提供append/FileHandle/目录管理/通用rename；已有publisher stage创建仍要求可信Main不在lease中替换其父目录。不能把新openat读取测试当作所有写入路径的父目录竞态证明。正式FS、原模块恢复和launcher另做。
+
+## a49d79b设备结果（Node提交已通过）
+
+**a49d79b/run41771737494 success**，实查artifact：
+
+```text
+API26 id13295562153: node-candidate-results-api-26-t25-f0-e0-s0-passed-l0
+API35 id13295207316: node-candidate-results-api-35-t25-f0-e0-s0-passed-l0
+```
+
+含新增Node实际文件提交、view快照/非法buffer、两PID与扩展Key断言；该版本还没有READ/SIZE，不能用于证明本轮读取候选。
+
+## Node文件提交JNI（a49d79b已设备通过）
 
 验收APK新增固定linked binding `mbot_files_bridge` 的publish/replace；从JS异步Promise→最多4个libuv任务→隔离Kotlin RuntimeFileCommitClient→原生产Main host。JNI只接basename与Uint8Array，不接根、Key、nonce、URL或命令；Main分配的capability/session只留在隔离Kotlin，不进argv/env/JS descriptor。结果与稳定错误有限映射，Java异常正文从不回JS；JNI调用已发生但结果丢失则unknown。
 
@@ -102,7 +132,7 @@ OK (32 tests)
 
 ## 后续
 
-1. 10be45f已API26/35各25项过，模型pipe回归也过；接着查新增Node文件JNI那一commit的独立25项结果，不能混用同计数的旧run。
-2. Node commit通过后补真正的受控文件读取/metadata，仍不授予目录FD或整个filesDir；保持身份/范围/预算和关闭语义。
+1. a49d79b的Node commit已API26/35各25项过；先查本轮读取候选30项，尤其Main→isolated FIFO与未消费输出释放，不能混用旧run。
+2. 读取组件通过后接Node READ/SIZE JNI，并扩展Key/文件读回断言；仍不授予目录FD或整个filesDir，保持身份/范围/预算和关闭语义。
 3. 再扩展真正受控FS所需的read/stat/list/mkdir/append/FileHandle与全写者协调，适配原JSONL/MemoryStore并运行原恢复测试；不要全局把link改成rename。
 4. full-ICU/正式launcher/model resolver、可信Bot身份与SQLite lease另见HANDOFF，仍未完成。

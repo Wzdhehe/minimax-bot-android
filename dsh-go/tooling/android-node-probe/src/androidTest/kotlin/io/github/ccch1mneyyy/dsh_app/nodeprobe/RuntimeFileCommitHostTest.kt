@@ -8,6 +8,7 @@ import android.os.Process
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataCode
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeAtomicPublisher
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitClient
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitHost
@@ -37,7 +38,7 @@ class RuntimeFileCommitHostTest {
                 val identity = peer.identity().get(10, TimeUnit.SECONDS)
                 assertNotEquals(Process.myUid(), identity.uid)
                 hosts.add(RuntimeFileCommitHost.open(context, "$prefix-backup", identity.uid, peer.peerBinder()))
-                hosts.add(RuntimeFileCommitHost.open(context, "$prefix-state", identity.uid, peer.peerBinder(), allowReplace = true, readTimeoutMs = 1_000))
+                hosts.add(RuntimeFileCommitHost.open(context, "$prefix-state", identity.uid, peer.peerBinder(), allowReplace = true, readTimeoutMs = 1_000, allowRead = true))
                 hosts.add(RuntimeFileCommitHost.open(context, "$prefix-closed", identity.uid, peer.peerBinder()))
                 hosts[2].closeAsync().get(5, TimeUnit.SECONDS)
                 // A correct session from Main is still unauthorized: the host
@@ -50,7 +51,7 @@ class RuntimeFileCommitHostTest {
                     }
                 }, what = 4).get(15, TimeUnit.SECONDS)
                 assertEquals(identity.uid, result.uid)
-                val allowed = setOf("setup", "exclusive", "replacement", "nonce", "path", "pipe_shape", "truncated", "overlong", "oversize", "timeout", "closed", "passed")
+                val allowed = setOf("setup", "exclusive", "replacement", "read", "nonce", "path", "pipe_shape", "truncated", "overlong", "oversize", "timeout", "closed", "passed")
                 val code = result.data.getString("code").takeIf { it in allowed } ?: "unknown"
                 assertTrue("runtime_file_probe_$code", code == "passed")
                 assertEquals("original", File(roots[0], "memory.bak").readText())
@@ -137,5 +138,40 @@ class RuntimeFileCommitHostTest {
         }
         assertEquals(RuntimeDataCode.WORKER_REQUIRED, result.get())
         assertEquals(0, calls.get())
+    }
+
+    @Test fun abandonedSnapshotOutputsReleaseTheirSlotsOnCloseAndDeadline() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        for (cancel in listOf(true, false)) {
+            val scope = "output-test-${UUID.randomUUID()}"
+            val root = File(context.noBackupFilesDir, "minimax-bot-runtime/files/$scope")
+            try {
+                RuntimeAtomicPublisher.open(context, listOf("files", scope)).use { publisher ->
+                    publisher.publishIfAbsent("large.bin", ByteArray(1024 * 1024) { 7 })
+                }
+                ProbeConnection(context).use { peer ->
+                    val identity = peer.identity().get(10, TimeUnit.SECONDS)
+                    RuntimeFileCommitHost.open(context, scope, identity.uid, peer.peerBinder(),
+                        readTimeoutMs = if (cancel) 10_000 else 1_000, allowRead = true).use { host ->
+                        val response = peer.run(Bundle().apply {
+                            putString("id", UUID.randomUUID().toString())
+                            putBinder("state_host", host); putString("state_session", host.session)
+                        }, what = 6).get(10, TimeUnit.SECONDS)
+                        assertEquals(identity.uid, response.uid)
+                        assertTrue("runtime_file_probe_output", response.data.getString("code") == "passed")
+                        assertTrue(host.inFlightOperations > 0)
+                        if (cancel) host.closeAsync().get(3, TimeUnit.SECONDS)
+                        else {
+                            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3)
+                            while (host.inFlightOperations > 0 && System.nanoTime() < deadline) Thread.sleep(5)
+                            assertFalse(host.whenRetired().isDone)
+                        }
+                        assertEquals(0, host.inFlightOperations)
+                        assertTrue(peer.peerBinder().isBinderAlive)
+                        assertEquals(1024 * 1024L, File(root, "large.bin").length())
+                    }
+                }
+            } finally { root.deleteRecursively() }
+        }
     }
 }

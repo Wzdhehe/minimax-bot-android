@@ -26,6 +26,11 @@ internal class RuntimePrivateDirectory private constructor(
         if (closed) throw RuntimeDataFailure(RuntimeDataCode.CLOSED)
     }
     @Synchronized fun sync() { requireWorker(); Os.fsync(descriptor.fileDescriptor) }
+    /** Borrow while open; close cannot recycle this FD during a native openat. */
+    @Synchronized fun <T> withDescriptor(block: (Int) -> T): T {
+        requireWorker()
+        return block(descriptor.fd)
+    }
     @Synchronized override fun close() {
         if (closed) return
         closed = true

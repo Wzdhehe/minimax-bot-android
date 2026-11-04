@@ -22,7 +22,8 @@ internal fun readBoundedRequestPipe(
     try {
         val fd = channel.fileDescriptor
         if ((Os.fstat(fd).st_mode and OsConstants.S_IFMT) != OsConstants.S_IFIFO) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
-        Os.fcntlInt(fd, OsConstants.F_SETFL, Os.fcntlInt(fd, OsConstants.F_GETFL, 0) or OsConstants.O_NONBLOCK)
+        val flags = Os.fcntlInt(fd, OsConstants.F_GETFL, 0)
+        if (flags and OsConstants.O_NONBLOCK == 0) Os.fcntlInt(fd, OsConstants.F_SETFL, flags or OsConstants.O_NONBLOCK)
         val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
         val poll = StructPollfd().apply { this.fd = fd; events = OsConstants.POLLIN.toShort() }
         val bytes = ByteArray(length)

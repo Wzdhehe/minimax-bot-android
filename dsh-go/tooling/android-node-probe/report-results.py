@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 PHASE = r'bootstrap|sqlite_load|sqlite_memory|vfs_register|vfs_open|vfs_wal|vfs_verify|vfs_write|vfs_reopen|model_streams|model_dynamic|sdk_route|file_commit|unknown'
 CODE = r'SQLITE_CANTOPEN|SQLITE_IOERR_SHMOPEN|SQLITE_IOERR|SQLITE_BUSY|SQLITE_READONLY|SQLITE_ERROR|SQLITE_PERM|SQLITE_MISUSE|SQLITE_NOTFOUND|fd_vfs_unavailable|fd_vfs_input_invalid|sqlite_parent_missing|runtime_data_invalid|runtime_data_denied|runtime_data_closed|runtime_data_unavailable|unknown'
 FAILURE = re.compile(r'node_probe_failed_at_(' + PHASE + r')_code_(' + CODE + r')(?:\b|$)')
-LOCATION = re.compile(r'(IsolatedNodeModelTest|RuntimeDatabaseFilesTest|FilePublicationProbeTest|RuntimeAtomicPublisherTest|RuntimeFileCommitHostTest)\.kt:([0-9]{1,5})\b')
+LOCATION = re.compile(r'(IsolatedNodeModelTest|RuntimeDatabaseFilesTest|FilePublicationProbeTest|RuntimeAtomicPublisherTest|RuntimeFileCommitHostTest|RuntimeFileSnapshotTest)\.kt:([0-9]{1,5})\b')
 PUBLICATION_ERRNO = re.compile(r'\bpublication_errno_([0-9]{1,4})\b')
 KINDS = {
     'java.lang.AssertionError': 'assertion', 'java.util.concurrent.TimeoutException': 'timeout',
@@ -24,10 +24,11 @@ KINDS = {
     'runtime_data_unavailable': 'native_data', 'runtime_data_closed': 'closed_data',
     'runtime_data_invalid': 'invalid_data',
     'runtime_data_denied': 'denied_data',
+    'runtime_data_not_found': 'missing_data', 'runtime_data_too_large': 'large_data',
 }
 KINDS.update({'runtime_file_probe_' + stage: 'file_' + stage for stage in (
     'setup', 'exclusive', 'replacement', 'nonce', 'path', 'pipe_shape', 'truncated',
-    'overlong', 'oversize', 'timeout', 'closed', 'drain', 'unknown')})
+    'overlong', 'oversize', 'timeout', 'closed', 'drain', 'read', 'output', 'unknown')})
 
 
 def tag(element):
@@ -59,7 +60,7 @@ def report(directory, status_file=None, github_output=None):
                 identifier = match[1] + '-' + match[2]
             for filename, line in sorted(set(LOCATION.findall(text)))[:5]:
                 print('::error::Node probe failure location=' + filename + '.kt:' + line)
-                source_line = line if filename == 'IsolatedNodeModelTest' else {'RuntimeDatabaseFilesTest': 'd', 'FilePublicationProbeTest': 'p', 'RuntimeAtomicPublisherTest': 'a', 'RuntimeFileCommitHostTest': 'c'}[filename] + line
+                source_line = line if filename == 'IsolatedNodeModelTest' else {'RuntimeDatabaseFilesTest': 'd', 'FilePublicationProbeTest': 'p', 'RuntimeAtomicPublisherTest': 'a', 'RuntimeFileCommitHostTest': 'c', 'RuntimeFileSnapshotTest': 's'}[filename] + line
             for kind in sorted({kind for needle, kind in KINDS.items() if needle in text}):
                 print('::error::Node probe failure kind=' + kind)
                 if identifier == 'unclassified':

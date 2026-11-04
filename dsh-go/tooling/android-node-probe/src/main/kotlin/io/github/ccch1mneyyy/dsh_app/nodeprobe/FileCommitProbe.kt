@@ -35,6 +35,15 @@ internal fun runFileCommitProbe(data: Bundle): String {
         check(state.publishIfAbsent("payload.bin", fileProbeBytes(false)) == RuntimePublicationResult.PUBLISHED)
         check(state.replace("payload.bin", fileProbeBytes(true)) == RuntimePublicationResult.PUBLISHED)
         check(state.publishIfAbsent("empty.bin", byteArrayOf()) == RuntimePublicationResult.PUBLISHED)
+        stage = "read"
+        denied(RuntimeDataCode.DENIED) { backup.read("memory.bak") }
+        denied(RuntimeDataCode.DENIED) { backup.size("memory.bak") }
+        check(state.read("payload.bin").contentEquals(fileProbeBytes(true)))
+        check(state.size("payload.bin") == (84 * 1024).toLong())
+        check(state.read("empty.bin").isEmpty())
+        check(state.size("empty.bin") == 0L)
+        denied(RuntimeDataCode.NOT_FOUND) { state.read("missing.bin") }
+        denied(RuntimeDataCode.INVALID) { state.read("../outside") }
         stage = "nonce"
         val forged = (if (stateSession[0] == '0') "1" else "0") + stateSession.substring(1)
         denied(RuntimeDataCode.DENIED) { RuntimeFileCommitClient(stateHost, forged).publishIfAbsent("forged.bin", byteArrayOf()) }
@@ -96,6 +105,27 @@ internal fun runFileCommitDrainProbe(data: Bundle): String {
         if (rawFileCommit(host, session, "drain.bin", 1, pipe[0]) == RuntimeDataCode.CLOSED.wire) "passed" else "drain"
     } catch (_: Exception) { "drain" }
     finally { pipe.forEach { try { it.close() } catch (_: Exception) { } } }
+}
+
+/** Retained only in this verification process to simulate an abandoned reader. */
+internal object UnconsumedSnapshotProbe {
+    @Volatile private var reader: ParcelFileDescriptor? = null
+    fun open(data: Bundle): String {
+        val host = data.getBinder("state_host") ?: return "output"
+        val session = data.getString("state_session") ?: return "output"
+        val request = Parcel.obtain()
+        val reply = Parcel.obtain()
+        return try {
+            request.writeInterfaceToken(RuntimeFileCommitWire.DESCRIPTOR)
+            request.writeString(session); request.writeString("large.bin")
+            check(host.transact(RuntimeFileCommitWire.READ, request, reply, 0))
+            check(reply.readString() == "ok" && reply.readInt() == RuntimeFileCommitWire.MAX_BYTES)
+            reader = ParcelFileDescriptor.CREATOR.createFromParcel(reply)
+            "passed"
+        } catch (_: Exception) { "output" }
+        finally { request.recycle(); reply.recycle() }
+    }
+    fun close() { try { reader?.close() } catch (_: Exception) { }; reader = null }
 }
 
 private fun rawFileCommit(host: IBinder, session: String, name: String, length: Int, body: ParcelFileDescriptor): String? {

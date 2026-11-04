@@ -54,15 +54,19 @@ class NodeIsolationProbeService : Service() {
         Messenger(Handler(Looper.getMainLooper(), Handler.Callback { message ->
             if (message.sendingUid == applicationInfo.uid) {
                 if (message.what == 1) runProbe(message)
-                else if (message.what in 4..5 && started.compareAndSet(false, true)) {
+                else if (message.what in 4..6 && started.compareAndSet(false, true)) {
                     val data = message.data
                     val reply = message.replyTo
-                    val drain = message.what == 5
+                    val operation = message.what
                     worker.execute {
                         val response = Message.obtain(null, 2)
                         response.data = Bundle().apply {
                             putString("id", data.getString("id"))
-                            putString("code", if (drain) runFileCommitDrainProbe(data) else runFileCommitProbe(data))
+                            putString("code", when (operation) {
+                                5 -> runFileCommitDrainProbe(data)
+                                6 -> UnconsumedSnapshotProbe.open(data)
+                                else -> runFileCommitProbe(data)
+                            })
                         }
                         try { reply?.send(response) } catch (_: Exception) { }
                     }
@@ -88,6 +92,7 @@ class NodeIsolationProbeService : Service() {
     }
     override fun onBind(intent: Intent?): IBinder = messenger.binder
     override fun onDestroy() {
+        UnconsumedSnapshotProbe.close()
         worker.shutdownNow()
         super.onDestroy()
         // node::Start is one-shot here; do not attempt reinitialization. Only
