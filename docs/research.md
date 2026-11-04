@@ -35,3 +35,7 @@
 - [DSH Go](https://github.com/ccch1mneyyy/dsh-Go)：可在 Android 设备本机运行 DSH，并提供 DS Bot 的原生 Bot 页面和群聊；支持自定义 OpenAI / Anthropic 兼容模型渠道。DS Bot 是 DSH 插件，与官方 MiniMax Bot 的宿主协议不同。DSH Go 主体为 AGPL-3.0，品牌及吉祥物另有限制。本仓库导入的 `dsh-go/` 是产品外壳，核心换为官方 MiniMax Bot + mcode-webui fork runtime。
 - [DS Bot App](https://github.com/QingJ01/DS-Bot-App)：Apache-2.0 的 Android 多 Bot 和群聊 App，使用电脑或服务器上的 DSH 执行，手机需配对并保持主机在线；可借鉴界面和交互，但不满足本项目本机执行约束。
 - [AnythingLLM Mobile](https://github.com/Mintplex-Labs/anythingllm-mobile)：GPL-3.0-or-later 的 Android/iOS 本机 AI 助手，提供本地模型及自定义兼容接口；其与本项目所需多 Bot、群聊和插件协议的功能重合度仍需验证。
+
+## Nyral（2026-11-04 用户补充）
+
+已实查 [aixtin/nyral](https://github.com/aixtin/nyral) 的固定提交 `72289ba9ad9dcbe894a3277c6e0f4a45e6dd7328`。原生 Kotlin 自研引擎/SQLite 链更直接，但不是官方 mbot/mcode runtime 或插件市场的兼容实现；不替换既定产品方向。会话 epoch、pending 事务与轻量 UI 值得借鉴，宽存储、同 UID Shell、手机操控及系统闹钟链不照搬。逐项源码依据、构建未验证项和后续复用顺序见 [Nyral 调研](research/nyral.md)。

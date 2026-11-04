@@ -61,6 +61,10 @@ dev/integration 891aefa
 - 页面要流畅、有过渡/轻量骨架，尊重减少动态效果/DSH 性能降级；不宣称未测的真机 FPS。
 - Mini App 是另一个可视化程序类型，暂不适配。mcode 插件市场单独做，不能把能从 GitHub 下载等同于在 Android 上可安装执行。
 
+## 新增参考：Nyral
+
+用户提供aixtin/nyral，已只读检查固定提交72289ba9ad9dcbe894a3277c6e0f4a45e6dd7328（MIT），见[源码对照](research/nyral.md)。自研Kotlin引擎/原生SQLite更直接，但未发现mbot/mcode runtime或官方插件市场适配，不能因此放弃既定兼容要求。可借鉴会话epoch、pending事务与轻量交互；不搬宽存储、同UID shell、手机操控、系统闹钟链。本轮没有复制代码或构建/运行Nyral，当前脚本还有crashToken构建输入要求；原有安全边界不变。
+
 ## 已做的事情与边界
 
 按顺序阅读各专题 handoff，避免只看提交标题：
@@ -80,7 +84,7 @@ dev/integration 891aefa
 ## 接下来优先做
 
 1. 四普通文件FD候选46c1c07/run41703671145已API26/35通过，artifact分别13264018422/13263928937，name均`t1-f0-e0-s0-passed-l0`。ICU producer41680254279在330分钟超时、无库、verify跳过；新ccache+300分钟预算/always-save待CI，先查progress artifact/cache save outcome，不能仅凭smoke说长编译已解决。见T-AndroidNode。
-2. Node READ/SIZE已585f082各30项过。c78faca/41776354659失败job重跑已31项过（首次0结果不抹去），42fba3a/41777415973已各35项过。显式Main move/remove IPC已c1b9aee各35项过，Node JNI已c8e702d各35项过；888aa77 append40项API35通过/API26 f1定位transport夹具（lc89）；先验证本轮夹具修正后的44项，并查c8e506e子目录结果，再推进新功能；之后接Main子scope/目录授权与Node，再继续FileHandle/大日志与原模块恢复（T-RuntimeFiles）。SQLite owner的close不撤销已发FD；真正lease/backup、pi-ai/model resolver与正式生命周期仍缺。目录留Main，不把cwd当权限，不选周期快照，不回退同UID任意shell。固定JNI脚本不是产品启动器。
+2. Node READ/SIZE已585f082各30项过。c78faca/41776354659失败job重跑已31项过（首次0结果不抹去），42fba3a/41777415973已各35项过。显式Main move/remove IPC已c1b9aee各35项过，Node JNI已c8e702d各35项过；888aa77 append40项API35通过/API26 f1定位transport夹具（lc89）；先验证78d49f5/run41781774323夹具修正后的44项，并查c8e506e/run41781117518子目录结果，再推进新功能；之后接Main子scope/目录授权与Node，再继续FileHandle/大日志与原模块恢复（T-RuntimeFiles）。SQLite owner的close不撤销已发FD；真正lease/backup、pi-ai/model resolver与正式生命周期仍缺。目录留Main，不把cwd当权限，不选周期快照，不回退同UID任意shell。固定JNI脚本不是产品启动器。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
 5. 总工作区下实现项目管理与 Bot 绑定，遵守路径防护并分开 cwd 和访问许可；补资料库、附件、群聊/记忆/审批等全量 parity 未完成项。
