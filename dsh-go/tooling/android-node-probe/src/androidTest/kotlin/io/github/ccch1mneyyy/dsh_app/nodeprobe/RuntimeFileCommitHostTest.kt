@@ -40,8 +40,8 @@ class RuntimeFileCommitHostTest {
                 assertNotEquals(Process.myUid(), identity.uid)
                 hosts.add(RuntimeFileCommitHost.open(context, "$prefix-backup", identity.uid, peer.peerBinder()))
                 hosts.add(RuntimeFileCommitHost.open(context, "$prefix-state", identity.uid, peer.peerBinder(), allowReplace = true, readTimeoutMs = 1_000,
-                    allowRead = true, allowMove = true, allowRemove = true))
-                hosts.add(RuntimeFileCommitHost.open(context, "$prefix-closed", identity.uid, peer.peerBinder(), allowMove = true, allowRemove = true))
+                    allowRead = true, allowMove = true, allowRemove = true, allowAppend = true))
+                hosts.add(RuntimeFileCommitHost.open(context, "$prefix-closed", identity.uid, peer.peerBinder(), allowMove = true, allowRemove = true, allowAppend = true))
                 hosts.add(RuntimeFileCommitHost.open(context, "$prefix-state", identity.uid, peer.peerBinder(), allowMove = true))
                 hosts.add(RuntimeFileCommitHost.open(context, "$prefix-state", identity.uid, peer.peerBinder(), allowReplace = true))
                 hosts[2].closeAsync().get(5, TimeUnit.SECONDS)
@@ -89,6 +89,7 @@ class RuntimeFileCommitHostTest {
             assertEquals(RuntimePublicationResult.OUTCOME_UNKNOWN, client.replace("document.json", byteArrayOf()))
             assertEquals(RuntimePublicationResult.OUTCOME_UNKNOWN, client.move("source.tmp", "target.json", true))
             assertEquals(RuntimeDeletionResult.OUTCOME_UNKNOWN, client.remove("document.json"))
+            assertEquals(RuntimePublicationResult.OUTCOME_UNKNOWN, client.append("document.json", byteArrayOf(1)))
         }
     }
 

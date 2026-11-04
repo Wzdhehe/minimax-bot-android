@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+> 环境恢复后的新run实查：修正后的full-ICU producer **0bf4043/run41757171111** 已创建build job，toolchain/preflight/cache-restore step均success，当前compile仍in_progress；这不证明cache命中、cache已保存或完整库成功。尚无producer artifact/ICU设备结果，默认候选仍无Intl。下文“无job”是首次ec2f1b2记录，不能代表这个新run。
+
 > 2026-11-04最新：**46c1c07/run41703671145的四普通文件FD候选已API26/35通过**，每台t1/f0/e0/s0，含两次不同PID、WAL/Key/模型。full-ICU重跑41680254279在compile330分钟超时失败、verify skipped，无产物；不能继续写运行中。详见T-Persistence及HANDOFF。
 
 ## 缓存workflow配置修复

@@ -33,20 +33,24 @@ internal class RuntimeAtomicPublisher private constructor(
     private val kernel: RuntimePublicationKernel,
     private val maxBytes: Int,
     private val syncDirectory: (FileDescriptor) -> Unit,
+    private val mutationLock: RuntimeDirectoryMutationLock.Lease,
 ) : Closeable {
     @Synchronized fun publishIfAbsent(name: String, bytes: ByteArray): RuntimePublicationResult =
-        commit(name, bytes, replace = false)
+        mutationLock.withLock { commit(name, bytes, replace = false) }
 
     /** Atomically create/replace a complete JSON/history file. An unknown result
      * must be reconciled by the caller; never automatically retry a new payload.
      */
     @Synchronized fun replace(name: String, bytes: ByteArray): RuntimePublicationResult =
-        commit(name, bytes, replace = true)
+        mutationLock.withLock { commit(name, bytes, replace = true) }
 
     /** Same-directory regular-file move, not POSIX link or directory rename.
      * Main must separately grant source removal and optional target replacement.
      */
-    @Synchronized fun move(source: String, target: String, replace: Boolean): RuntimePublicationResult {
+    @Synchronized fun move(source: String, target: String, replace: Boolean): RuntimePublicationResult =
+        mutationLock.withLock { moveUncoordinated(source, target, replace) }
+
+    private fun moveUncoordinated(source: String, target: String, replace: Boolean): RuntimePublicationResult {
         directory.requireWorker()
         if (!validTarget(source) || !validTarget(target) || source == target) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
         runtimeFileSize(directory, source) // Openat/private regular-file admission, no root paths.
@@ -74,7 +78,10 @@ internal class RuntimeAtomicPublisher private constructor(
     }
 
     /** Removes only a Main-owned private regular file. No directory recursion. */
-    @Synchronized fun remove(name: String): RuntimeDeletionResult {
+    @Synchronized fun remove(name: String): RuntimeDeletionResult =
+        mutationLock.withLock { removeUncoordinated(name) }
+
+    private fun removeUncoordinated(name: String): RuntimeDeletionResult {
         directory.requireWorker()
         if (!validTarget(name)) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
         var entered = false
@@ -100,6 +107,23 @@ internal class RuntimeAtomicPublisher private constructor(
             if (entered) return RuntimeDeletionResult.OUTCOME_UNKNOWN
             throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
         }
+    }
+
+    /** Bounded whole-file append via a fresh inode, not an O_APPEND/FileHandle
+     * API. Shared directory coordination prevents lost updates among publishers.
+     * An unknown outcome must never be automatically retried (duplicate records).
+     */
+    @Synchronized fun append(name: String, bytes: ByteArray): RuntimePublicationResult = mutationLock.withLock {
+        directory.requireWorker()
+        if (!validTarget(name) || bytes.size > maxBytes) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+        val suffix = bytes.copyOf()
+        val before = try { readRuntimeFileSnapshot(directory, name, maxBytes) }
+            catch (error: RuntimeDataFailure) {
+                if (error.code != RuntimeDataCode.NOT_FOUND) throw error
+                byteArrayOf()
+            }
+        if (suffix.size > maxBytes - before.size) throw RuntimeDataFailure(RuntimeDataCode.TOO_LARGE)
+        commit(name, before + suffix, replace = true)
     }
 
     private fun commit(name: String, bytes: ByteArray, replace: Boolean): RuntimePublicationResult {
@@ -155,7 +179,9 @@ internal class RuntimeAtomicPublisher private constructor(
             } catch (_: Exception) { }
         }
     }
-    @Synchronized override fun close() { directory.close() }
+    @Synchronized override fun close() {
+        try { directory.close() } finally { mutationLock.close() }
+    }
     override fun toString() = "RuntimeAtomicPublisher(REDACTED)"
     companion object {
         private const val STAGE_PREFIX = ".native-publish-"
@@ -170,8 +196,14 @@ internal class RuntimeAtomicPublisher private constructor(
                 catch (_: LinkageError) { throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }
                 catch (_: Exception) { throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }
             val directory = RuntimePrivateDirectory.open(context, relativeSegments)
-            try { return RuntimeAtomicPublisher(directory, implementation, maxBytes, syncDirectory) }
-            catch (error: Throwable) { directory.close(); throw error }
+            var mutationLock: RuntimeDirectoryMutationLock.Lease? = null
+            try {
+                mutationLock = RuntimeDirectoryMutationLock.acquire(directory)
+                return RuntimeAtomicPublisher(directory, implementation, maxBytes, syncDirectory, mutationLock)
+            } catch (error: Throwable) {
+                try { directory.close() } finally { mutationLock?.close() }
+                throw if (error is RuntimeDataFailure || error is Error) error else RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+            }
         }
     }
 }

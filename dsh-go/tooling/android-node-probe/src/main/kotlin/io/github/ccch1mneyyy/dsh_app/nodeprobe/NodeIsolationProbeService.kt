@@ -58,6 +58,17 @@ internal object NodeProbeRuntime {
             fileError(error.code)
         } catch (_: Exception) { 2 }
     }
+    fun appendRuntimeFile(name: String, bytes: ByteArray): Int {
+        val client = fileClient ?: return 6
+        return try {
+            when (client.append(name, bytes)) {
+                RuntimePublicationResult.PUBLISHED -> 0
+                RuntimePublicationResult.ALREADY_EXISTS -> 2 // Append cannot report an exclusive-create conflict.
+                RuntimePublicationResult.OUTCOME_UNKNOWN -> 2
+            }
+        } catch (error: RuntimeDataFailure) { fileError(error.code) }
+        catch (_: Exception) { 2 }
+    }
     fun moveRuntimeFile(source: String, target: String, replace: Boolean): Int {
         val client = fileClient ?: return 6
         return try {

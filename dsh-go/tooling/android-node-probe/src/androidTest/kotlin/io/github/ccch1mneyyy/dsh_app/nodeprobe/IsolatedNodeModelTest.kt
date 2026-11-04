@@ -116,7 +116,7 @@ class IsolatedNodeModelTest {
                                 assertTrue(identity.data.getBoolean("database_owner_denied"))
                                 assertTrue(identity.data.getBoolean("publication_owner_denied"))
                                 NativeModelRequestHost(identity.uid, providerId!!, "normal", probe.peerBinder(), channels::open, channels::close).use { host ->
-                                RuntimeFileCommitHost.open(context, "node-state", identity.uid, probe.peerBinder(), allowReplace = true, allowRead = true, allowMove = true, allowRemove = true).use { fileHost ->
+                                RuntimeFileCommitHost.open(context, "node-state", identity.uid, probe.peerBinder(), allowReplace = true, allowRead = true, allowMove = true, allowRemove = true, allowAppend = true).use { fileHost ->
                                 val id = UUID.randomUUID().toString()
                                 val data = Bundle().apply {
                                     putString("id", id)
@@ -234,6 +234,11 @@ class IsolatedNodeModelTest {
                                 val invalidMutations = mutations.getJSONArray("invalid")
                                 assertEquals(6, invalidMutations.length())
                                 repeat(6) { assertTrue(invalidMutations.getBoolean(it)) }
+                                val appends = report.getJSONObject("fileAppends")
+                                for (name in listOf("created", "committed", "empty")) assertEquals("published", appends.getString(name))
+                                for (name in listOf("binary", "overLimit", "unchanged", "invalid")) assertTrue(appends.getBoolean(name))
+                                assertEquals(0, appends.getInt("emptySize"))
+                                for (name in listOf("removed", "emptyRemoved")) assertEquals("removed", appends.getString(name))
                                 val committed = File(dataDirectory, "minimax-bot-runtime/files/node-state")
                                 assertEquals(listOf("node-empty.bin", "node-snapshot.bin", "node-state.bin"), committed.list()!!.sorted())
                                 assertTrue(fileProbeBytes(false).contentEquals(File(committed, "node-snapshot.bin").readBytes()))

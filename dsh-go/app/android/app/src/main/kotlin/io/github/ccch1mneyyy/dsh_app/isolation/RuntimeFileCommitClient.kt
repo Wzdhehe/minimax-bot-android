@@ -19,6 +19,7 @@ internal object RuntimeFileCommitWire {
     const val MOVE = IBinder.FIRST_CALL_TRANSACTION + 4
     const val MOVE_REPLACE = IBinder.FIRST_CALL_TRANSACTION + 5
     const val REMOVE = IBinder.FIRST_CALL_TRANSACTION + 6
+    const val APPEND = IBinder.FIRST_CALL_TRANSACTION + 7
     const val MAX_BYTES = 1024 * 1024
     const val MAX_WIRE_BYTES = 8 * 1024
     fun validTarget(name: String) = RuntimePrivateDirectory.validName(name) && !name.startsWith(".native-publish-")
@@ -36,6 +37,7 @@ internal class RuntimeFileCommitClient(private val host: IBinder, private val se
     }
     fun publishIfAbsent(name: String, bytes: ByteArray) = commit(RuntimeFileCommitWire.PUBLISH, name, bytes)
     fun replace(name: String, bytes: ByteArray) = commit(RuntimeFileCommitWire.REPLACE, name, bytes)
+    fun append(name: String, bytes: ByteArray) = commit(RuntimeFileCommitWire.APPEND, name, bytes)
     fun move(source: String, target: String, replace: Boolean): RuntimePublicationResult {
         validate(source)
         if (!RuntimeFileCommitWire.validTarget(target) || source == target) throw RuntimeDataFailure(RuntimeDataCode.INVALID)

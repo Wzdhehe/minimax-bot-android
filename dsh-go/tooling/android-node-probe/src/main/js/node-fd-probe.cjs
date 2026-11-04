@@ -197,6 +197,21 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
         await mutationRefused('remove', ['.native-publish-reserved.tmp'], 'runtime_data_invalid'),
       ],
     };
+    probePhase = 'file_append';
+    const appendCreated = await files.append('node-append.jsonl', new Uint8Array([0, 255]));
+    const appendCommitted = await files.append('node-append.jsonl', new Uint8Array([17, 42]));
+    const appendedBytes = await files.read('node-append.jsonl');
+    const appendEmpty = await files.append('node-append-empty.bin', new Uint8Array());
+    const appendEmptySize = await files.size('node-append-empty.bin');
+    report.fileAppends = {
+      created: appendCreated, committed: appendCommitted, empty: appendEmpty,
+      binary: appendedBytes.length === 4 && appendedBytes.every((value, i) => value === [0, 255, 17, 42][i]),
+      emptySize: appendEmptySize,
+      overLimit: await mutationRefused('append', ['node-append.jsonl', new Uint8Array(1024 * 1024)], 'runtime_data_too_large'),
+      unchanged: (await files.read('node-append.jsonl')).length === 4,
+      invalid: await mutationRefused('append', ['../outside', new Uint8Array()], 'runtime_data_invalid'),
+      removed: await files.remove('node-append.jsonl'), emptyRemoved: await files.remove('node-append-empty.bin'),
+    };
   }
   // Owner inspects the bounded result privately. No console/log response dump.
   fs.writeSync(Number(result), JSON.stringify(report));

@@ -3,6 +3,36 @@
 
 **Node读取/size已585f082在API26/35各30项通过；stage FD改造c78faca已两版本31项过（API35首次0结果失败、重跑通过）。Main move/remove已42fba3a两版本35项通过；本轮新增显式权限IPC，设备待新CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 不修改vendor，不回退同UID Agent/shell。
 
+## 有界追加与同目录写者协调（本轮，40项设备待新CI）
+
+为后续Store/MemoryStore日志增加Main append组件，并通过APPEND二进制pipe与固定Node JNI接入验收。Main必须显式allowAppend（默认false），不从allowReplace或PUBLISH推导，Agent仍不能选根/flags/目录。append只保留原前缀并追加完整二进制，缺失时创建，空追加可创建空文件；包括原文件的**总大小最多1MiB wire policy**，超限返回TOO_LARGE且不改原文件。注入publication-only kernel不能暗中获得替换支持。
+
+**这里是有界整文件原子追加，复杂度O(文件大小)，每次发布新inode；不是O_APPEND、通用FileHandle、无界JSONL或原模块已移植。** 适合此阶段小文件候选；不能替换leased SQLite物理文件，不能拿它模拟原JSONL的同步句柄/部分写/truncate契约。未知结果不自动重试，否则可能重复日志；原调用方operationId/恢复仍待实现。
+
+新Main-only RuntimeDirectoryMutationLock按持有目录FD的(dev,ino)协调所有RuntimeAtomicPublisher实例，publish/replace/move/remove/append均加入同一目录gate。append在同一gate内读取→合并→完整stage/fsync→原子替换→目录sync，避免两个owner丢更新；不同目录不共享gate。lease按live owner计数，最后close移除entry，目录真实FD仍不外发。只协调这些Main API调用，**不是排斥其他进程/绕过该API直接native写者的文件锁**，正式launcher必须统一所有写者。目录路径改名后仍按持有cap/inode操作，不重新按路径选锁。
+
+五新增仪器用例（35→40）：二进制/空/旧FD/总预算/UI/关闭；两个owner并发24记录无丢失且关闭一个不影响另一个；阻塞append的内核窗口后同目录replace须等待、另一个目录可继续；实际append后结果丢失及sync故障unknown且不重试；拒绝symlink/目录/宽权限/越界并在父目录替换后仍只追加原cap。原真实isolated UID矩阵扩展APPEND、覆盖权不含追加、nonce/close/transport unknown；Node两新PID必须实际追加二进制/空文件/总量超限不改数据/越界，再清理临时文件，原三文件/模型/Key/WAL断言保留。
+
+Python报告器新增固定RuntimeFileAppendTest/lbN与file_append有限phase，Python29通过；actionlint1.7.12检查修改的Node候选workflow通过（外部shellcheck/pyflakes未运行）；钉点Node JNI/SQLite已重准备，精确APK host1/scope4通过。host1首次命令工作目录带了重复dsh-go前缀而找不到文件，纠正为`cd dsh-go && node --test tooling/android-node-probe/probe-bundle.test.mjs`后通过；不把错误入口算作测试执行。同一恢复工具链offline两个验收APK已成功：
+
+```text
+BUILD SUCCESSFUL in 2m 34s
+71 actionable tasks: 21 executed, 50 up-to-date
+```
+
+40项设备CI结果待新commit，不提前记通过；本地没有adb/真机。Node候选workflow显式加入新coordinator文件触发路径，不改full-ICU producer五输入。
+
+## c1b9aee设备结果（显式move/remove IPC）
+
+run41779079402 **success**，API实查：
+
+```text
+API26 id13298915795: node-candidate-results-api-26-t35-f0-e0-s0-passed-l0
+API35 id13299245445: node-candidate-results-api-35-t35-f0-e0-s0-passed-l0
+```
+
+真实isolated UID新增权限组合/移动/删除/拒绝与unknown及旧35项通过；同期native41779079439、broker设备41779079401、scope41779079436均success。该版本尚无Node移动/删除入口（后续c8e702d），也没有本轮append。
+
 ## Node move/rename/remove JNI（本轮，设备待新CI）
 
 验收linked binding追加三个固定异步方法：move(source,target)独占移动，rename(source,target)覆盖移动，remove(name)仅删普通文件。仍复用最多4个libuv任务与隔离Kotlin client→Main授予的文件cap；不传根、任意flags、目录FD、Key或nonce给JS。source/target仅字符串与有限长度/arity，Main再做完整basename/身份/操作权限检查。JNI进入mutation后结果丢失仍返回outcome_unknown，不能错误沿用查询的unavailable；remove只回removed或unknown，有限已知拒绝用code。
@@ -18,7 +48,7 @@ BUILD SUCCESSFUL in 1m 11s
 
 无本地adb/真机。设备仍须查本轮新commit/run，不能使用下面c1b9aee或42fba3a的35项证明Node新分支执行。
 
-## move/remove显式IPC授权（本轮，设备待新CI）
+## move/remove显式IPC授权（c1b9aee设备通过，以下为当轮实现记录）
 
 v1追加MOVE/MOVE_REPLACE/REMOVE，不携带文件正文或目录FD。Main默认不授予移动/删除；MOVE要求allowMove，MOVE_REPLACE同时要求allowMove与allowReplace，REMOVE只由allowRemove授权。读取权、覆盖权、发布权均不能推导删除权。Main仍先核对真实isolated UID、nonce、控制Parcel预算、严格basename/保留前缀/不同源目标/无尾随字段，再admit操作；close之后拒绝，已进入mutation仍允许完成并drain。
 
@@ -179,19 +209,19 @@ API35 id13294617445: node-candidate-results-api-35-t25-f0-e0-s0-passed-l0
 
 ## 授权边界
 
-可信Main launcher先观察隔离服务的真实UID/Binder，然后调用`RuntimeFileCommitHost.open(context, scopeId, isolatedUid, peer, allowReplace=…, allowRead=…, allowMove=…, allowRemove=…)`。只能在Main worker创建；同Main UID、无效scope或预算拒绝。根固定为：
+可信Main launcher先观察隔离服务的真实UID/Binder，然后调用`RuntimeFileCommitHost.open(context, scopeId, isolatedUid, peer, allowReplace=…, allowRead=…, allowMove=…, allowRemove=…, allowAppend=…)`。只能在Main worker创建；同Main UID、无效scope或预算拒绝。根固定为：
 
 ```text
 context.noBackupFilesDir/minimax-bot-runtime/files/<Main选择的scopeId>/
 ```
 
-即使scopeId为v2也不会覆盖`v2/sqlite`，Key prefs/Keystore及workspace均不在此子树。scopeId不是Agent参数，目录FD/真实根路径不传隔离端。客户端只提交严格basename；不支持子目录/绝对路径/穿越/保留stage前缀。Main默认仅授予目标不存在发布，必须显式allowReplace才可替换；allowRead/allowMove/allowRemove也默认false，覆盖移动需要allowMove且allowReplace。备份区不能因为Agent选了mutation opcode就获得额外权限。
+即使scopeId为v2也不会覆盖`v2/sqlite`，Key prefs/Keystore及workspace均不在此子树。scopeId不是Agent参数，目录FD/真实根路径不传隔离端。客户端只提交严格basename；不支持子目录/绝对路径/穿越/保留stage前缀。Main默认仅授予目标不存在发布，必须显式allowReplace才可替换；allowRead/allowMove/allowRemove/allowAppend也默认false，覆盖移动需要allowMove且allowReplace。备份区不能因为Agent选了mutation opcode就获得额外权限。
 
 每个host绑定真实Binder callingUid、随机64hex会话和peer死亡。不信任请求中的UID、root或scope，也没有这些协议字段；session仅交隔离Kotlin客户端，不进Node环境/argv。10be45f验收只接隔离Kotlin矩阵；新增Node文件JNI见顶部，仍没有正式launcher分配这些host。
 
 ## v1协议与结果
 
-`RuntimeFileCommit.v1` descriptor；PUBLISH/REPLACE请求为session、basename、声明字节数、一个pipe读端FD。READ/SIZE为session、basename；MOVE/MOVE_REPLACE为session、source basename、target basename；REMOVE为session、basename，控制请求不能有尾随字段。控制Parcel最多8KiB；正文最大1MiB，一律经匿名pipe传输，不把文件塞进Binder。文件是二进制字节，不套模型UTF8/JSON解码规则。
+`RuntimeFileCommit.v1` descriptor；PUBLISH/REPLACE/APPEND请求为session、basename、声明字节数、一个pipe读端FD。READ/SIZE为session、basename；MOVE/MOVE_REPLACE为session、source basename、target basename；REMOVE为session、basename，控制请求不能有尾随字段。控制Parcel最多8KiB；正文最大1MiB，一律经匿名pipe传输，不把文件塞进Binder。文件是二进制字节，不套模型UTF8/JSON解码规则。
 
 UID/session/操作/名称/长度/admission检查均在分配正文缓冲及文件创建前。每host最多4个已admit调用；客户端进程最多4个pipe writer及有界executor。FIFO类型检查、nonblocking poll、声明长度恰好读满并要求EOF，截断/多余字节/非pipe拒绝；默认绝对5秒读取截止，每次最多100ms观察close。读取截止不代表能中断存储fsync。
 
@@ -250,5 +280,5 @@ OK (32 tests)
 
 1. c78faca失败job重跑31项与42fba3a两版本35项已确认；继续查本轮新IPC的35项结果，不混用旧run。
 2. 显式移动/删除IPC已实现并补真实isolated UID/权限组合/关闭/结果未知断言；验证后接Node与原模块，不能从PUBLISH推导删除权或把通用fs.link替换为移动。
-3. 再扩展真正受控FS所需的read/stat/list/mkdir/append/FileHandle与全写者协调，适配原JSONL/MemoryStore并运行原恢复测试；不要全局把link改成rename。
+3. 有界append和Main API目录协调已加入候选；继续扩展真正受控FS所需的stat/list/mkdir/FileHandle/大日志与所有写者约束，适配原JSONL/MemoryStore并运行原恢复测试；不要全局把link改成rename。
 4. full-ICU/正式launcher/model resolver、可信Bot身份与SQLite lease另见HANDOFF，仍未完成。

@@ -130,7 +130,7 @@ class ResultReportingTest(unittest.TestCase):
 
     def test_node_file_bridge_diagnostics_never_include_native_capabilities(self):
         for phase, failure in [('file_commit', 'runtime_data_unavailable'), ('file_read', 'runtime_data_not_found'),
-                               ('file_mutation', 'runtime_data_denied')]:
+                               ('file_mutation', 'runtime_data_denied'), ('file_append', 'runtime_data_too_large')]:
             with self.subTest(phase=phase):
                 code, output = self.run_report('private-capability-marker '
                     f'node_probe_failed_at_{phase}_code_{failure} at x(IsolatedNodeModelTest.kt:161)')
@@ -159,3 +159,13 @@ class ResultReportingTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.module.report(self.root, status)
         self.assertEqual(status.read_text(), 't1-f1-e0-s0-denied_data-lm103\n')
+
+    def test_append_failure_uses_only_a_fixed_location_without_file_contents(self):
+        code, output = self.run_report('private-history-body runtime_data_too_large at x(RuntimeFileAppendTest.kt:61)')
+        self.assertEqual(code, 1)
+        self.assertIn('kind=large_data', output)
+        self.assertNotIn('private-history', output)
+        status = self.root / 'status.txt'
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.module.report(self.root, status)
+        self.assertEqual(status.read_text(), 't1-f1-e0-s0-large_data-lb61\n')

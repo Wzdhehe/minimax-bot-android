@@ -36,6 +36,7 @@ internal fun runFileCommitProbe(data: Bundle): String {
         denied(RuntimeDataCode.DENIED) { backup.replace("memory.bak", byteArrayOf()) }
         denied(RuntimeDataCode.DENIED) { backup.move("memory.bak", "moved.bak", false) }
         denied(RuntimeDataCode.DENIED) { backup.remove("memory.bak") }
+        denied(RuntimeDataCode.DENIED) { backup.append("memory.bak", byteArrayOf(1)) }
         stage = "replacement"
         check(state.publishIfAbsent("payload.bin", fileProbeBytes(false)) == RuntimePublicationResult.PUBLISHED)
         check(state.replace("payload.bin", fileProbeBytes(true)) == RuntimePublicationResult.PUBLISHED)
@@ -73,12 +74,19 @@ internal fun runFileCommitProbe(data: Bundle): String {
         check(rawFileMutation(stateHost, stateSession, RuntimeFileCommitWire.MOVE, "payload.bin", "../outside") == RuntimeDataCode.INVALID.wire)
         check(rawFileMutation(stateHost, stateSession, RuntimeFileCommitWire.REMOVE, "../outside") == RuntimeDataCode.INVALID.wire)
         check(rawFileMutation(stateHost, stateSession, RuntimeFileCommitWire.REMOVE, "payload.bin", "unexpected") == RuntimeDataCode.INVALID.wire)
+        check(state.append("append.bin", byteArrayOf(0, -1)) == RuntimePublicationResult.PUBLISHED)
+        check(state.append("append.bin", byteArrayOf(17)) == RuntimePublicationResult.PUBLISHED)
+        check(state.read("append.bin").contentEquals(byteArrayOf(0, -1, 17)))
+        denied(RuntimeDataCode.DENIED) { replaceOnly.append("append.bin", byteArrayOf(18)) }
+        check(state.read("append.bin").contentEquals(byteArrayOf(0, -1, 17)))
+        check(state.remove("append.bin") == RuntimeDeletionResult.REMOVED)
         stage = "nonce"
         val forged = (if (stateSession[0] == '0') "1" else "0") + stateSession.substring(1)
         denied(RuntimeDataCode.DENIED) { RuntimeFileCommitClient(stateHost, forged).publishIfAbsent("forged.bin", byteArrayOf()) }
         val forgedClient = RuntimeFileCommitClient(stateHost, forged)
         denied(RuntimeDataCode.DENIED) { forgedClient.move("payload.bin", "forged.bin", true) }
         denied(RuntimeDataCode.DENIED) { forgedClient.remove("payload.bin") }
+        denied(RuntimeDataCode.DENIED) { forgedClient.append("payload.bin", byteArrayOf()) }
         stage = "path"
         for (name in listOf("../outside", "/private/key", ".native-publish-reserved.tmp", "subdir/file")) {
             denied(RuntimeDataCode.INVALID) { state.publishIfAbsent(name, byteArrayOf()) }
@@ -125,6 +133,7 @@ internal fun runFileCommitProbe(data: Bundle): String {
         val closed = RuntimeFileCommitClient(closedHost, closedSession)
         denied(RuntimeDataCode.CLOSED) { closed.move("source.tmp", "target.json", false) }
         denied(RuntimeDataCode.CLOSED) { closed.remove("source.tmp") }
+        denied(RuntimeDataCode.CLOSED) { closed.append("source.tmp", byteArrayOf()) }
         return "passed"
     } catch (_: Exception) { return stage }
 }

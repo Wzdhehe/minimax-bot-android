@@ -20,6 +20,10 @@ c78faca/41776354659首次API26已31项过，API35在33秒内exit1且没有测试
 
 后续Node move/rename/remove JNI已加入验收，仍只用Main显式cap；隔离Kotlin映射新结果，JNI异常在mutation调用发生后为unknown。两新PID必需完整移动/冲突/覆盖/删除与非法输入断言，原Key/模型/WAL不删；钉点JNI/SQLite与Python28/host1通过，两个验收APK1m11s（71 tasks/17 executed/54 up-to-date），新35项设备待新CI，不能引用前一提交同计数。正式FS/生命周期未接。
 
+本轮再补Main有界append与目录inode gate，所有publisher mutations协调；APPEND显式权限/1MiB总量/pipe与Node JNI已接验收，新增五项（共40项）候选，Python29/host1/scope4/actionlint过、两个验收APK2m34s（71 tasks/21 executed/50 up-to-date），设备待CI。追加是O(文件大小)完整新inode原子替换，不是O_APPEND/FileHandle/大JSONL；未知不重试，不能替换leased SQLite文件。全写者必须统一经过Main API；不是排斥旁路进程的文件锁。详见T-RuntimeFiles最新节。
+
+最新实查：**c1b9aee/41779079402已API26/35各35项通过**，artifact13298915795/13299245445；native41779079439、broker设备41779079401、scope41779079436均success。这证明显式移动/删除IPC，不能用于证明后续Node分支或append。
+
 > e03b997/run41686820725的SDK route矩阵已API实查API26/35 success；以下待CI是实现当轮状态。正式resolver/启动器仍未接；FD VFS 的6605508/41700450899已定位Main含目录FD的IPC发送失败，SQLite未执行，不能称持久化已解决。后续46c1c07/run41703671145的四普通文件FD方案已API26/35通过（含WAL、两新PID与既有Key/模型断言）；仍无完整产品runtime，详见 [T-Persistence](T-Persistence.md)。
 
 Main持久数据库文件owner本阶段已加入生产源码，验收Node直接使用；固定四数据FD且不截断已有文件，隔离UID必须拒绝调用owner。两个APK43s构建、Python22过；44c0190/run41760010243的API26/35已各7项通过（hardlink按平台/owner分支边界记录）；完整lease/进程撤销、model resolver/启动器仍缺，见[T-NativeDataFiles](T-NativeDataFiles.md)。

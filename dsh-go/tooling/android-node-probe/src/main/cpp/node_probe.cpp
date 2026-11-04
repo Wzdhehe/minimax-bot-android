@@ -18,6 +18,7 @@ jmethodID file_read_method = nullptr;
 jmethodID file_size_method = nullptr;
 jmethodID file_move_method = nullptr;
 jmethodID file_remove_method = nullptr;
+jmethodID file_append_method = nullptr;
 std::atomic<int> opens{0};
 std::atomic<int> file_commits{0};
 
@@ -116,7 +117,7 @@ struct FileWork {
   v8::Global<v8::Context> context;
   std::u16string name, target;
   std::vector<unsigned char> bytes;
-  int operation = 0;  // publish, replace, read, size, move, rename, remove; fixed callbacks.
+  int operation = 0;  // publish, replace, read, size, move, rename, remove, append; fixed callbacks.
   bool called = false;
   jlong size = 0;
   int result = -1;
@@ -181,7 +182,8 @@ void RunFile(uv_work_t* request) {
       }
       if (bytes && !env->ExceptionCheck()) {
         task->called = true;
-        task->result = env->CallIntMethod(dispatcher, file_method, name, bytes, task->operation == 1 ? JNI_TRUE : JNI_FALSE);
+        task->result = task->operation == 7 ? env->CallIntMethod(dispatcher, file_append_method, name, bytes) :
+          env->CallIntMethod(dispatcher, file_method, name, bytes, task->operation == 1 ? JNI_TRUE : JNI_FALSE);
       }
     }
     if (env->ExceptionCheck()) { env->ExceptionClear(); if (task->called) task->result = FileMutation(task->operation) ? 2 : 6; }
@@ -230,7 +232,7 @@ void CommitFile(const v8::FunctionCallbackInfo<v8::Value>& args, int operation) 
   auto context = isolate->GetCurrentContext();
   auto resolver = v8::Promise::Resolver::New(context).ToLocalChecked();
   args.GetReturnValue().Set(resolver->GetPromise());
-  const bool body = operation == 0 || operation == 1;
+  const bool body = operation == 0 || operation == 1 || operation == 7;
   const bool move = operation == 4 || operation == 5;
   if (args.Length() != (body || move ? 2 : 1) || !args[0]->IsString() || args[0].As<v8::String>()->Length() > 128 ||
       (body && !args[1]->IsUint8Array()) || (move && (!args[1]->IsString() || args[1].As<v8::String>()->Length() > 128))) {
@@ -274,6 +276,7 @@ void SizeFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args
 void MoveFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, 4); }
 void RenameFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, 5); }
 void RemoveFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, 6); }
+void AppendFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, 7); }
 void InitializeFiles(v8::Local<v8::Object> exports, v8::Local<v8::Value>, v8::Local<v8::Context> context, void*) {
   auto* isolate = context->GetIsolate();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "publish"), v8::Function::New(context, PublishFile).ToLocalChecked()).Check();
@@ -283,6 +286,7 @@ void InitializeFiles(v8::Local<v8::Object> exports, v8::Local<v8::Value>, v8::Lo
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "move"), v8::Function::New(context, MoveFile).ToLocalChecked()).Check();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "rename"), v8::Function::New(context, RenameFile).ToLocalChecked()).Check();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "remove"), v8::Function::New(context, RemoveFile).ToLocalChecked()).Check();
+  exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "append"), v8::Function::New(context, AppendFile).ToLocalChecked()).Check();
 }
 // Node's macro emits a TU-local `_module` regardless of the public module name.
 // Keep the second registration in its own namespace rather than duplicating it.
@@ -342,7 +346,8 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   file_size_method = env->GetMethodID(type, "sizeRuntimeFile", "(Ljava/lang/String;)J");
   file_move_method = env->GetMethodID(type, "moveRuntimeFile", "(Ljava/lang/String;Ljava/lang/String;Z)I");
   file_remove_method = env->GetMethodID(type, "removeRuntimeFile", "(Ljava/lang/String;)I");
-  if (!open_method || !cancel_method || !file_method || !file_read_method || !file_size_method || !file_move_method || !file_remove_method) return JNI_ERR;
+  file_append_method = env->GetMethodID(type, "appendRuntimeFile", "(Ljava/lang/String;[B)I");
+  if (!open_method || !cancel_method || !file_method || !file_read_method || !file_size_method || !file_move_method || !file_remove_method || !file_append_method) return JNI_ERR;
   JNINativeMethod method{const_cast<char*>("start"),
       const_cast<char*>("(Ljava/lang/String;IIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;[I)I"), reinterpret_cast<void*>(Start)};
   if (env->RegisterNatives(type, &method, 1) != JNI_OK) return JNI_ERR;
