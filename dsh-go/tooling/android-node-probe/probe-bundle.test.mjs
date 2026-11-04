@@ -89,3 +89,76 @@ test('the exact APK script consumes inherited Unix FDs and reports privately wit
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('the packaged scoped-model block routes two turns over actual inherited FDs', { timeout: 12_000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'mbot-node-scoped-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  execFileSync('python3', [join(root, 'prepare-probe.py'), '--bundle-only', '--bundle-output', directory]);
+  const script = await readFile(join(directory, 'node-fd-probe.cjs'), 'utf8');
+  const moduleLine = /^const nativeBindingModuleUrl = (.+);$/m.exec(script);
+  assert.ok(moduleLine);
+  const moduleUrl = JSON.parse(moduleLine[1]);
+  const start = script.indexOf("    probePhase = 'scoped_model_route';");
+  const end = script.indexOf('    const cancelledId =', start);
+  assert.ok(start >= 0 && end > start);
+  const scopedBlock = script.slice(start, end);
+  const childScript = `
+    const nativeBindingModuleUrl = ${JSON.stringify(moduleUrl)};
+    const providerId = 'host-fixture';
+    let probePhase, count = 0;
+    setTimeout(() => process.stderr.write('scoped fixture timed out after ' + count + ' open(s)'), 7000).unref();
+    const report = {};
+    const binding = {
+      async open(id, body) {
+        const payload = JSON.parse(body);
+        if (!id || payload.providerId !== providerId || payload.modelId !== 'normal' || count >= 2) throw Error('bad_request');
+        return 3 + count++;
+      },
+      cancel() {},
+    };
+    (async () => { ${scopedBlock}
+      process.stdout.write(JSON.stringify({ scoped: report.scopedModelRoute, count }));
+    })().catch(() => { process.exitCode = 1; });
+  `;
+  const servers = [], owners = [], peers = [];
+  let child;
+  const timeout = setTimeout(() => { child?.kill('SIGKILL'); peers.forEach((socket) => socket.destroy()); }, 10_000);
+  try {
+    for (let index = 0; index < 2; index++) {
+      const path = join(directory, `scoped-${index}`);
+      const server = createServer((socket) => {
+        peers.push(socket);
+        socket.on('error', () => {});
+      });
+      servers.push(server); server.listen(path); await once(server, 'listening');
+      const owner = connect(path); owners.push(owner); owner.on('error', () => {});
+      await once(owner, 'connect'); owner.pause();
+    }
+    child = spawn(process.execPath, ['--no-warnings', '-e', "eval(require('node:fs').readFileSync(0, 'utf8'))"], {
+      stdio: ['pipe', 'pipe', 'pipe', ...owners], env: buildRuntimeEnv(process.env),
+    });
+    child.stdin.end(childScript);
+    const exited = once(child, 'exit');
+    let stdout = '', stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
+    await once(child, 'spawn'); owners.forEach((socket) => socket.destroy());
+    // These are preauthenticated, already-issued model channels: the reader
+    // consumes their responses and intentionally sends no HTTP request.
+    for (const socket of peers) socket.end(header +
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"lookup","arguments":"{}"}}]}}]}\n\n' +
+      'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\ndata: [DONE]\n\n');
+    const [code] = await exited;
+    assert.equal(code, 0, stderr);
+    assert.equal(stderr, '');
+    const report = JSON.parse(stdout);
+    assert.equal(report.count, 2);
+    assert.equal(report.scoped.unboundStatus, 400);
+    for (const name of ['first', 'second']) {
+      assert.deepEqual(report.scoped[name], { status: 200, toolCalls: true, done: true });
+    }
+  } finally {
+    clearTimeout(timeout); child?.kill(); owners.forEach((socket) => socket.destroy()); peers.forEach((socket) => socket.destroy());
+    await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));
+  }
+});

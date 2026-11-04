@@ -1,6 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+## scoped模型binding → JNI/Binder 验收（本轮代码已编译，设备待CI）
+
+在现有固定验收脚本嵌入实际`native-model-binding.mjs`和`model-fetch-scope.mjs`。脚本通过同一个`mbot_model_bridge`、隔离Kotlin client、Main `NativeModelRequestHost`与Key注入broker：不在scope时请求返回400；两个binding各跑一个带工具的模型流，关闭第一个后第二个仍可执行。设备用例断言两次200/tool_calls/DONE、生成Key只在native注入（每进程8次）且不在报告、env、文件；实际使用同一授权provider/model，尚不证明多provider的native分配或产品launcher。
+
+本机执行：Python32 passed；精确APK脚本宿主2项passed（含两个真实继承Unix FD，JNI/broker用fixture）；SQLite/WAL FD VFS宿主测试与API26/x86_64对象交叉编译passed；本地默认无Intl release验收APK+仪器APK编译 `BUILD SUCCESSFUL in 3m 16s`（71 tasks/18 executed）。本机无adb/KVM/设备，API26/35模拟器执行须看本次push后的`Isolated Android Node candidate`，不能套用先前49项结果。CI路径过滤已加入binding和fetch-scope源文件；full-ICU producer五输入未动。
+
 ## 组合矩阵已接入钉住的full-ICU产物（2026-11-04 20:54 实查）
 
 **a2c17d5**只把`.github/workflows/android-node-probe.yml`的既有`PINNED_SOURCE_RUN_ID`填为**41826964330**：五个producer权威输入未动、校验未放宽、未编造SHA。**41831847047整体success**，两job均success：

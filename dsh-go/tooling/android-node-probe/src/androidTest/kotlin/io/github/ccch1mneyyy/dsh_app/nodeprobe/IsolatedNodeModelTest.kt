@@ -153,7 +153,7 @@ class IsolatedNodeModelTest {
                                 val report = if (text.isBlank()) JSONObject() else JSONObject(text)
                                 if (reply.data.getString("code") != "ok") {
                                     val phases = setOf("bootstrap", "sqlite_load", "sqlite_memory", "vfs_register", "vfs_open", "vfs_wal",
-                                        "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "model_dynamic", "sdk_route", "file_commit", "file_read")
+                                        "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "model_dynamic", "sdk_route", "scoped_model_route", "file_commit", "file_read")
                                     val codes = setOf("SQLITE_CANTOPEN", "SQLITE_IOERR", "SQLITE_IOERR_SHMOPEN", "SQLITE_BUSY", "SQLITE_READONLY",
                                         "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "sqlite_parent_missing",
                                         "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable", "runtime_data_not_found", "runtime_data_too_large")
@@ -209,6 +209,14 @@ class IsolatedNodeModelTest {
                                 assertEquals(200, report.getJSONObject("sdkRoute").getInt("status"))
                                 assertTrue(report.getJSONObject("sdkRoute").getBoolean("toolCalls"))
                                 assertTrue(report.getJSONObject("sdkRoute").getBoolean("done"))
+                                val scoped = report.getJSONObject("scopedModelRoute")
+                                assertEquals(400, scoped.getInt("unboundStatus"))
+                                for (name in listOf("first", "second")) {
+                                    val routed = scoped.getJSONObject(name)
+                                    assertEquals(200, routed.getInt("status"))
+                                    assertTrue(routed.getBoolean("toolCalls"))
+                                    assertTrue(routed.getBoolean("done"))
+                                }
                                 val fileCommits = report.getJSONObject("fileCommits")
                                 for (name in listOf("snapshot", "initial", "empty")) {
                                     assertEquals(if (attempt == 0) "published" else "already_exists", fileCommits.getString(name))
@@ -245,7 +253,7 @@ class IsolatedNodeModelTest {
                                 assertTrue(fileProbeBytes(true).contentEquals(File(committed, "node-state.bin").readBytes()))
                                 assertEquals(0L, File(committed, "node-empty.bin").length())
                                 assertTrue(committed.listFiles()!!.none { it.readBytes().toString(Charsets.UTF_8).contains(secret) })
-                                assertEquals(6, headersInjected.get())
+                                assertEquals(8, headersInjected.get())
                                 assertFalse(store.catalog().toString().contains(secret))
                                 assertFalse(logs.any { it.contains(secret) })
                                 }

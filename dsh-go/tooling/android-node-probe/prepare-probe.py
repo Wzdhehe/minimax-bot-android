@@ -32,6 +32,8 @@ def bundle(output_dir=None):
         'model-fd-client.mjs': ['model-broker.mjs'],
         'model-sdk-fetch.mjs': ['model-broker.mjs', 'model-fd-client.mjs'],
         'native-model-route.mjs': ['model-broker.mjs', 'model-sdk-fetch.mjs'],
+        'model-fetch-scope.mjs': ['model-broker.mjs'],
+        'native-model-binding.mjs': ['native-model-route.mjs', 'model-fetch-scope.mjs'],
     }
     def module_url(name):
         if name not in urls:
@@ -51,6 +53,9 @@ def bundle(output_dir=None):
     route_placeholder = '"__MBOT_NATIVE_ROUTE_MODULE_URL__"'
     assert template.count(route_placeholder) == 1
     template = template.replace(route_placeholder, json.dumps(module_url('native-model-route.mjs')))
+    binding_placeholder = '"__MBOT_NATIVE_BINDING_MODULE_URL__"'
+    assert template.count(binding_placeholder) == 1
+    template = template.replace(binding_placeholder, json.dumps(module_url('native-model-binding.mjs')))
     (assets / 'node-fd-probe.cjs').write_text(template)
 
 

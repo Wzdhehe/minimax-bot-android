@@ -3,6 +3,7 @@
 // This script is packaged in the verification APK, never supplied by an Agent.
 const modelModuleUrl = "__MBOT_FD_MODULE_URL__";
 const nativeRouteModuleUrl = "__MBOT_NATIVE_ROUTE_MODULE_URL__";
+const nativeBindingModuleUrl = "__MBOT_NATIVE_BINDING_MODULE_URL__";
 const fs = require('node:fs');
 let probePhase = 'bootstrap';
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
@@ -116,6 +117,32 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       messages: [{ role: 'user', content: 'tool check' }], tools: [{ type: 'function', function: { name: 'lookup', parameters: { type: 'object' } } }] }) });
     const sdkBody = await sdkResponse.text();
     report.sdkRoute = { status: sdkResponse.status, toolCalls: sdkBody.includes('tool_calls'), done: sdkBody.includes('[DONE]') };
+    probePhase = 'scoped_model_route';
+    // Exercise the production per-turn dispatcher through the same linked
+    // JNI/Binder/native broker capability as the fixed SDK route above.
+    const { createNativeModelBinding } = await import(nativeBindingModuleUrl);
+    const byForkProviderId = { 'custom_provider:probe': { nativeProviderId: providerId,
+      apiFormat: 'openai-completions', models: ['normal'] } };
+    const firstScope = createNativeModelBinding({ byForkProviderId, binding });
+    const secondScope = createNativeModelBinding({ byForkProviderId, binding });
+    firstScope.install(globalThis);
+    secondScope.install(globalThis);
+    try {
+      const endpoint = 'https://models.mbot.invalid/v1/chat/completions';
+      const request = { method: 'POST', body: JSON.stringify({ model: 'normal', stream: true,
+        messages: [{ role: 'user', content: 'scoped tool check' }],
+        tools: [{ type: 'function', function: { name: 'lookup', parameters: { type: 'object' } } }] }) };
+      const denied = await fetch(endpoint, request);
+      const run = (scope) => scope.runForModelKey('custom_provider:probe/normal', async () => {
+        const response = await fetch(endpoint, request);
+        const text = await response.text();
+        return { status: response.status, toolCalls: text.includes('tool_calls'), done: text.includes('[DONE]') };
+      });
+      const first = await run(firstScope);
+      firstScope.close();
+      const second = await run(secondScope);
+      report.scopedModelRoute = { unboundStatus: denied.status, first, second };
+    } finally { firstScope.close(); secondScope.close(); }
     const cancelledId = require('node:crypto').randomUUID();
     binding.cancel(cancelledId);
     try { fs.closeSync(await binding.open(cancelledId, request)); report.dynamicCancelled = false; }
