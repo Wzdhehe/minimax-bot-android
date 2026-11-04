@@ -31,6 +31,23 @@ test('a descriptor needs an absolute entry, a pinned commit, a port and a token'
   assert.throws(() => createRuntimeDescriptor({ entryPath: '/x', pinCommit: PIN, port: 80, token: 'short' }), /token/);
 });
 
+test('the descriptor carries an optional loopback broker session for model requests', () => {
+  const { priv } = makeDirs();
+  const broker = { baseUrl: 'http://127.0.0.1:43117', token: 'a'.repeat(64) };
+  const withBroker = createRuntimeDescriptor({ entryPath: '/x/entry.mjs', pinCommit: PIN, port: 8080, token: 'b'.repeat(64), broker });
+  assert.deepEqual(withBroker.broker, broker);
+  const path = writeRuntimeDescriptor({ dir: priv, descriptor: withBroker, allowedRoots: [priv] });
+  assert.deepEqual(readRuntimeDescriptor({ path, allowedRoots: [priv] }), withBroker);
+  // A descriptor without a broker session stays valid: the guest may run
+  // without model requests.
+  const without = createRuntimeDescriptor({ entryPath: '/x/entry.mjs', pinCommit: PIN, port: 8080, token: 'b'.repeat(64) });
+  assert.equal(without.broker, null);
+  // A broker that is not loopback, or whose token is not a session token, is
+  // refused before anything is written.
+  assert.throws(() => createRuntimeDescriptor({ entryPath: '/x', pinCommit: PIN, port: 8080, token: 'b'.repeat(64), broker: { baseUrl: 'http://10.0.0.1:80', token: 'a'.repeat(64) } }), /loopback broker/);
+  assert.throws(() => createRuntimeDescriptor({ entryPath: '/x', pinCommit: PIN, port: 8080, token: 'b'.repeat(64), broker: { baseUrl: 'http://127.0.0.1:80', token: 'short' } }), /broker session token/);
+});
+
 test('the descriptor round-trips through the private directory with owner-only permissions', () => {
   const { priv } = makeDirs();
   const descriptor = createRuntimeDescriptor({ entryPath: join(priv, 'runtime', 'entry.mjs'), pinCommit: PIN, port: 9123, token: 'c'.repeat(64) });

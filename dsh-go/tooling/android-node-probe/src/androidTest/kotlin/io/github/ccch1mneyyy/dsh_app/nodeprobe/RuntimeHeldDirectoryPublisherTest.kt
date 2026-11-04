@@ -83,8 +83,9 @@ class RuntimeHeldDirectoryPublisherTest {
         // from it: the publisher owns a copy of the descriptor.
         val publisher = RuntimeAtomicPublisher.openForHeldDirectory(child)
         child.close()
-        assertEquals(RuntimePublicationResult.PUBLISHED, publisher.publishIfAbsent("history.jsonl", "after\n".toByteArray()))
-        assertEquals("after\n", File(root, "messages/history.jsonl").readText())
+        assertEquals(RuntimePublicationResult.PUBLISHED, publisher.publishIfAbsent("after.jsonl", "after\n".toByteArray()))
+        assertEquals("after\n", File(root, "messages/after.jsonl").readText())
+        assertEquals("first\n", File(root, "messages/history.jsonl").readText())
         publisher.close()
         parent.close()
     }

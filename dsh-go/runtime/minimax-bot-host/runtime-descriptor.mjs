@@ -46,8 +46,13 @@ function isInside(root, candidate) {
 /**
  * Build a validated descriptor. Throws before anything is written when a
  * field is missing or malformed.
+ *
+ * The optional broker session is the native model broker the guest calls for
+ * model requests. It is a loopback credential, like the Bot service token,
+ * and it never carries a provider key: the provider key stays in the native
+ * side and only the resolved model answer crosses this session.
  */
-export function createRuntimeDescriptor({ entryPath, pinCommit, port, token }) {
+export function createRuntimeDescriptor({ entryPath, pinCommit, port, token, broker = null }) {
   if (typeof entryPath !== 'string' || !entryPath || entryPath.includes('\0') || !isAbsolute(entryPath)) {
     throw new TypeError('An absolute runtime entry path is required');
   }
@@ -60,7 +65,17 @@ export function createRuntimeDescriptor({ entryPath, pinCommit, port, token }) {
   if (typeof token !== 'string' || !/^[0-9a-f]{32,}$/.test(token)) {
     throw new TypeError('A session token is required');
   }
-  return Object.freeze({ entryPath, pinCommit, port, token });
+  if (broker === null || broker === undefined) {
+    return Object.freeze({ entryPath, pinCommit, port, token, broker: null });
+  }
+  const { baseUrl, token: brokerToken } = broker ?? {};
+  if (typeof baseUrl !== 'string' || !/^http:\/\/127\.0\.0\.1:[0-9]{1,5}$/.test(baseUrl)) {
+    throw new TypeError('A loopback broker URL is required');
+  }
+  if (typeof brokerToken !== 'string' || !/^[0-9a-f]{32,}$/.test(brokerToken)) {
+    throw new TypeError('A broker session token is required');
+  }
+  return Object.freeze({ entryPath, pinCommit, port, token, broker: Object.freeze({ baseUrl, token: brokerToken }) });
 }
 
 /**
