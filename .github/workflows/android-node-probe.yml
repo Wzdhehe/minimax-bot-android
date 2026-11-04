@@ -70,7 +70,10 @@ jobs:
     env:
       # Pin a successful source producer here after it exists, then push this
       # workflow. This also works when workflow_dispatch is not registered on main.
-      PINNED_SOURCE_RUN_ID: ''
+      # 41826964330 is the full-ICU producer whose build, verify (26) and verify
+      # (35) all succeeded; its artifact is still unexpired and the five build
+      # inputs are unchanged, so the combination matrix may reuse it.
+      PINNED_SOURCE_RUN_ID: '41826964330'
     strategy:
       fail-fast: false
       matrix:
