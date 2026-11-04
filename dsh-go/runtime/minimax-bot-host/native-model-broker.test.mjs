@@ -133,7 +133,11 @@ test('cancelling the runtime stream closes the real native OkHttp provider call'
 test('native-held key never reaches runtime descriptor, environment, logs or Agent-readable files', options, async (t) => {
   const s = await stack(t);
   const descriptor = createRuntimeDescriptor({ entryPath: join(s.root, 'entry.mjs'),
-    pinCommit: '97818b2890b4acae1c6bd1200a226ff506680628', port: s.proxy.port, token: s.proxy.token });
+    pinCommit: '97818b2890b4acae1c6bd1200a226ff506680628', port: s.proxy.port, token: s.proxy.token,
+    // The non-secret provider catalog travels with the descriptor; the key and
+    // the real endpoint never do.
+    catalog: { providers: [{ providerId: 'native-provider', name: 'Native', apiFormat: 'openai-completions',
+      enabled: true, models: ['stream'] }], defaultProviderId: 'native-provider', defaultModelId: 'stream' } });
   const path = writeRuntimeDescriptor({ dir: s.root, descriptor, allowedRoots: [s.root], workspaceRoot: s.workspace });
   const env = buildRuntimeEnv({ baseEnv: process.env });
   const source = `
@@ -160,9 +164,16 @@ console.log(JSON.stringify({descriptor, env:process.env, argv:process.argv, file
   assert.equal(report.artifactsSafe, true, 'native key reached an observable artifact');
   assert.equal(report.logsSafe, true);
   assert.equal(report.nativeSurfacesSafe, true);
-  const persistedDescriptor = JSON.parse(await readFile(path));
-  assert.deepEqual(Object.keys(persistedDescriptor).sort(), ['broker', 'entryPath', 'pinCommit', 'port', 'token']);
+  const persistedText = await readFile(path, 'utf8');
+  const persistedDescriptor = JSON.parse(persistedText);
+  assert.deepEqual(Object.keys(persistedDescriptor).sort(), ['broker', 'catalog', 'entryPath', 'pinCommit', 'port', 'token']);
   assert.equal(persistedDescriptor.broker, null, 'this FD/proxy fixture must not acquire a broker session');
+  // The catalog is a projection: provider, api format and models only.
+  assert.deepEqual(persistedDescriptor.catalog.providers, [{ providerId: 'native-provider', name: 'Native',
+    apiFormat: 'openai-completions', enabled: true, models: ['stream'] }]);
+  assert.equal(persistedDescriptor.catalog.defaultModelId, 'stream');
+  assert.ok(!persistedText.includes('apiKey'), 'the descriptor must not carry an api key field');
+  assert.ok(!persistedText.includes('baseUrl'), 'the descriptor must not carry the real upstream endpoint');
 });
 
 test('native blocks echoed/escaped keys, provider bodies, redirects and secret-bearing exceptions', options, async (t) => {
