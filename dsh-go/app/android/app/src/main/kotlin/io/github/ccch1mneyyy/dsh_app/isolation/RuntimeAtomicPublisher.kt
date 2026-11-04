@@ -2,10 +2,10 @@
 package io.github.ccch1mneyyy.dsh_app.isolation
 
 import android.content.Context
+import android.os.ParcelFileDescriptor
 import android.system.Os
 import android.system.OsConstants
 import java.io.Closeable
-import java.io.File
 import java.io.FileDescriptor
 import java.util.UUID
 
@@ -48,16 +48,19 @@ internal class RuntimeAtomicPublisher private constructor(
         }
         val snapshot = bytes.copyOf()
         val stage = STAGE_PREFIX + UUID.randomUUID() + ".tmp"
-        val file = File(directory.file, stage)
         var kernelEntered = false
         var kernelReturned = false
         var published = false
         var stageCreated = false
         try {
-            val fd = Os.open(file.path, OsConstants.O_RDWR or OsConstants.O_CREAT or OsConstants.O_EXCL or
-                OsConstants.O_NOFOLLOW or OsConstants.O_CLOEXEC, 384 /* 0600 */)
-            stageCreated = true
-            try {
+            val owner = directory.withDescriptor { parent ->
+                val raw = NativeRuntimePublication.openStage(parent, stage)
+                if (raw < 0) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+                stageCreated = true
+                ParcelFileDescriptor.adoptFd(raw)
+            }
+            owner.use {
+                val fd = it.fileDescriptor
                 var offset = 0
                 while (offset < snapshot.size) {
                     val count = Os.write(fd, snapshot, offset, minOf(32 * 1024, snapshot.size - offset))
@@ -65,7 +68,7 @@ internal class RuntimeAtomicPublisher private constructor(
                     offset += count
                 }
                 Os.fsync(fd)
-            } finally { Os.close(fd) }
+            }
             val directoryFd = directory.descriptor.fd
             kernelEntered = true
             val result = if (replace) kernel.replace(directoryFd, stage, name)
@@ -86,7 +89,9 @@ internal class RuntimeAtomicPublisher private constructor(
         } finally {
             // The stage is private and was created by this operation. Cleanup
             // failure never changes a committed target or erases unknown outcome.
-            if (stageCreated) try { Os.remove(file.path) } catch (_: Exception) { }
+            if (stageCreated) try {
+                directory.withDescriptor { NativeRuntimePublication.removeStage(it, stage) }
+            } catch (_: Exception) { }
         }
     }
     @Synchronized override fun close() { directory.close() }

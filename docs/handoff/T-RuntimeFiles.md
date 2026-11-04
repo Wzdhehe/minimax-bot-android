@@ -1,9 +1,35 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-RuntimeFiles：Main授予的有界文件提交能力（2026-11-04）
 
-**Main受控读取/size已a96d916在API26/35各30项通过；新增Node读取JNI已编译，独立30项候选待CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 原子发布/替换内核及21项设备基线见[T-RuntimeFS](T-RuntimeFS.md)。不修改vendor，不回退同UID Agent/shell。
+**Node读取/size已585f082在API26/35各30项通过；新增stage目录FD改造已编译，31项设备候选待CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 原子发布/替换内核及21项设备基线见[T-RuntimeFS](T-RuntimeFS.md)。不修改vendor，不回退同UID Agent/shell。
 
-## Node读取JNI（最新，设备待CI）
+## stage创建/清理改用Main目录FD（最新，设备待CI）
+
+RuntimeAtomicPublisher不再按directory.file路径创建/清理stage。生产JNI增加固定openStage/removeStage：只能保留前缀basename，openat以WRONLY/CREAT/EXCL/NOFOLLOW/CLOEXEC和0600创建，unlinkat仅删stage，UID/目录类型仍检查，永不接受任意flags/根路径。FD只由Main adopt并在写入/fsync后关闭；发布与目录sync也仍对同一目录cap。创建失败不删除别人的stage，清理失败不覆盖已提交或未知结果。
+
+新增用例：先持有两个publisher，再将路径改名并以外部目录symlink替代；独占发布、替换、冲突和注入ENOSYS后的stage清理必须全部留在原目录，外部哨兵与目录成员不变。原内核拒绝用例另断言stage helpers不能覆盖/删除普通已提交文件。原30项保留，新候选31项，需新CI。Main读取旧cap已由前轮测试证明，本轮补的是写入stage路径，不把它说成一般目录重命名/完整FS。
+
+双ABI生产CMake/JNI/16KiB与Python27通过；最终两个APK含stage-helper拒绝断言：
+
+```text
+BUILD SUCCESSFUL in 35s
+71 actionable tasks: 7 executed, 64 up-to-date
+```
+
+没有本地adb/真机，设备待新run。崩溃遗留stage清理/JSONL恢复仍缺；没有Agent目录FD或Stored-file FD、任意shell、宽存储权限。
+
+## 585f082设备结果（Node读取/size）
+
+**585f082/run41775322136 success**，实查artifact：
+
+```text
+API26 id13297081597: node-candidate-results-api-26-t30-f0-e0-s0-passed-l0
+API35 id13297031642: node-candidate-results-api-35-t30-f0-e0-s0-passed-l0
+```
+
+Node双PID实际读回、大小/错误、原文件提交/Key/WAL与Main读取全部通过。仍为固定脚本/假provider，不是完整Bot或生产启动器。
+
+## Node读取JNI（585f082已设备通过）
 
 验收linked binding追加read/size，复用同一最多4任务池，经隔离Kotlin client→Main已授权READ/SIZE。read仅把有界pipe内容转为独立Uint8Array；size转为安全整数范围的Number。Java异常、未知回复归一化；查询无写入副作用，错误不伪装提交unknown。最大1MiB、稳定missing/invalid/denied/closed/too_large/unavailable；无Root/Key/nonce/真实文件FD交给JS。
 
@@ -158,7 +184,7 @@ OK (32 tests)
 
 ## 后续
 
-1. Main读取a96d916已API26/35各30项过；先查新增Node READ/SIZE那一commit的独立30项，不能混用旧run。
-2. 原publisher stage创建/清理仍按可信父目录路径，下一步在扩展目录操作前迁到Main目录FD下的固定openat/unlinkat，补父目录被替换时的写入测试；不开放任意flags/路径或目录FD给Agent。
+1. Node读取585f082已API26/35各30项过；先查新stage目录FD候选31项，不混用旧run。
+2. 读写stage都对Main目录cap后，继续实现原模块真正需要的受控rename/remove/append/目录与FileHandle，逐项绑定Main权限/预算并跑原调用方恢复测试；不能把通用fs.link替换为移动，也不开放目录FD/任意flags或路径。
 3. 再扩展真正受控FS所需的read/stat/list/mkdir/append/FileHandle与全写者协调，适配原JSONL/MemoryStore并运行原恢复测试；不要全局把link改成rename。
 4. full-ICU/正式launcher/model resolver、可信Bot身份与SQLite lease另见HANDOFF，仍未完成。

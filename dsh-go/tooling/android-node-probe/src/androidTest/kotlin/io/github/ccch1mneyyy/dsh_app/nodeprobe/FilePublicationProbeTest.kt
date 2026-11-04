@@ -74,6 +74,10 @@ class FilePublicationProbeTest {
 
     @Test fun traversalAndANonDirectoryFdAreRefused() = fixture { root, fd ->
         stage(root, "stage.tmp", "unchanged".toByteArray())
+        // Stage-only helpers cannot create/overwrite or delete an ordinary
+        // committed filename even if trusted Main accidentally passes one.
+        expect(-OsConstants.EINVAL, NativeRuntimePublication.openStage(fd, "stage.tmp"))
+        expect(OsConstants.EINVAL, NativeRuntimePublication.removeStage(fd, "stage.tmp"))
         for (name in listOf("../outside", "subdir/file", ".", "..", "")) {
             expect(OsConstants.EINVAL, NativeRuntimePublication.publishNoReplace(fd, "stage.tmp", name))
         }

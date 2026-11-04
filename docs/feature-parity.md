@@ -11,7 +11,7 @@
 - [x] better-sqlite3 12.11.1 Android x86_64验收：内存数据库、四普通FD VFS的WAL/并行只读/两次新PID读回已API26/35通过。Main固定文件owner已验证；完整数据lease/FS/online backup、ARM64/真机仍缺，见[T-Persistence](handoff/T-Persistence.md)。
 - [x] SDK→模型FD流式适配（组件）：四类真实pi-ai provider（含Google async scope）、工具事件、背压、取消及错误不重试宿主验证通过；动态JNI/Binder路由已API26/35通过。正式model resolver/启动器与完整runtime仍未装配，见T-RuntimeBroker。
 - [x] Main原子发布/替换组件与隔离Node文件commit：a49d79b在API26/35各25项通过，含不覆盖/并发/提交未知、Node快照/两PID及Key/数据库回归；不是完整runtime FS，见[T-RuntimeFS](handoff/T-RuntimeFS.md)。
-- [x] Main显式授权的有界读取/大小：a96d916在API26/35各30项通过，含openat目录cap、父目录替换与输出close/deadline。Node读取JNI已编译，设备待新CI；仍缺完整FS/原模块/launcher，见[T-RuntimeFiles](handoff/T-RuntimeFiles.md)。
+- [x] Main显式授权的有界读取/大小及Node JNI：585f082在API26/35各30项通过，含实际Node读回、openat目录cap、父目录替换与输出close/deadline。stage创建/清理FD改造已编译，31项设备待CI；仍缺完整FS/原模块/launcher，见[T-RuntimeFiles](handoff/T-RuntimeFiles.md)。
 - [x] native Key broker 的四协议文本流与取消、Key边界测试；API26/35各十项Keystore/隔离UID/Unix FD/IPC仪器用例通过。仅组件基线，不证明真实模型或完整runtime；见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。
 
 - [ ] 将官方 MiniMax Bot 的业务逻辑作为内置 Bot 服务接入上述 runtime：启动、持久化、会话恢复、审批和问答；不实现通用 Mini App 容器。

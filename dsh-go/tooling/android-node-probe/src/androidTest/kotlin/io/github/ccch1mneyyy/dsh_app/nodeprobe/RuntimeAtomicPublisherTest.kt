@@ -227,4 +227,27 @@ class RuntimeAtomicPublisherTest {
             }
         }
     }
+
+    @Test fun stageCreationPublicationAndCleanupNeverFollowAReplacedParentPath() = fixture { context, root ->
+        RuntimeAtomicPublisher.open(context, segments).use { publisher ->
+            val unsupported = RuntimePublicationKernel { _, _, _ -> OsConstants.ENOSYS }
+            RuntimeAtomicPublisher.open(context, segments, unsupported).use { refused ->
+                publisher.publishIfAbsent("document.json", "original".toByteArray())
+                val moved = File(root.parentFile, "retired-directory")
+                assertTrue(root.renameTo(moved))
+                val outside = File(root.parentFile, "outside-directory").apply { mkdir() }
+                File(outside, "document.json").writeText("private-outside-sentinel")
+                Os.symlink(outside.path, root.path)
+                assertEquals(RuntimePublicationResult.PUBLISHED, publisher.publishIfAbsent("new.json", "new".toByteArray()))
+                assertEquals(RuntimePublicationResult.PUBLISHED, publisher.replace("document.json", "replacement".toByteArray()))
+                assertEquals(RuntimePublicationResult.ALREADY_EXISTS, publisher.publishIfAbsent("document.json", "ignored".toByteArray()))
+                expectFailure(RuntimeDataCode.UNAVAILABLE) { refused.publishIfAbsent("refused.json", "staged".toByteArray()) }
+                assertEquals("replacement", File(moved, "document.json").readText())
+                assertEquals("new", File(moved, "new.json").readText())
+                assertEquals(listOf("document.json", "new.json"), moved.list()!!.sorted())
+                assertEquals("private-outside-sentinel", File(outside, "document.json").readText())
+                assertEquals(listOf("document.json"), outside.list()!!.sorted())
+            }
+        }
+    }
 }

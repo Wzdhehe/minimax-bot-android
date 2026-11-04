@@ -11,4 +11,7 @@ internal object NativeRuntimePublication : RuntimePublicationKernel {
     override external fun replace(directory: Int, source: String, target: String): Int
     /** Main-only owned file FD or negative errno, never parcelled to Agent. */
     external fun openRead(directory: Int, name: String): Int
+    /** Internal reserved-stage operations; no caller-provided flags or paths. */
+    external fun openStage(directory: Int, name: String): Int
+    external fun removeStage(directory: Int, name: String): Int
 }

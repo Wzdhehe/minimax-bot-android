@@ -20,13 +20,18 @@ std::string basename(JNIEnv* env, jstring input) {
   }
   return value;
 }
-jint Commit(JNIEnv* env, jint directory, jstring source, jstring target, unsigned flags) {
-  const auto from = basename(env, source), to = basename(env, target);
-  if (env->ExceptionCheck() || directory < 3 || from.empty() || to.empty()) return EINVAL;
+int directory_error(int directory) {
+  if (directory < 3) return EINVAL;
   struct stat info{};
   if (fstat(directory, &info) != 0) return errno;
   if (!S_ISDIR(info.st_mode)) return ENOTDIR;
-  if (info.st_uid != getuid()) return EACCES;
+  return info.st_uid == getuid() ? 0 : EACCES;
+}
+jint Commit(JNIEnv* env, jint directory, jstring source, jstring target, unsigned flags) {
+  const auto from = basename(env, source), to = basename(env, target);
+  if (env->ExceptionCheck() || directory < 3 || from.empty() || to.empty()) return EINVAL;
+  const int error = directory_error(directory);
+  if (error) return error;
 #ifdef __NR_renameat2
   // The trusted entry points select exclusive publication or atomic replace.
   // Neither operation promises general POSIX link() semantics.
@@ -45,13 +50,26 @@ jint Replace(JNIEnv* env, jobject, jint directory, jstring source, jstring targe
 jint OpenRead(JNIEnv* env, jobject, jint directory, jstring name) {
   const auto file = basename(env, name);
   if (env->ExceptionCheck() || directory < 3 || file.empty()) return -EINVAL;
-  struct stat info{};
-  if (fstat(directory, &info) != 0) return -errno;
-  if (!S_ISDIR(info.st_mode)) return -ENOTDIR;
-  if (info.st_uid != getuid()) return -EACCES;
+  const int error = directory_error(directory);
+  if (error) return -error;
   // Only the trusted Main directory capability, never a parent pathname.
   const int fd = openat(directory, file.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
   return fd >= 0 ? fd : -errno;
+}
+jint OpenStage(JNIEnv* env, jobject, jint directory, jstring name) {
+  const auto file = basename(env, name);
+  if (env->ExceptionCheck() || file.rfind(".native-publish-", 0) != 0) return -EINVAL;
+  const int error = directory_error(directory);
+  if (error) return -error;
+  const int fd = openat(directory, file.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
+  return fd >= 0 ? fd : -errno;
+}
+jint RemoveStage(JNIEnv* env, jobject, jint directory, jstring name) {
+  const auto file = basename(env, name);
+  if (env->ExceptionCheck() || file.rfind(".native-publish-", 0) != 0) return EINVAL;
+  const int error = directory_error(directory);
+  if (error) return error;
+  return unlinkat(directory, file.c_str(), 0) == 0 ? 0 : errno;
 }
 }
 
@@ -64,7 +82,9 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     {const_cast<char*>("publishNoReplace"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Publish)},
     {const_cast<char*>("replace"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Replace)},
     {const_cast<char*>("openRead"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(OpenRead)},
+    {const_cast<char*>("openStage"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(OpenStage)},
+    {const_cast<char*>("removeStage"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(RemoveStage)},
   };
-  if (env->RegisterNatives(type, methods, 3) != JNI_OK) return JNI_ERR;
+  if (env->RegisterNatives(type, methods, 5) != JNI_OK) return JNI_ERR;
   return JNI_VERSION_1_6;
 }
