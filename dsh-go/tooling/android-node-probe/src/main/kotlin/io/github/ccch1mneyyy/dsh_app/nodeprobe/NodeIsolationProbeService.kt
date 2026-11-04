@@ -27,6 +27,24 @@ internal object NodeProbeRuntime {
     @Volatile private var fileClient: RuntimeFileCommitClient? = null
     fun configureModelBroker(host: IBinder, session: String) { modelClient = ModelRequestClient(host, session) }
     fun configureFileBroker(host: IBinder, session: String) { fileClient = RuntimeFileCommitClient(host, session) }
+    private fun fileError(code: RuntimeDataCode): Int = when (code) {
+        RuntimeDataCode.INVALID -> 3; RuntimeDataCode.DENIED -> 4; RuntimeDataCode.CLOSED -> 5
+        RuntimeDataCode.NOT_FOUND -> 7; RuntimeDataCode.TOO_LARGE -> 8; else -> 6
+    }
+    fun readRuntimeFile(name: String): ByteArray {
+        val client = fileClient ?: return byteArrayOf(6)
+        return try {
+            val bytes = client.read(name)
+            ByteArray(bytes.size + 1).also { bytes.copyInto(it, 1) }
+        } catch (error: RuntimeDataFailure) { byteArrayOf(fileError(error.code).toByte()) }
+        catch (_: Exception) { byteArrayOf(6) }
+    }
+    fun sizeRuntimeFile(name: String): Long {
+        val client = fileClient ?: return -6L
+        return try { client.size(name) }
+        catch (error: RuntimeDataFailure) { -fileError(error.code).toLong() }
+        catch (_: Exception) { -6L }
+    }
     fun commitRuntimeFile(name: String, bytes: ByteArray, replace: Boolean): Int {
         val client = fileClient ?: return 6
         return try {
@@ -36,7 +54,7 @@ internal object NodeProbeRuntime {
                 RuntimePublicationResult.OUTCOME_UNKNOWN -> 2
             }
         } catch (error: RuntimeDataFailure) {
-            when (error.code) { RuntimeDataCode.INVALID -> 3; RuntimeDataCode.DENIED -> 4; RuntimeDataCode.CLOSED -> 5; else -> 6 }
+            fileError(error.code)
         } catch (_: Exception) { 2 }
     }
     fun openModelFd(id: String, body: String): Int = try { modelClient?.open(id, body)?.detachFd() ?: -1 } catch (_: Exception) { -1 }

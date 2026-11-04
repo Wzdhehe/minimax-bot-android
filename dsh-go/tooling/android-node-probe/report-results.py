@@ -7,8 +7,8 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
-PHASE = r'bootstrap|sqlite_load|sqlite_memory|vfs_register|vfs_open|vfs_wal|vfs_verify|vfs_write|vfs_reopen|model_streams|model_dynamic|sdk_route|file_commit|unknown'
-CODE = r'SQLITE_CANTOPEN|SQLITE_IOERR_SHMOPEN|SQLITE_IOERR|SQLITE_BUSY|SQLITE_READONLY|SQLITE_ERROR|SQLITE_PERM|SQLITE_MISUSE|SQLITE_NOTFOUND|fd_vfs_unavailable|fd_vfs_input_invalid|sqlite_parent_missing|runtime_data_invalid|runtime_data_denied|runtime_data_closed|runtime_data_unavailable|unknown'
+PHASE = r'bootstrap|sqlite_load|sqlite_memory|vfs_register|vfs_open|vfs_wal|vfs_verify|vfs_write|vfs_reopen|model_streams|model_dynamic|sdk_route|file_commit|file_read|unknown'
+CODE = r'SQLITE_CANTOPEN|SQLITE_IOERR_SHMOPEN|SQLITE_IOERR|SQLITE_BUSY|SQLITE_READONLY|SQLITE_ERROR|SQLITE_PERM|SQLITE_MISUSE|SQLITE_NOTFOUND|fd_vfs_unavailable|fd_vfs_input_invalid|sqlite_parent_missing|runtime_data_invalid|runtime_data_denied|runtime_data_closed|runtime_data_unavailable|runtime_data_not_found|runtime_data_too_large|unknown'
 FAILURE = re.compile(r'node_probe_failed_at_(' + PHASE + r')_code_(' + CODE + r')(?:\b|$)')
 LOCATION = re.compile(r'(IsolatedNodeModelTest|RuntimeDatabaseFilesTest|FilePublicationProbeTest|RuntimeAtomicPublisherTest|RuntimeFileCommitHostTest|RuntimeFileSnapshotTest)\.kt:([0-9]{1,5})\b')
 PUBLICATION_ERRNO = re.compile(r'\bpublication_errno_([0-9]{1,4})\b')

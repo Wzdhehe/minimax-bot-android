@@ -1,9 +1,35 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-RuntimeFiles：Main授予的有界文件提交能力（2026-11-04）
 
-**文件提交Node JNI已a49d79b在API26/35各25项通过；新增受控读取/size已编译，30项设备候选待CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 原子发布/替换内核及21项设备基线见[T-RuntimeFS](T-RuntimeFS.md)。不修改vendor，不回退同UID Agent/shell。
+**Main受控读取/size已a96d916在API26/35各30项通过；新增Node读取JNI已编译，独立30项候选待CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 原子发布/替换内核及21项设备基线见[T-RuntimeFS](T-RuntimeFS.md)。不修改vendor，不回退同UID Agent/shell。
 
-## 有界读取与文件大小（最新，设备待CI）
+## Node读取JNI（最新，设备待CI）
+
+验收linked binding追加read/size，复用同一最多4任务池，经隔离Kotlin client→Main已授权READ/SIZE。read仅把有界pipe内容转为独立Uint8Array；size转为安全整数范围的Number。Java异常、未知回复归一化；查询无写入副作用，错误不伪装提交unknown。最大1MiB、稳定missing/invalid/denied/closed/too_large/unavailable；无Root/Key/nonce/真实文件FD交给JS。
+
+Main为原Node两PID验收的state scope显式allowRead。固定JS现在必须读回84KiB二进制与原始view快照/空文件、查询两个大小，确认missing和路径拒绝。Main断言新增fileReads字段及原目录/内容/Key/env/descriptor/log/session不泄露，不能通过跳过新branch来保持30项计数。原模型/WAL/输入/输出drain与父目录替换测试保留。
+
+重准备JNI/SQLite成功，Python27/精确APK host1通过；两个验收APK实际构建：
+
+```text
+BUILD SUCCESSFUL in 1m 25s
+71 actionable tasks: 17 executed, 54 up-to-date
+```
+
+这是验收JNI，不是完整生产Node生命周期或node:fs。须查新commit的30项结果，不能套下面a96d916的同计数旧run。原JSONL/MemoryStore、append/FileHandle/目录管理/backup、model resolver/launcher仍缺。
+
+## a96d916设备结果（Main读取/size）
+
+**a96d916/run41774204029 success**，实查artifact：
+
+```text
+API26 id13296805584: node-candidate-results-api-26-t30-f0-e0-s0-passed-l0
+API35 id13296248786: node-candidate-results-api-35-t30-f0-e0-s0-passed-l0
+```
+
+Main→isolated FIFO读回、拒绝/大小、未消费输出的close/deadline释放，以及新五项和旧25项均通过。本run没有Node READ/SIZE JNI；后文pending是当轮实现记录。
+
+## 有界读取与文件大小（a96d916已设备通过）
 
 v1追加READ/SIZE，Main factory必须显式`allowRead=true`，默认关闭，且不能由请求扩大权限。仍只在files/<Main scope>内接受单个严格basename，不读stage、Key prefs、workspace或SQLite目录。SIZE仅返回已授权普通文件的长度，不是通用stat/realpath，不返回inode/UID/真实路径；目录/特殊对象拒绝。
 
@@ -132,7 +158,7 @@ OK (32 tests)
 
 ## 后续
 
-1. a49d79b的Node commit已API26/35各25项过；先查本轮读取候选30项，尤其Main→isolated FIFO与未消费输出释放，不能混用旧run。
-2. 读取组件通过后接Node READ/SIZE JNI，并扩展Key/文件读回断言；仍不授予目录FD或整个filesDir，保持身份/范围/预算和关闭语义。
+1. Main读取a96d916已API26/35各30项过；先查新增Node READ/SIZE那一commit的独立30项，不能混用旧run。
+2. 原publisher stage创建/清理仍按可信父目录路径，下一步在扩展目录操作前迁到Main目录FD下的固定openat/unlinkat，补父目录被替换时的写入测试；不开放任意flags/路径或目录FD给Agent。
 3. 再扩展真正受控FS所需的read/stat/list/mkdir/append/FileHandle与全写者协调，适配原JSONL/MemoryStore并运行原恢复测试；不要全局把link改成rename。
 4. full-ICU/正式launcher/model resolver、可信Bot身份与SQLite lease另见HANDOFF，仍未完成。

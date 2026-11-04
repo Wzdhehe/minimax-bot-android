@@ -14,6 +14,8 @@ jobject dispatcher = nullptr;
 jmethodID open_method = nullptr;
 jmethodID cancel_method = nullptr;
 jmethodID file_method = nullptr;
+jmethodID file_read_method = nullptr;
+jmethodID file_size_method = nullptr;
 std::atomic<int> opens{0};
 std::atomic<int> file_commits{0};
 
@@ -112,7 +114,9 @@ struct FileWork {
   v8::Global<v8::Context> context;
   std::u16string name;
   std::vector<unsigned char> bytes;
-  bool replace = false, called = false;
+  int operation = 0;  // publish, replace, read, size; selected by fixed callbacks.
+  bool called = false;
+  jlong size = 0;
   int result = -1;
 };
 
@@ -134,17 +138,42 @@ void RunFile(uv_work_t* request) {
   }
   if (env) {
     auto name = env->NewString(reinterpret_cast<const jchar*>(task->name.data()), task->name.size());
-    auto bytes = env->NewByteArray(static_cast<jsize>(task->bytes.size()));
-    if (bytes && !task->bytes.empty() && !env->ExceptionCheck()) {
-      env->SetByteArrayRegion(bytes, 0, task->bytes.size(), reinterpret_cast<const jbyte*>(task->bytes.data()));
-    }
-    if (name && bytes && !env->ExceptionCheck()) {
+    jbyteArray bytes = nullptr;
+    jbyteArray response = nullptr;
+    if (name && !env->ExceptionCheck() && task->operation == 2) {
       task->called = true;
-      task->result = env->CallIntMethod(dispatcher, file_method, name, bytes, task->replace ? JNI_TRUE : JNI_FALSE);
+      response = static_cast<jbyteArray>(env->CallObjectMethod(dispatcher, file_read_method, name));
+      task->result = 6;
+      if (response && !env->ExceptionCheck()) {
+        const auto length = env->GetArrayLength(response);
+        if (length >= 1 && length <= 1024 * 1024 + 1) {
+          jbyte code = 6;
+          env->GetByteArrayRegion(response, 0, 1, &code);
+          if (code == 0) {
+            task->result = 0; task->bytes.resize(length - 1);
+            if (length > 1) env->GetByteArrayRegion(response, 1, length - 1, reinterpret_cast<jbyte*>(task->bytes.data()));
+          } else if (code >= 3 && code <= 8 && length == 1) task->result = code;
+        }
+      }
+    } else if (name && !env->ExceptionCheck() && task->operation == 3) {
+      task->called = true;
+      task->size = env->CallLongMethod(dispatcher, file_size_method, name);
+      task->result = task->size >= 0 && task->size <= 9007199254740991LL ? 0 :
+        (task->size >= -8 && task->size <= -3 ? static_cast<int>(-task->size) : 6);
+    } else if (name && !env->ExceptionCheck()) {
+      bytes = env->NewByteArray(static_cast<jsize>(task->bytes.size()));
+      if (bytes && !task->bytes.empty() && !env->ExceptionCheck()) {
+        env->SetByteArrayRegion(bytes, 0, task->bytes.size(), reinterpret_cast<const jbyte*>(task->bytes.data()));
+      }
+      if (bytes && !env->ExceptionCheck()) {
+        task->called = true;
+        task->result = env->CallIntMethod(dispatcher, file_method, name, bytes, task->operation == 1 ? JNI_TRUE : JNI_FALSE);
+      }
     }
-    if (env->ExceptionCheck()) { env->ExceptionClear(); if (task->called) task->result = 2; }
+    if (env->ExceptionCheck()) { env->ExceptionClear(); if (task->called) task->result = task->operation >= 2 ? 6 : 2; }
     if (name) env->DeleteLocalRef(name);
     if (bytes) env->DeleteLocalRef(bytes);
+    if (response) env->DeleteLocalRef(response);
   }
   if (attached) java_vm->DetachCurrentThread();
 }
@@ -155,13 +184,20 @@ void FinishFile(uv_work_t* request, int status) {
   auto context = task->context.Get(task->isolate);
   v8::Context::Scope entered(context);
   auto resolver = task->resolver.Get(task->isolate);
-  if (status == 0 && task->result >= 0 && task->result <= 2) {
+  if (status == 0 && task->result == 0 && task->operation == 2) {
+    auto backing = v8::ArrayBuffer::NewBackingStore(task->isolate, task->bytes.size());
+    if (!task->bytes.empty()) std::memcpy(backing->Data(), task->bytes.data(), task->bytes.size());
+    auto buffer = v8::ArrayBuffer::New(task->isolate, std::move(backing));
+    resolver->Resolve(context, v8::Uint8Array::New(buffer, 0, task->bytes.size())).FromMaybe(false);
+  } else if (status == 0 && task->result == 0 && task->operation == 3) {
+    resolver->Resolve(context, v8::Number::New(task->isolate, static_cast<double>(task->size))).FromMaybe(false);
+  } else if (task->operation < 2 && status == 0 && task->result >= 0 && task->result <= 2) {
     const char* results[] = {"published", "already_exists", "outcome_unknown"};
     resolver->Resolve(context, v8::String::NewFromUtf8(task->isolate, results[task->result]).ToLocalChecked()).FromMaybe(false);
-  } else if (status == 0 && task->result >= 3 && task->result <= 6) {
-    const char* errors[] = {"runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable"};
+  } else if (status == 0 && task->result >= 3 && task->result <= 8) {
+    const char* errors[] = {"runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable", "runtime_data_not_found", "runtime_data_too_large"};
     RejectFile(context, resolver, errors[task->result - 3]);
-  } else if (task->called) {
+  } else if (task->called && task->operation < 2) {
     resolver->Resolve(context, v8::String::NewFromUtf8Literal(task->isolate, "outcome_unknown")).FromMaybe(false);
   } else {
     RejectFile(context, resolver, "runtime_data_unavailable");
@@ -170,20 +206,24 @@ void FinishFile(uv_work_t* request, int status) {
   delete task;
 }
 
-void CommitFile(const v8::FunctionCallbackInfo<v8::Value>& args, bool replace) {
+void CommitFile(const v8::FunctionCallbackInfo<v8::Value>& args, int operation) {
   auto* isolate = args.GetIsolate();
   auto context = isolate->GetCurrentContext();
   auto resolver = v8::Promise::Resolver::New(context).ToLocalChecked();
   args.GetReturnValue().Set(resolver->GetPromise());
-  if (args.Length() != 2 || !args[0]->IsString() || args[0].As<v8::String>()->Length() > 128 || !args[1]->IsUint8Array()) {
+  const bool query = operation >= 2;
+  if (args.Length() != (query ? 1 : 2) || !args[0]->IsString() || args[0].As<v8::String>()->Length() > 128 || (!query && !args[1]->IsUint8Array())) {
     RejectFile(context, resolver, "runtime_data_invalid"); return;
   }
-  auto view = args[1].As<v8::Uint8Array>();
-  auto buffer = view->Buffer();
-  auto backing = buffer->GetBackingStore();
-  // A snapshot must not race another JS worker or detached/resizable storage.
-  if (backing->IsShared() || backing->IsResizableByUserJavaScript() || buffer->WasDetached() || view->ByteLength() > 1024 * 1024) {
-    RejectFile(context, resolver, "runtime_data_invalid"); return;
+  v8::Local<v8::Uint8Array> view;
+  if (!query) {
+    view = args[1].As<v8::Uint8Array>();
+    auto buffer = view->Buffer();
+    auto backing = buffer->GetBackingStore();
+    // A snapshot must not race another JS worker or detached/resizable storage.
+    if (backing->IsShared() || backing->IsResizableByUserJavaScript() || buffer->WasDetached() || view->ByteLength() > 1024 * 1024) {
+      RejectFile(context, resolver, "runtime_data_invalid"); return;
+    }
   }
   int active = file_commits.load();
   bool admitted = false;
@@ -191,10 +231,10 @@ void CommitFile(const v8::FunctionCallbackInfo<v8::Value>& args, bool replace) {
   if (!admitted) { RejectFile(context, resolver, "runtime_data_unavailable"); return; }
   auto* task = new FileWork;
   task->isolate = isolate; task->resolver.Reset(isolate, resolver); task->context.Reset(isolate, context);
-  task->replace = replace;
+  task->operation = operation;
   v8::String::Value name(isolate, args[0]);
   task->name.assign(reinterpret_cast<const char16_t*>(*name), name.length());
-  task->bytes.resize(view->ByteLength());
+  if (!query) task->bytes.resize(view->ByteLength());
   if (!task->bytes.empty() && view->CopyContents(task->bytes.data(), task->bytes.size()) != task->bytes.size()) {
     file_commits.fetch_sub(1); delete task;
     RejectFile(context, resolver, "runtime_data_invalid"); return;
@@ -202,12 +242,16 @@ void CommitFile(const v8::FunctionCallbackInfo<v8::Value>& args, bool replace) {
   task->work.data = task;
   if (uv_queue_work(node::GetCurrentEventLoop(isolate), &task->work, RunFile, FinishFile) != 0) FinishFile(&task->work, UV_ECANCELED);
 }
-void PublishFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, false); }
-void ReplaceFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, true); }
+void PublishFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, 0); }
+void ReplaceFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, 1); }
+void ReadFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, 2); }
+void SizeFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, 3); }
 void InitializeFiles(v8::Local<v8::Object> exports, v8::Local<v8::Value>, v8::Local<v8::Context> context, void*) {
   auto* isolate = context->GetIsolate();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "publish"), v8::Function::New(context, PublishFile).ToLocalChecked()).Check();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "replace"), v8::Function::New(context, ReplaceFile).ToLocalChecked()).Check();
+  exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "read"), v8::Function::New(context, ReadFile).ToLocalChecked()).Check();
+  exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "size"), v8::Function::New(context, SizeFile).ToLocalChecked()).Check();
 }
 // Node's macro emits a TU-local `_module` regardless of the public module name.
 // Keep the second registration in its own namespace rather than duplicating it.
@@ -263,7 +307,9 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   open_method = env->GetMethodID(type, "openModelFd", "(Ljava/lang/String;Ljava/lang/String;)I");
   cancel_method = env->GetMethodID(type, "cancelModelFd", "(Ljava/lang/String;)V");
   file_method = env->GetMethodID(type, "commitRuntimeFile", "(Ljava/lang/String;[BZ)I");
-  if (!open_method || !cancel_method || !file_method) return JNI_ERR;
+  file_read_method = env->GetMethodID(type, "readRuntimeFile", "(Ljava/lang/String;)[B");
+  file_size_method = env->GetMethodID(type, "sizeRuntimeFile", "(Ljava/lang/String;)J");
+  if (!open_method || !cancel_method || !file_method || !file_read_method || !file_size_method) return JNI_ERR;
   JNINativeMethod method{const_cast<char*>("start"),
       const_cast<char*>("(Ljava/lang/String;IIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;[I)I"), reinterpret_cast<void*>(Start)};
   if (env->RegisterNatives(type, &method, 1) != JNI_OK) return JNI_ERR;

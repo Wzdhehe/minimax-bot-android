@@ -116,7 +116,7 @@ class IsolatedNodeModelTest {
                                 assertTrue(identity.data.getBoolean("database_owner_denied"))
                                 assertTrue(identity.data.getBoolean("publication_owner_denied"))
                                 NativeModelRequestHost(identity.uid, providerId!!, "normal", probe.peerBinder(), channels::open, channels::close).use { host ->
-                                RuntimeFileCommitHost.open(context, "node-state", identity.uid, probe.peerBinder(), allowReplace = true).use { fileHost ->
+                                RuntimeFileCommitHost.open(context, "node-state", identity.uid, probe.peerBinder(), allowReplace = true, allowRead = true).use { fileHost ->
                                 val id = UUID.randomUUID().toString()
                                 val data = Bundle().apply {
                                     putString("id", id)
@@ -153,10 +153,10 @@ class IsolatedNodeModelTest {
                                 val report = if (text.isBlank()) JSONObject() else JSONObject(text)
                                 if (reply.data.getString("code") != "ok") {
                                     val phases = setOf("bootstrap", "sqlite_load", "sqlite_memory", "vfs_register", "vfs_open", "vfs_wal",
-                                        "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "model_dynamic", "sdk_route", "file_commit")
+                                        "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "model_dynamic", "sdk_route", "file_commit", "file_read")
                                     val codes = setOf("SQLITE_CANTOPEN", "SQLITE_IOERR", "SQLITE_IOERR_SHMOPEN", "SQLITE_BUSY", "SQLITE_READONLY",
                                         "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "sqlite_parent_missing",
-                                        "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable")
+                                        "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable", "runtime_data_not_found", "runtime_data_too_large")
                                     val phase = report.optString("failedPhase").takeIf { it in phases } ?: "unknown"
                                     val code = report.optString("failureCode").takeIf { it in codes } ?: "unknown"
                                     fail("node_probe_failed_at_${phase}_code_${code}")
@@ -216,6 +216,12 @@ class IsolatedNodeModelTest {
                                 assertEquals("published", fileCommits.getString("replaced"))
                                 assertEquals(6, fileCommits.getJSONArray("rejected").length())
                                 repeat(6) { assertTrue(fileCommits.getJSONArray("rejected").getBoolean(it)) }
+                                val fileReads = report.getJSONObject("fileReads")
+                                assertEquals(84 * 1024, fileReads.getInt("size"))
+                                assertEquals(0, fileReads.getInt("emptySize"))
+                                for (name in listOf("binary", "original", "empty", "missing", "invalidPath", "invalidMetadata")) {
+                                    assertTrue(fileReads.getBoolean(name))
+                                }
                                 val committed = File(dataDirectory, "minimax-bot-runtime/files/node-state")
                                 assertEquals(listOf("node-empty.bin", "node-snapshot.bin", "node-state.bin"), committed.list()!!.sorted())
                                 assertTrue(fileProbeBytes(false).contentEquals(File(committed, "node-snapshot.bin").readBytes()))

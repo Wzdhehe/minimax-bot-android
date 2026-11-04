@@ -149,6 +149,22 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       await refused('never.bin', detachedView),
     ];
     report.fileCommits = { snapshot, initial, replaced, empty, rejected };
+    probePhase = 'file_read';
+    const read = await files.read('node-state.bin');
+    const original = await files.read('node-snapshot.bin');
+    async function queryRefused(operation, name, code) {
+      try { await files[operation](name); return false; }
+      catch (error) { return error.code === code; }
+    }
+    report.fileReads = {
+      size: await files.size('node-state.bin'), emptySize: await files.size('node-empty.bin'),
+      binary: read.length === 84 * 1024 && read.every((value, i) => value === 255 - i % 251),
+      original: original.length === 84 * 1024 && original.every((value, i) => value === i % 251),
+      empty: (await files.read('node-empty.bin')).length === 0,
+      missing: await queryRefused('read', 'missing.bin', 'runtime_data_not_found'),
+      invalidPath: await queryRefused('read', '../outside', 'runtime_data_invalid'),
+      invalidMetadata: await queryRefused('size', '../outside', 'runtime_data_invalid'),
+    };
   }
   // Owner inspects the bounded result privately. No console/log response dump.
   fs.writeSync(Number(result), JSON.stringify(report));
@@ -156,7 +172,8 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
 })().catch((error) => {
   const codes = new Set(['SQLITE_CANTOPEN', 'SQLITE_IOERR', 'SQLITE_IOERR_SHMOPEN', 'SQLITE_BUSY', 'SQLITE_READONLY',
     'SQLITE_ERROR', 'SQLITE_PERM', 'SQLITE_MISUSE', 'SQLITE_NOTFOUND', 'fd_vfs_unavailable', 'fd_vfs_input_invalid',
-    'runtime_data_invalid', 'runtime_data_denied', 'runtime_data_closed', 'runtime_data_unavailable']);
+    'runtime_data_invalid', 'runtime_data_denied', 'runtime_data_closed', 'runtime_data_unavailable',
+    'runtime_data_not_found', 'runtime_data_too_large']);
   const code = codes.has(error?.code) ? error.code : codes.has(error?.message) ? error.message :
     error?.message === 'Cannot open database because the directory does not exist' ? 'sqlite_parent_missing' : 'unknown';
   try {
