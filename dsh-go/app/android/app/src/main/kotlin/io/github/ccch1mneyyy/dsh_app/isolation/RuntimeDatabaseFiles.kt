@@ -14,6 +14,7 @@ internal enum class RuntimeDataCode(val wire: String) {
     OWNER_ONLY("runtime_data_owner_only"), WORKER_REQUIRED("runtime_data_worker_required"),
     UNAVAILABLE("runtime_data_unavailable"), CLOSED("runtime_data_closed"),
     INVALID("runtime_data_invalid"),
+    DENIED("runtime_data_denied"),
 }
 
 internal class RuntimeDataFailure(val code: RuntimeDataCode) : IOException(code.wire) {

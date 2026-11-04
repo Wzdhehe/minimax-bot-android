@@ -1,8 +1,10 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-04）
 
-生产Main原子发布结果组件区分PUBLISHED/ALREADY_EXISTS/OUTCOME_UNKNOWN，不把rename后sync失败说成未写入。目录能力抽为RuntimePrivateDirectory，数据库owner复用；**132273a/41765512240的API26/35各17项过**，包含六新增与旧回归。JNI现移到生产CMake并默认绑定，双ABI交叉编译/JNI/16KiB检查过；迁移后的设备CI仍待观察，未装配完整FS/launcher，见[T-RuntimeFS](T-RuntimeFS.md)。模型协议、Key保存和正式入口未变，组件close不撤销已发FD。
+生产Main原子发布结果组件区分PUBLISHED/ALREADY_EXISTS/OUTCOME_UNKNOWN，不把rename后sync失败说成未写入。目录能力抽为RuntimePrivateDirectory，数据库owner复用；**132273a/41765512240的API26/35各17项过**，生产JNI迁移8d65ac0/41766746821也各17项过；双ABI交叉编译/JNI/16KiB检查过，未装配完整FS/launcher，见[T-RuntimeFS](T-RuntimeFS.md)。模型协议、Key保存和正式入口未变，组件close不撤销已发FD。
 
-后续新增显式replace供状态/pending更新，共用完整stage与提交结果语义；publication-only内核默认拒绝replace。四新增仪器用例/旧17项已构建（2m40s）、双ABI编译过，21项设备候选待CI。不能替换leased SQLite文件，不能自动重试unknown；可信根/操作授权/Agent FS尚未装配。
+显式replace供状态/pending更新，共用完整stage与提交结果语义，publication-only内核默认拒绝replace；**30b5249/41767469341的API26/35各21项过**。不能替换leased SQLite文件，不能自动重试unknown。
+
+接着新增生产RuntimeFileCommitHost/Client：Main固定files/<scope>，UID/nonce/peer与replace授权，1MiB二进制pipe、有限admission/close drain；隔离Kotlin验收新增四项（含active close），25项候选待CI，Node文件JNI/完整FS/launcher仍未接。原模型pipe循环抽到共享BoundedPipeReader，仍保留严格UTF8/JSON/provider/model与取消映射；本地宿主JUnit32/Node44、Python25及broker组件回归通过，Node APK最终1m8s。详情见[T-RuntimeFiles](T-RuntimeFiles.md)。
 
 > e03b997/run41686820725的SDK route矩阵已API实查API26/35 success；以下待CI是实现当轮状态。正式resolver/启动器仍未接；FD VFS 的6605508/41700450899已定位Main含目录FD的IPC发送失败，SQLite未执行，不能称持久化已解决。后续46c1c07/run41703671145的四普通文件FD方案已API26/35通过（含WAL、两新PID与既有Key/模型断言）；仍无完整产品runtime，详见 [T-Persistence](T-Persistence.md)。
 

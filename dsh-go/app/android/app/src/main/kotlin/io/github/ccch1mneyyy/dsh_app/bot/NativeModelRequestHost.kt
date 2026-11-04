@@ -6,13 +6,12 @@ import android.os.IBinder
 import android.os.Parcel
 import android.os.ParcelFileDescriptor
 import android.os.Process
-import android.system.Os
-import android.system.OsConstants
-import android.system.StructPollfd
-import android.system.ErrnoException
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import io.github.ccch1mneyyy.dsh_app.isolation.ModelRequestWire
+import io.github.ccch1mneyyy.dsh_app.isolation.readBoundedRequestPipe
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataCode
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.model.ModelBrokerCode
 import io.github.ccch1mneyyy.dsh_app.model.ModelBrokerFailure
 import io.github.ccch1mneyyy.dsh_app.model.requireNativeJsonBudget
@@ -114,35 +113,17 @@ internal class NativeModelRequestHost(
         return true
     }
     private fun readBody(channel: ParcelFileDescriptor, length: Int, revoked: AtomicBoolean): String {
-        val fd = channel.fileDescriptor
-        if ((Os.fstat(fd).st_mode and OsConstants.S_IFMT) != OsConstants.S_IFIFO) throw ModelBrokerFailure(ModelBrokerCode.INVALID_REQUEST)
-        Os.fcntlInt(fd, OsConstants.F_SETFL, Os.fcntlInt(fd, OsConstants.F_GETFL, 0) or OsConstants.O_NONBLOCK)
-        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(readTimeoutMs)
-        val poll = StructPollfd().apply { this.fd = fd; events = OsConstants.POLLIN.toShort() }
-        val bytes = ByteArray(length)
-        val extra = ByteArray(1)
-        var offset = 0
-        while (true) {
-            if (revoked.get() || closed.get()) throw ModelBrokerFailure(ModelBrokerCode.CANCELLED)
-            val remaining = deadline - System.nanoTime()
-            if (remaining <= 0) throw ModelBrokerFailure(ModelBrokerCode.UNAVAILABLE)
-            try {
-                poll.revents = 0
-                Os.poll(arrayOf(poll), minOf(100L, java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(remaining).coerceAtLeast(1)).toInt())
-                if (poll.revents.toInt() and (OsConstants.POLLERR or OsConstants.POLLNVAL) != 0) throw ModelBrokerFailure(ModelBrokerCode.INVALID_REQUEST)
-                if (poll.revents.toInt() and (OsConstants.POLLIN or OsConstants.POLLHUP) == 0) continue
-                val count = if (offset == length) Os.read(fd, extra, 0, 1) else Os.read(fd, bytes, offset, length - offset)
-                if (count == 0) {
-                    if (offset != length) throw ModelBrokerFailure(ModelBrokerCode.INVALID_REQUEST)
-                    return Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                        .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
-                }
-                if (offset == length) throw ModelBrokerFailure(ModelBrokerCode.INVALID_REQUEST)
-                offset += count
-            } catch (error: ErrnoException) {
-                if (error.errno != OsConstants.EINTR && error.errno != OsConstants.EAGAIN) throw ModelBrokerFailure(ModelBrokerCode.UNAVAILABLE)
-            }
+        val bytes = try {
+            readBoundedRequestPipe(channel, length, ModelRequestWire.MAX_BODY_BYTES, readTimeoutMs) { revoked.get() || closed.get() }
+        } catch (error: RuntimeDataFailure) {
+            throw ModelBrokerFailure(when (error.code) {
+                RuntimeDataCode.INVALID -> ModelBrokerCode.INVALID_REQUEST
+                RuntimeDataCode.CLOSED -> ModelBrokerCode.CANCELLED
+                else -> ModelBrokerCode.UNAVAILABLE
+            })
         }
+        return Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
     }
     private fun prune() {
         val cutoff = System.nanoTime() - java.util.concurrent.TimeUnit.SECONDS.toNanos(30)

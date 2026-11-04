@@ -116,3 +116,14 @@ class ResultReportingTest(unittest.TestCase):
             self.module.report(self.root, status, outputs)
         self.assertEqual(status.read_text(), 't1-f1-e0-s0-invalid_data-la72\n')
         self.assertEqual(outputs.read_text(), 'result_id=' + status.read_text())
+
+    def test_file_commit_failure_uses_only_the_fixed_stage_and_test_location(self):
+        code, output = self.run_report('private-sentinel runtime_file_probe_truncated '
+            'at x(RuntimeFileCommitHostTest.kt:62)')
+        self.assertEqual(code, 1)
+        self.assertIn('failure kind=file_truncated', output)
+        self.assertNotIn('private', output)
+        status = self.root / 'status.txt'
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.module.report(self.root, status)
+        self.assertEqual(status.read_text(), 't1-f1-e0-s0-file_truncated-lc62\n')

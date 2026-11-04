@@ -3,7 +3,20 @@
 
 **尚未实现完整runtime FS。** 当前WAL/两进程读取、Main四文件owner已有各自设备证据，不能代替本卡。Mini App可视化程序仍不适配；下述官方Bot的miniapp/node目录是复用其业务后端，不新增Mini App浏览器。
 
-## 原子替换（最新新增，设备待CI）
+## Main授予的文件提交broker（后续）
+
+Main范围/操作/UID/nonce/peer与pipe提交组件正在接入验收，见[T-RuntimeFiles](T-RuntimeFiles.md)。Node文件JNI/完整FS仍缺；下面只证明Main原子内核与组件。
+
+## 原子替换（30b5249已API26/35通过）
+
+**30b5249/run41767469341 success**，artifact实际元数据：
+
+```text
+API26 id13293327695: node-candidate-results-api-26-t21-f0-e0-s0-passed-l0
+API35 id13293706961: node-candidate-results-api-35-t21-f0-e0-s0-passed-l0
+```
+
+同期native broker41767469344与broker设备41767469369均success。下文“新增/预期21项”是实现当轮记录，设备基线现已取得；新文件IPC候选另查T-RuntimeFiles。
 
 真实调用方store.mjs的state.json和memory.mjs的pending/文档更新使用rename替换；备份/初始JSONL则必须目标不存在。现生产`RuntimeAtomicPublisher.replace`与`publishIfAbsent`显式分开，共用同一有界stage写入/fsync/目录sync和结果未知处理；production JNI以固定入口选择renameat2 flags=0或NOREPLACE，未开放任意flags/syscall。publication-only注入内核默认以ENOSYS拒绝replace，不把不支持操作悄悄降为覆盖。
 
@@ -18,7 +31,9 @@ BUILD SUCCESSFUL in 2m 40s
 71 actionable tasks: 16 executed, 55 up-to-date
 ```
 
-## 生产native构建接入（8d65ac0，设备执行待CI）
+## 生产native构建接入（8d65ac0已API26/35通过）
+
+**8d65ac0/run41766746821 success**；API26 artifact13293341597、API35 artifact13292863477，名字均`t17-f0-e0-s0-passed-l0`。App同源CMake/JNI类在验收设备中实际执行成功；ARM64仍仅交叉编译，完整Flutter App未构建。同期native41766746732/broker设备41766746813均success。
 
 原验收`file_publication_probe.cpp`已移到App `src/main/cpp/runtime_publication.cpp`，同一renameat2算法注册生产`NativeRuntimePublication.publishNoReplace`。App与Node验收目标均指向同一CMakeLists，NDK27.3.13750724/CMake3.22.1，静态C++ runtime避免增加共享STL冲突，库LOAD为16KiB对齐；R8显式保留JNI类/方法。原probe类与独立probe库删除，prepare会删除旧的生成库。
 
@@ -134,7 +149,7 @@ report-results允许固定FilePublicationProbeTest位置（artifact后缀lpN）�
 
 ## 接着做
 
-1. 132273a组件17项已API26/35通过；生产native迁移8d65ac0/run41766746821及新增replace的21项候选须分别查CI。接着绑定Main选择的根/操作权限和真实isolated caller，再做完整FS；保留输入/冲突/并发/结果未知测试，不开放泛化syscall。
+1. Main原子组件已30b5249/41767469341两版本各21项通过；范围/操作/真实UID文件broker见T-RuntimeFiles，接着查其独立25项候选，再接Node binding及完整FS；不开放泛化syscall。
 2. 然后设计Main持有的专用runtime-data FS能力与提交/恢复语义，再适配固定JSONL/MemoryStore调用并跑原实现测试。还需明确读写预算、流、原子替换、exclusive publication、所有写者同步和退出生命周期；目前没有这些生产接口。
 3. 完整online backup、JSON/history、uploads/assets与模型配置安全投影都仍缺；不能因数据库owner或本探测通过就切正式入口。
 4. 官方server.mjs确实创建HTTP server并listen；isolated UID的UI传输也需独立native桥接（未实现）。只在宿主临时验证过HTTP server可通过connection事件处理已连接Unix FD而不listen，不是Android或完整官方后端已接通。
