@@ -5,6 +5,8 @@ on:
     paths:
       - 'dsh-go/tooling/android-node-probe/node-source-build.json'
       - 'dsh-go/tooling/android-node-probe/build-source.py'
+      - 'dsh-go/tooling/android-node-probe/smoke-compiler-cache.py'
+      - 'dsh-go/tooling/android-node-probe/test_source_recipe.py'
       - '.github/workflows/android-node-source.yml'
   workflow_dispatch:
 permissions:
@@ -13,6 +15,11 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    env:
+      CCACHE_DIR: ${{ runner.temp }}/mbot-node-ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}/upstream-node-mobile
+      CCACHE_COMPILERCHECK: content
+      CCACHE_MAXSIZE: 3G
     outputs:
       archive_sha: ${{ steps.build.outputs.archive_sha }}
     steps:
@@ -43,18 +50,65 @@ jobs:
       - name: Install the source build toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-18 ninja-build
+          sudo apt-get install -y clang-18 ninja-build ccache
           sdkmanager 'ndk;27.3.13750724'
           echo '/usr/lib/llvm-18/bin' >> "$GITHUB_PATH"
           df -h "$GITHUB_WORKSPACE"
+      - name: Check the pinned recipe, compiler cache and build-group timeout
+        run: |
+          python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_source_recipe.py' -v
+          python3 dsh-go/tooling/android-node-probe/smoke-compiler-cache.py --ndk "$ANDROID_HOME/ndk/27.3.13750724"
+      - name: Restore compiler results from the same pinned build
+        id: compiler_cache
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/mbot-node-ccache
+          key: node-icu-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dsh-go/tooling/android-node-probe/node-source-build.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            node-icu-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dsh-go/tooling/android-node-probe/node-source-build.json') }}-
       - name: Compile pinned x86_64 Node with full ICU
         timeout-minutes: 330
         id: build
         run: |
-          python3 dsh-go/tooling/android-node-probe/build-source.py \
+          ccache --zero-stats
+          source_status=0
+          # Leave time for cache save before either the step or job deadline.
+          # GNU timeout stops the build process group, including compilers.
+          timeout --signal=TERM --kill-after=30s 300m python3 dsh-go/tooling/android-node-probe/build-source.py \
             --mobile-source "$GITHUB_WORKSPACE/upstream-node-mobile" \
             --ndk "$ANDROID_HOME/ndk/27.3.13750724" \
-            --output "$RUNNER_TEMP/node-full-icu.zip"
+            --output "$RUNNER_TEMP/node-full-icu.zip" || source_status=$?
+          case "$source_status" in
+            0) source_state=success ;;
+            124) source_state=budget_exhausted ;;
+            137) source_state=terminated ;;
+            *) source_state=failed ;;
+          esac
+          printf '%s\n' "$source_state" > "$RUNNER_TEMP/node-source-state.txt"
+          printf 'build_state=%s\n' "$source_state" >> "$GITHUB_OUTPUT"
+          ccache --show-stats
+          if [ "$source_status" -ne 0 ]; then
+            printf '::error::Node source build state=%s; attempting to preserve completed compiler results\n' "$source_state"
+          fi
+          exit "$source_status"
+      - name: Preserve completed compiler results even when compilation times out
+        id: compiler_cache_save
+        if: always() && steps.compiler_cache.outputs.cache-primary-key != ''
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/mbot-node-ccache
+          key: ${{ steps.compiler_cache.outputs.cache-primary-key }}
+      - name: Keep finite source progress status, never compiler environment
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-full-icu-progress-${{ steps.build.outputs.build_state || 'setup_failed' }}-cache-${{ steps.compiler_cache_save.outcome || 'unknown' }}
+          path: ${{ runner.temp }}/node-source-state.txt
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Keep a temporary private build input, not a release or APK
         uses: actions/upload-artifact@v4
         with:

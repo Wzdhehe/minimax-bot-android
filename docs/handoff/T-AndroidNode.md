@@ -3,11 +3,30 @@
 
 > 2026-11-04最新：**46c1c07/run41703671145的四普通文件FD候选已API26/35通过**，每台t1/f0/e0/s0，含两次不同PID、WAL/Key/模型。full-ICU重跑41680254279在compile330分钟超时失败、verify skipped，无产物；不能继续写运行中。详见T-Persistence及HANDOFF。
 
+## 2026-11-04：源码编译缓存与预算（CI待实跑）
+
+41680254279的check明确 `Compile pinned x86_64 Node with full ICU has timed out after 330 minutes`；build开始17:02、compile17:04到22:34，verify skipped，无归档。不能只再次增加超时。实际读取并核对摘要的上游scripts/build.py，以及同commit的prepare.py：prepare每次拒绝已有source目录，因此直接缓存out目录不构成受支持的续编。
+
+现在在忽略目录生成的recipe除full-icu外，只将四类host/target CC/CXX命令用shlex.join包装ccache；不改编译flags、源树或Ninja并发2。source pin新增compilerCache字段，旧未声明归档拒绝。CI安装ccache、content compiler check、独立3G cache；按OS/arch/source pin隔离namespace，每次run/attempt保存新key并restore最近同namespace。只缓存编译结果，不缓存可执行源码树或把残余out当可信源。
+
+GNU timeout在300分钟对build process group发TERM、30秒后可KILL，给330分钟step/360分钟job留保存时间；退出124标budget_exhausted，137仅标terminated（不能断言是超时或OOM）。即使编译失败/超时，也always保存已完成cache并上传有限progress状态；cache保存/诊断服务失败不阻止已成功产物上传，但必须查看实际cache save outcome。source产物仍只在真正成功时上传，verify不能将预算退出当成功。
+
+本地真实smoke已执行：临时下载ccache4.14.2 musl-static，SHA256 `b20ff6415151226ac5a10dfd6839700c694bd67d1871c8fddb266d366ff25bfb` 与release API digest一致；工具只在/tmp，不提交、不进入APK。宿主C++与实际NDK27d/API26/x86_64各编译两次，hits2/misses2，缓存object逐字节匹配。固定父/子构建fixture验证GNU timeout返回124，整个子进程组停止。实际输出：
+
+```text
+PASS: real host + NDK API26/x86_64 compiler cache hits=2 misses=2; objects match
+PASS: GNU timeout returns 124 and stops the fixture build process group including its child
+```
+
+复现脚本 `smoke-compiler-cache.py --ndk /path/to/ndk27d --ccache /path/to/ccache`；CI还在长编译前跑这个smoke与recipe2项检查。完整Python检查**21项通过**；接受精确pin的上游build.py并验证生成recipe可解析；workflow YAML/bash语法过。**GitHub cache实际保存/恢复、完整Node编译及ICU/SQLite组合设备未验证，不能根据这个小smoke宣称已解决330分钟问题。** 首次可能只完成warm cache，读source progress artifact name和cache save outcome后再决定重跑。
+
+source artifact authority现在逐字节校验producer workflow、source pin、build-source.py及预检helper/test_source_recipe.py；这五个都是producer执行输入。后续更改它们会拒绝旧producer，不要改校验绕过。其他Android SQLite代码改动不改变这组producer inputs。
+
 ## full-ICU产物复用入口（待端到端验收）
 
 Node源码构建耗时很长，候选验收workflow现在支持复用已成功的同仓库source producer，组合**当前**JNI/SQLite/VFS/模型/Key/Intl测试，而不重跑Node编译。`android-node-probe.yml` 的 `PINNED_SOURCE_RUN_ID` 当前为空，默认仍用固定release；待41680254279的build job真正success后，可只改该值并push到feat/t-plugins触发当前验收。若GitHub已登记workflow_dispatch，也可提供 `source_run_id`；**没有实际运行dispatch，不保证分支workflow可被dispatch，不为此移动main**。
 
-复用前 `verify-source-run.py` 必须通过：run ID仅整数、同repo/同feat/t-plugins、producer workflow路径/事件/commit正确、build job（含上传）success，且producer commit的源码pin、build-source.py、source workflow与当前逐字节一致。随后download-artifact按固定name取私有产物；归档SHA交prepare-probe继续校验source manifest/config/ABI/ICU及recipe。没有任意artifact URL或静默回退。仅申请Actions只读权限，不触碰release/APK发布。
+复用前 `verify-source-run.py` 必须通过：run ID仅整数、同repo/同feat/t-plugins、producer workflow路径/事件/commit正确、build job（含上传）success，且producer commit的源码pin、build-source.py、source workflow、预检helper和recipe测试与当前逐字节一致。随后download-artifact按固定name取私有产物；归档SHA交prepare-probe继续校验source manifest/config/ABI/ICU及recipe。没有任意artifact URL或静默回退。仅申请Actions只读权限，不触碰release/APK发布。
 
 17项Python检查通过（新增5项覆盖source authority/非法ID不触网/fork等拒绝/未完成producer拒绝/recipe或workflow变更拒绝）。**source产物下载/组合设备验收仍未验证**，producer41680254279已在330分钟编译超时失败，无产物；过期/缺失artifact应失败，不能假造SHA。原source job的旧verify仅验它当时commit的固定脚本，不能代替当前SQLite/WAL组合测试。
 

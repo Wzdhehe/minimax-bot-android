@@ -26,9 +26,14 @@ def git(root, *args):
 
 def make_recipe(text):
     needle = "'--shared', '--openssl-no-asm', '--with-intl=none'"
-    if text.count(needle) != 1:
+    compiler = 'env[name] = shlex.quote(env[name])'
+    if text.count(needle) != 1 or text.count(compiler) != 1:
         raise RuntimeError('Unexpected Android configure recipe')
-    return text.replace(needle, "'--shared', '--openssl-no-asm', '--with-intl=full-icu'", 1)
+    # Compiler flags/source stay unchanged; cache both host generators and the
+    # Android target objects. Upstream otherwise starts from a new source tree
+    # every run, so retaining only out/ would not provide a supported resume.
+    return text.replace(needle, "'--shared', '--openssl-no-asm', '--with-intl=full-icu'", 1).replace(
+        compiler, 'env[name] = shlex.join(["ccache", env[name]])', 1)
 
 
 def build(mobile, ndk, output):

@@ -39,7 +39,7 @@ class SourceRunAuthorityTest(unittest.TestCase):
 
     def test_completed_producer_with_identical_inputs_can_be_retested(self):
         self.verify()
-        self.assertEqual(len(self.calls), 5)
+        self.assertTrue(all('/contents/' + name + '?' in '\n'.join(self.calls) for name in self.module.INPUTS))
 
     def test_invalid_id_never_reaches_network(self):
         for value in ['../123', '123?x=1', '0', '', '1' * 21]:

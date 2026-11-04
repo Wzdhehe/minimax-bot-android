@@ -12,7 +12,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[3]
 SOURCE_WORKFLOW = '.github/workflows/android-node-source.yml'
 INPUTS = (SOURCE_WORKFLOW, 'dsh-go/tooling/android-node-probe/node-source-build.json',
-          'dsh-go/tooling/android-node-probe/build-source.py')
+          'dsh-go/tooling/android-node-probe/build-source.py',
+          'dsh-go/tooling/android-node-probe/smoke-compiler-cache.py',
+          'dsh-go/tooling/android-node-probe/test_source_recipe.py')
 
 
 def verify(run_id, repository, branch, api, root=ROOT):
