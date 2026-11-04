@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { createMiniAppAgentGateway as createUpstreamGateway } from '@mcode-runtime/agent-gateway';
 import { createBotAgentPort } from './agent-port.mjs';
+import { NativeBindingError } from './native-model-binding.mjs';
+import { createNativeModelRuntime } from './native-model-runtime.mjs';
 
 // A colon cannot occur in an installed plugin name in either pinned manifest
 // reader. An installed package cannot replace this built-in arena by name.
@@ -29,7 +31,7 @@ export function createMiniAppAgentGateway(options) {
  * Production binds it to the pinned createWebuiRuntimeHost, which constructs
  * and binds the REAL gateway/session ports. No replacement ports are built.
  */
-export async function createBotRuntimeSession({ dataDir, startHost, signal }) {
+export async function createBotRuntimeSession({ dataDir, startHost, signal, catalog = null, probe = null, nativeBinding = null }) {
   if (typeof dataDir !== 'string' || !isAbsolute(dataDir) || dataDir.includes('\0')) {
     throw failure('runtime_data_directory_required');
   }
@@ -41,6 +43,7 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal }) {
   let closeRuntime;
   let closed = false;
   let closePromise;
+  let modelBinding = null;
   const onAbort = () => { void close().catch(() => {}); };
   function close() {
     if (closePromise) return closePromise;
@@ -52,6 +55,7 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal }) {
       const errors = [];
       try { release?.(); } catch (error) { errors.push(error); }
       try { await closeRuntime?.(); } catch (error) { errors.push(error); }
+      try { modelBinding?.close(); } catch (error) { errors.push(error); }
       if (errors.length === 1) throw errors[0];
       if (errors.length > 1) throw new AggregateError(errors, 'runtime_close_failed');
     });
@@ -71,7 +75,20 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal }) {
       pluginId: caller.pluginId, processGeneration: caller.runId,
       policy: { kind: 'allowlist', capabilities: ['session.run'], maxConcurrent: 2 },
     });
-    const bot = createBotAgentPort({ agent: assembled.host.application.miniAppAgent, caller });
+    // The native catalog is projected through the upstream provider API: the
+    // pinned upstream service owns provider keys, config locking and writes.
+    const application = assembled.host.application;
+    const nativeRuntime = await createNativeModelRuntime({
+      application, catalog, probe, nativeBinding, fetchTarget: globalThis,
+    });
+    const providerBinding = nativeRuntime.providerBinding;
+    modelBinding = nativeRuntime.binding;
+    const bot = createBotAgentPort({
+      agent: application.miniAppAgent,
+      caller,
+      binding: modelBinding,
+      resolveModelKey: nativeRuntime.resolveModelKey,
+    });
     // A retained application object cannot become usable again after close,
     // even if another generation later registers the same built-in plugin.
     const agent = Object.freeze(Object.fromEntries(['run', 'models', 'reply', 'answer'].map((method) => [method, (...args) => {
@@ -81,7 +98,18 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal }) {
     apiHost.close = close;
     signal?.addEventListener('abort', onAbort, { once: true });
     if (signal?.aborted) { await close(); throw failure('REQUEST_CANCELLED'); }
-    return Object.freeze({ agent, close });
+    /**
+     * Switch the session model through the upstream session selection. The
+     * switch reaches the next turn: a turn already running keeps its model.
+     */
+    const setSessionModel = async ({ providerId, modelId, sessionId }) => {
+      const models = application?.models;
+      if (!models || typeof models.select !== 'function') throw failure('runtime_model_selection_unavailable');
+      const known = providerBinding.some((entry) => entry.forkProviderId === providerId && entry.models.includes(modelId));
+      if (!known) throw new NativeBindingError('model_not_available');
+      return models.select({ providerId, modelId, sessionId });
+    };
+    return Object.freeze({ agent, close, providerBinding, setSessionModel });
   } catch (error) {
     try { await close(); }
     catch (cleanupError) { throw new AggregateError([error, cleanupError], 'runtime_start_failed'); }

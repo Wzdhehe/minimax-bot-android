@@ -10,7 +10,7 @@ function deferred() {
   const promise = new Promise((done) => { resolve = done; });
   return { promise, resolve };
 }
-function fixture(dataDir, { runTurn, onClose = async () => {} } = {}) {
+function fixture(dataDir, { runTurn, onClose = async () => {}, modelApplication = null } = {}) {
   const owners = new Map();
   const created = [];
   const turns = [];
@@ -42,7 +42,8 @@ function fixture(dataDir, { runTurn, onClose = async () => {} } = {}) {
     replyPermission: async () => 'processed',
   });
   const application = createProcessLocalMiniAppAgentApplication(gateway);
-  const assembled = { host: { apiHost: { close: onClose }, application: { miniAppAgent: application } } };
+  const hostApplication = { miniAppAgent: application, ...(modelApplication ?? {}) };
+  const assembled = { host: { apiHost: { close: onClose }, application: hostApplication } };
   return { assembled, application, gateway, created, owners, turns };
 }
 
@@ -54,7 +55,7 @@ test('trusted registration uses the actual gateway and ignores request-supplied 
   } });
   t.after(() => session.close());
   assert.equal('registerArena' in host.application, false);
-  assert.deepEqual(Object.keys(session).sort(), ['agent', 'close']);
+  assert.deepEqual(Object.keys(session).sort(), ['agent', 'close', 'providerBinding', 'setSessionModel']);
   assert.equal(Object.isFrozen(session.agent), true);
   const events = [];
   const first = await session.agent.run({ text: 'hello', caller: { pluginId: 'forged', runId: 'forged' } },
@@ -69,6 +70,70 @@ test('trusted registration uses the actual gateway and ignores request-supplied 
   await assert.rejects(session.agent.run({ text: 'steal', sessionId: 'foreign-session' }), (error) => error.code === 'SESSION_NOT_FOUND');
   await assert.rejects(host.application.models({ caller: { pluginId: 'builtin:minimax-bot', runId: 'forged' } }),
     (error) => error.code === 'AGENT_UNAVAILABLE');
+});
+
+test('the native catalog is projected through the upstream provider API and every turn is bound', async (t) => {
+  const calls = { create: [], update: [], select: [], list: [], test: [] };
+  const modelApplication = {
+    modelProviders: {
+      async listUser() { return []; },
+      async create(input) {
+        calls.create.push(input);
+        return { providerId: `custom_provider:${input.name}`, name: input.name };
+      },
+      async update(input) {
+        calls.update.push(input);
+        return { providerId: input.providerId, name: input.name };
+      },
+      async testProvider(input) { calls.test.push(input); return { success: true }; },
+    },
+    models: {
+      async list() {
+        calls.list.push(true);
+        return [{ providerId: 'custom_provider:minimax', modelId: 'm1',
+          modelConfigId: 'custom_provider:minimax/m1', selected: true }];
+      },
+      async select(input) { calls.select.push(input); return true; },
+    },
+  };
+  const nativeBinding = { open() { return Promise.resolve(null); }, cancel() {} };
+  const session = await createBotRuntimeSession({
+    dataDir: '/fixture/catalog',
+    catalog: {
+      providers: [{ providerId: 'minimax', apiFormat: 'openai-completions', enabled: true, models: ['m1'] }],
+      defaultProviderId: 'minimax',
+      defaultModelId: 'm1',
+    },
+    nativeBinding,
+    startHost: async ({ dataDir }) => fixture(dataDir, { modelApplication }).assembled,
+  });
+  t.after(() => session.close());
+  assert.deepEqual(calls.create, [{
+    name: 'minimax',
+    baseUrl: 'https://models.mbot.invalid/v1',
+    apiFormat: 'openai-completions',
+    models: [{ modelId: 'm1' }],
+    apiKey: 'native-broker-placeholder',
+  }]);
+  assert.deepEqual(calls.select, [{ providerId: 'custom_provider:minimax', modelId: 'm1' }]);
+  assert.deepEqual(session.providerBinding, [{
+    forkProviderId: 'custom_provider:minimax',
+    nativeProviderId: 'minimax',
+    apiFormat: 'openai-completions',
+    models: ['m1'],
+    connectivity: 'not_run',
+  }]);
+  // The turn runs inside the native route of the model the session selected.
+  const turn = await session.agent.run({ text: 'hello' });
+  assert.equal(turn.text, 'fixture reply');
+  assert.equal(calls.list.length, 1);
+  // A switch outside the native catalog is refused before it reaches the fork.
+  await assert.rejects(() => session.setSessionModel({ providerId: 'custom_provider:other', modelId: 'm1', sessionId: 'session-1' }),
+    (error) => error.code === 'model_not_available');
+  assert.equal(calls.select.length, 1);
+  // A switch inside the catalog goes to the upstream session selection.
+  assert.equal(await session.setSessionModel({ providerId: 'custom_provider:minimax', modelId: 'm1', sessionId: 'session-1' }), true);
+  assert.deepEqual(calls.select[1], { providerId: 'custom_provider:minimax', modelId: 'm1', sessionId: 'session-1' });
 });
 
 test('concurrent host construction keeps gateway ownership within its own async scope', async (t) => {

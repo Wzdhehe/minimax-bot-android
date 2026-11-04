@@ -7,8 +7,8 @@ export { createWebuiRuntimeHost };
 
 // Trusted controller factory; defining it does not launch a process/listener.
 // Android must still assemble its independent-UID model/files adapters first.
-export function createBuiltinBotRuntime({ dataDir, appVersion, signal }) {
-  return createBotRuntimeSession({ dataDir, signal, startHost: ({ dataDir: root }) =>
+export function createBuiltinBotRuntime({ dataDir, appVersion, signal, catalog = null, probe = null, nativeBinding = null }) {
+  return createBotRuntimeSession({ dataDir, signal, catalog, probe, nativeBinding, startHost: ({ dataDir: root }) =>
     createWebuiRuntimeHost({ dataDir: root, appVersion, mcodeToolsRequested: false }) });
 }
 export { createBotAgentPort } from './agent-port.mjs';
