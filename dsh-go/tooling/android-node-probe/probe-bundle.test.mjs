@@ -162,3 +162,61 @@ test('the packaged scoped-model block routes two turns over actual inherited FDs
     await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));
   }
 });
+
+test('the packaged Bot transport block serves HTTP on an inherited duplex FD without listening', { timeout: 12_000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'mbot-node-bot-fd-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  execFileSync('python3', [join(root, 'prepare-probe.py'), '--bundle-only', '--bundle-output', directory]);
+  const script = await readFile(join(directory, 'node-fd-probe.cjs'), 'utf8');
+  const moduleLine = /^const botTransportModuleUrl = (.+);$/m.exec(script);
+  assert.ok(moduleLine);
+  const moduleUrl = JSON.parse(moduleLine[1]);
+  const start = script.indexOf("    probePhase = 'bot_http_fd';");
+  const end = script.indexOf("    probePhase = 'model_dynamic';", start);
+  assert.ok(start >= 0 && end > start);
+  const block = script.slice(start, end);
+  const childScript = `
+    const botTransportModuleUrl = ${JSON.stringify(moduleUrl)};
+    const botFd = '3';
+    let probePhase;
+    const report = {};
+    (async () => { ${block}
+      process.stdout.write(JSON.stringify(report.botFdTransport));
+    })().catch(() => { process.exitCode = 1; });
+  `;
+  let peer, owner, child;
+  const server = createServer((socket) => { peer = socket; socket.on('error', () => {}); });
+  const timeout = setTimeout(() => { child?.kill('SIGKILL'); owner?.destroy(); peer?.destroy(); }, 10_000);
+  try {
+    server.listen(join(directory, 'bot.sock'));
+    await once(server, 'listening');
+    const accepted = once(server, 'connection');
+    owner = connect(join(directory, 'bot.sock'));
+    owner.on('error', () => {});
+    await once(owner, 'connect');
+    await accepted;
+    child = spawn(process.execPath, ['--no-warnings', '-e', "eval(require('node:fs').readFileSync(0, 'utf8'))"], {
+      stdio: ['pipe', 'pipe', 'pipe', peer], env: buildRuntimeEnv(process.env),
+    });
+    child.stdin.end(childScript);
+    const exited = once(child, 'exit');
+    let stdout = '', stderr = '', response = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
+    owner.setEncoding('utf8').on('data', (chunk) => { response += chunk; });
+    const ownerClosed = new Promise((resolve) => owner.once('close', resolve));
+    await once(child, 'spawn');
+    peer.destroy();
+    owner.write('GET /fd-probe HTTP/1.1\r\nHost: 127.0.0.1:43117\r\nConnection: close\r\n\r\n');
+    const [code] = await exited;
+    await ownerClosed;
+    assert.equal(code, 0, stderr);
+    assert.equal(stderr, '');
+    assert.deepEqual(JSON.parse(stdout), { request: true, noListener: true });
+    assert.match(response, /^HTTP\/1\.1 200/);
+    assert.ok(response.includes('fd-ok'));
+  } finally {
+    clearTimeout(timeout); child?.kill(); owner?.destroy(); peer?.destroy();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

@@ -5,12 +5,13 @@ const modelModuleUrl = "__MBOT_FD_MODULE_URL__";
 const nativeRouteModuleUrl = "__MBOT_NATIVE_ROUTE_MODULE_URL__";
 const nativeBindingModuleUrl = "__MBOT_NATIVE_BINDING_MODULE_URL__";
 const descriptorModuleUrl = "__MBOT_DESCRIPTOR_MODULE_URL__";
+const botTransportModuleUrl = "__MBOT_BOT_FD_TRANSPORT_MODULE_URL__";
 const fs = require('node:fs');
 let probePhase = 'bootstrap';
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
 
 (async () => {
-  const [normal, stalled, echo, result, privatePath, nativeLibraryDir, providerId, descriptorFd, descriptorOwnerUid, ...dataFdArgs] = process.argv.slice(1);
+  const [normal, stalled, echo, result, privatePath, nativeLibraryDir, providerId, descriptorFd, descriptorOwnerUid, botFd, ...dataFdArgs] = process.argv.slice(1);
   const { streamNativeModelFd } = await import(modelModuleUrl);
   async function consume(fd, cancel) {
     const controller = new AbortController();
@@ -118,6 +119,26 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       brokerAbsent: guestDescriptor.broker === null,
       closed: descriptorClosed,
     };
+    probePhase = 'bot_http_fd';
+    const { createBotFdTransport } = await import(botTransportModuleUrl);
+    const botTransport = createBotFdTransport();
+    let complete;
+    const received = new Promise((resolve) => { complete = resolve; });
+    const server = require('node:http').createServer((request, response) => {
+      const valid = request.method === 'GET' && request.url === '/fd-probe' && request.headers.host === '127.0.0.1:43117';
+      response.writeHead(valid ? 200 : 400, { 'content-type': 'text/plain', connection: 'close' });
+      response.once('finish', () => complete(valid));
+      response.end(valid ? 'fd-ok' : 'fd-invalid');
+    });
+    let timer;
+    try {
+      await botTransport.listenServer(server);
+      botTransport.accept(Number(botFd));
+      const request = await Promise.race([received, new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Object.assign(new Error('bot_transport_timeout'), { code: 'bot_transport_timeout' })), 5000);
+      })]);
+      report.botFdTransport = { request, noListener: !server.listening };
+    } finally { clearTimeout(timer); botTransport.close(); server.close(() => {}); }
     probePhase = 'model_dynamic';
     const binding = process._linkedBinding('mbot_model_bridge');
     const request = JSON.stringify({ providerId, modelId: 'normal', messages: [{ role: 'user', content: 'Hi dynamic' }] });
@@ -263,7 +284,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     'SQLITE_ERROR', 'SQLITE_PERM', 'SQLITE_MISUSE', 'SQLITE_NOTFOUND', 'fd_vfs_unavailable', 'fd_vfs_input_invalid',
     'runtime_data_invalid', 'runtime_data_denied', 'runtime_data_closed', 'runtime_data_unavailable',
     'runtime_data_not_found', 'runtime_data_too_large', 'descriptor_invalid', 'descriptor_permissions',
-    'descriptor_not_a_regular_file']);
+    'descriptor_not_a_regular_file', 'bot_transport_timeout', 'bot_transport_invalid', 'bot_transport_unavailable']);
   const code = codes.has(error?.code) ? error.code : codes.has(error?.message) ? error.message :
     error?.message === 'Cannot open database because the directory does not exist' ? 'sqlite_parent_missing' : 'unknown';
   try {

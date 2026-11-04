@@ -36,6 +36,7 @@ def bundle(output_dir=None):
         'native-model-binding.mjs': ['native-model-route.mjs', 'model-fetch-scope.mjs'],
         'runtime-catalog-policy.mjs': [],
         'runtime-descriptor.mjs': ['runtime-catalog-policy.mjs'],
+        'bot-fd-transport.mjs': [],
     }
     def module_url(name):
         if name not in urls:
@@ -61,6 +62,9 @@ def bundle(output_dir=None):
     descriptor_placeholder = '"__MBOT_DESCRIPTOR_MODULE_URL__"'
     assert template.count(descriptor_placeholder) == 1
     template = template.replace(descriptor_placeholder, json.dumps(module_url('runtime-descriptor.mjs')))
+    bot_transport_placeholder = '"__MBOT_BOT_FD_TRANSPORT_MODULE_URL__"'
+    assert template.count(bot_transport_placeholder) == 1
+    template = template.replace(bot_transport_placeholder, json.dumps(module_url('bot-fd-transport.mjs')))
     (assets / 'node-fd-probe.cjs').write_text(template)
 
 

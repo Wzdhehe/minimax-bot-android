@@ -53,7 +53,7 @@ class ResultReportingTest(unittest.TestCase):
 
     def test_descriptor_and_scoped_route_diagnostics_are_finite(self):
         for phase, failure in [('descriptor_transfer', 'descriptor_permissions'),
-                               ('scoped_model_route', 'unknown')]:
+                               ('scoped_model_route', 'unknown'), ('bot_http_fd', 'bot_transport_timeout')]:
             with self.subTest(phase=phase):
                 code, output = self.run_report('private-sentinel node_probe_failed_at_' + phase + '_code_' + failure)
                 self.assertEqual(code, 1)

@@ -93,7 +93,7 @@ internal object NodeProbeRuntime {
     fun openModelFd(id: String, body: String): Int = try { modelClient?.open(id, body)?.detachFd() ?: -1 } catch (_: Exception) { -1 }
     fun cancelModelFd(id: String) { try { modelClient?.cancel(id) } catch (_: Exception) { } }
     fun load() { System.loadLibrary("mbot_node_probe") }
-    external fun start(script: String, normal: Int, stalled: Int, echo: Int, result: Int, privatePath: String, nativeLibraryDir: String, providerId: String, descriptorFd: Int, ownerUid: Int, dataFds: IntArray): Int
+    external fun start(script: String, normal: Int, stalled: Int, echo: Int, result: Int, privatePath: String, nativeLibraryDir: String, providerId: String, descriptorFd: Int, ownerUid: Int, botFd: Int, dataFds: IntArray): Int
 }
 
 /** Verification APK only. One fixed APK script per isolated process; no JS,
@@ -158,7 +158,7 @@ class NodeIsolationProbeService : Service() {
         val data = message.data
         val reply = message.replyTo ?: return
         val id = data.getString("id") ?: return
-        val fds = listOf("normal", "stalled", "echo", "result", "db", "wal", "shm", "journal", "runtime_descriptor").map { descriptor(data, it) }
+        val fds = listOf("normal", "stalled", "echo", "result", "db", "wal", "shm", "journal", "runtime_descriptor", "bot_connection").map { descriptor(data, it) }
         val privatePath = data.getString("privatePath")
         val host = data.getBinder("model_host")
         val session = data.getString("model_session")
@@ -183,7 +183,7 @@ class NodeIsolationProbeService : Service() {
                 // FDs on every stream path and the result FD after writing.
                 val raw = fds.map { it!!.detachFd() }
                 val exit = NodeProbeRuntime.start(script, raw[0], raw[1], raw[2], raw[3], privatePath, applicationInfo.nativeLibraryDir, providerId,
-                    raw[8], applicationInfo.uid, raw.subList(4, 8).toIntArray())
+                    raw[8], applicationInfo.uid, raw[9], raw.subList(4, 8).toIntArray())
                 code = if (exit == 0) "ok" else "node_nonzero_exit"
             } catch (_: UnsatisfiedLinkError) { code = "node_library_unavailable" }
             catch (_: Throwable) { code = "node_start_failed" }

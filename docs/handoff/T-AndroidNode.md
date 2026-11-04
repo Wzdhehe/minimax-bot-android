@@ -1,6 +1,13 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+
+## Bot双向socket FD跨UID验收（已编译，设备待CI）
+
+验收APK内嵌生产`bot-fd-transport.mjs`。Main通过既有isolated服务交付socketpair并发送固定HTTP请求；隔离Node用该transport将FD接到一个**简单HTTP夹具**，不调用listen，Main读取HTTP响应，双方各断言请求/响应和未监听。保留真实Keystore Key/模型JNI、descriptor旧generation、SQLite/WAL/full-ICU等既有断言；真实Bot服务鉴权/SSE已在单独Linux跨进程FD测试验证，**此Android用例尚未启动真实Bot业务**。
+
+本地：精确打包脚本宿主3项、Python33项通过；固定Node/NDK JNI重编、默认release的验收APK和仪器APK `BUILD SUCCESSFUL in 2m 5s`（71 tasks/17 executed），javap证实JNI start签名匹配。该本地APK `requiresIntl=false`、`requiresSqlite=false`，不把它当组合测试；本机无adb/KVM/物理设备。推送后须实查API26/35的当前CI及artifact，不把历史49项算成本次通过。
+
 ## scoped模型binding → JNI/Binder 验收（模拟器已通过）
 
 在现有固定验收脚本嵌入实际`native-model-binding.mjs`和`model-fetch-scope.mjs`。脚本通过同一个`mbot_model_bridge`、隔离Kotlin client、Main `NativeModelRequestHost`与Key注入broker：不在scope时请求返回400；两个binding各跑一个带工具的模型流，关闭第一个后第二个仍可执行。设备用例断言两次200/tool_calls/DONE、生成Key只在native注入（每进程8次）且不在报告、env、文件；实际使用同一授权provider/model，尚不证明多provider的native分配或产品launcher。

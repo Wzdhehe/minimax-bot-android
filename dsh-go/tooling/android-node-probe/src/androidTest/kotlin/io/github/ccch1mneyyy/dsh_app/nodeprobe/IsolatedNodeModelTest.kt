@@ -107,6 +107,7 @@ class IsolatedNodeModelTest {
                             .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", "Hi"))).toString())
                         val modelFds = listOf(modelFd("normal"), modelFd("stalled"), modelFd("echo"))
                         val resultPair = ParcelFileDescriptor.createSocketPair()
+                        val botPair = ParcelFileDescriptor.createSocketPair()
                         var descriptorFd: ParcelFileDescriptor? = null
                         try {
                             val descriptorSession = RuntimeDescriptorSession(
@@ -128,6 +129,8 @@ class IsolatedNodeModelTest {
                                 StructTimeval.fromMillis(5000))
                             Os.setsockoptTimeval(resultPair[1].fileDescriptor, OsConstants.SOL_SOCKET, OsConstants.SO_SNDTIMEO,
                                 StructTimeval.fromMillis(10_000))
+                            Os.setsockoptTimeval(botPair[0].fileDescriptor, OsConstants.SOL_SOCKET, OsConstants.SO_RCVTIMEO,
+                                StructTimeval.fromMillis(10_000))
                             ProbeConnection(base).use { probe ->
                                 val identity = probe.identity().get(10, TimeUnit.SECONDS)
                                 assertNotEquals(Process.myUid(), identity.uid)
@@ -144,12 +147,21 @@ class IsolatedNodeModelTest {
                                     putParcelable("normal", modelFds[0]); putParcelable("stalled", modelFds[1])
                                     putParcelable("echo", modelFds[2]); putParcelable("result", resultPair[1])
                                     putParcelable("runtime_descriptor", descriptorFd)
+                                    putParcelable("bot_connection", botPair[1])
                                     listOf("db", "wal", "shm", "journal").forEachIndexed { i, name -> putParcelable(name, dataDescriptors[i]) }
                                 }
                                 assertFalse(data.toString().contains(secret))
                                 val completion = probe.run(data)
                                 modelFds.forEach { it.close() }
                                 resultPair[1].close()
+                                botPair[1].close()
+                                val request = "GET /fd-probe HTTP/1.1\r\nHost: 127.0.0.1:43117\r\nConnection: close\r\n\r\n".toByteArray(Charsets.US_ASCII)
+                                var written = 0
+                                while (written < request.size) {
+                                    val count = Os.write(botPair[0].fileDescriptor, request, written, request.size - written)
+                                    check(count > 0) { "bot_fd_request_failed" }
+                                    written += count
+                                }
                                 val reply = completion.get(35, TimeUnit.SECONDS)
                                 assertNotEquals(Process.myUid(), reply.uid)
                                 val bytes = ByteArrayOutputStream()
@@ -174,11 +186,11 @@ class IsolatedNodeModelTest {
                                 val report = if (text.isBlank()) JSONObject() else JSONObject(text)
                                 if (reply.data.getString("code") != "ok") {
                                     val phases = setOf("bootstrap", "sqlite_load", "sqlite_memory", "vfs_register", "vfs_open", "vfs_wal",
-                                        "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "descriptor_transfer", "model_dynamic", "sdk_route", "scoped_model_route", "file_commit", "file_read", "file_mutation", "file_append")
+                                        "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "descriptor_transfer", "bot_http_fd", "model_dynamic", "sdk_route", "scoped_model_route", "file_commit", "file_read", "file_mutation", "file_append")
                                     val codes = setOf("SQLITE_CANTOPEN", "SQLITE_IOERR", "SQLITE_IOERR_SHMOPEN", "SQLITE_BUSY", "SQLITE_READONLY",
                                         "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "sqlite_parent_missing",
                                         "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable", "runtime_data_not_found", "runtime_data_too_large",
-                                        "descriptor_invalid", "descriptor_permissions", "descriptor_not_a_regular_file")
+                                        "descriptor_invalid", "descriptor_permissions", "descriptor_not_a_regular_file", "bot_transport_timeout", "bot_transport_invalid", "bot_transport_unavailable")
                                     val phase = report.optString("failedPhase").takeIf { it in phases } ?: "unknown"
                                     val code = report.optString("failureCode").takeIf { it in codes } ?: "unknown"
                                     fail("node_probe_failed_at_${phase}_code_${code}")
@@ -220,6 +232,21 @@ class IsolatedNodeModelTest {
                                 assertTrue(report.getBoolean("privateDenied"))
                                 val descriptorReport = report.getJSONObject("descriptorTransfer")
                                 for (name in listOf("pin", "provider", "generation", "brokerAbsent", "closed")) assertTrue(descriptorReport.getBoolean(name))
+                                val botTransportReport = report.getJSONObject("botFdTransport")
+                                assertTrue(botTransportReport.getBoolean("request"))
+                                assertTrue(botTransportReport.getBoolean("noListener"))
+                                val botBytes = ByteArrayOutputStream()
+                                val botChunk = ByteArray(1024)
+                                while (true) {
+                                    val count = Os.read(botPair[0].fileDescriptor, botChunk, 0, botChunk.size)
+                                    if (count <= 0) break
+                                    check(botBytes.size() + count <= 4096) { "bot_fd_response_too_large" }
+                                    botBytes.write(botChunk, 0, count)
+                                }
+                                val botResponse = botBytes.toString("UTF-8")
+                                assertTrue(botResponse.startsWith("HTTP/1.1 200"))
+                                assertTrue(botResponse.contains("fd-ok"))
+                                assertFalse(botResponse.contains(secret))
                                 assertEquals("done", report.getJSONObject("normal").getString("code"))
                                 assertEquals("hello", report.getJSONObject("normal").getJSONArray("events").getJSONObject(0).getString("delta"))
                                 assertEquals("broker_cancelled", report.getJSONObject("cancelled").getString("code"))
@@ -285,6 +312,7 @@ class IsolatedNodeModelTest {
                             }
                         } finally {
                             try { descriptorFd?.close() } catch (_: Exception) { }
+                            botPair.forEach { try { it.close() } catch (_: Exception) { } }
                             modelFds.forEach { try { it.close() } catch (_: Exception) { } }
                             resultPair.forEach { try { it.close() } catch (_: Exception) { } }
                         }
