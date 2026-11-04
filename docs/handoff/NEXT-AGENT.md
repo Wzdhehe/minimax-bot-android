@@ -131,7 +131,7 @@ env -u GH_TOKEN -u GITHUB_TOKEN gh run view 41826964500 --json status,conclusion
 
 **上项已完成**（a2c17d5 / 41831847047，见本节文首更新）。
 
-**本项已完成（2026-11-04，最终提交 9e32d04；真实 fork 验收 run 41840651106 / commit 044600c）**：native 非密钥目录投影与每轮受控绑定已落地，详见第5节与[T-RuntimeHost](T-RuntimeHost.md)。**下一项**：按[T-RuntimeBroker](T-RuntimeBroker.md)文首的契约把 native 侧接线补齐——descriptor 写入**剥离后**的非密钥目录，并把 native broker binding 交给 guest runtime 进程；之后官方连通性测试才会真跑（此前 `connectivity` 为 `not_run`），再往后是每 Bot 可信 MCP caller 绑定与真实 provider 验收。仍不发明跨端协议，不把真实Key写进BYOK yaml/env/descriptor/log，未接broker时明确拒绝模型执行，不加假回答。
+**本项已完成（2026-11-04，最终提交 9e32d04；真实 fork 验收 run 41840651106 / commit 044600c）**：native 非密钥目录投影与每轮受控绑定已落地，详见第5节与[T-RuntimeHost](T-RuntimeHost.md)。**下一项（目录接线已补齐，2026-11-04，commit f23775b；host 41847283169 / native 41847283225 / scope 41847283180 均 success）**：按[T-RuntimeBroker](T-RuntimeBroker.md)文首的契约，**descriptor 写入「剥离后」的非密钥目录这一半已经落地**——native 侧 `BotProviderStore.guestCatalogJson()` 产出允许列表目录（只有 providerId/name/apiFormat/enabled/models），`RuntimeDescriptorPayload` 编码时按**字段名**再挡一道凭据/端点，`createBuiltinBotRuntime` 改为只收 descriptor、目录由 `catalogFromDescriptor` 取出后交给钉点官方 provider API 投影，真实 factory 探针已走完整「写入→读回→投影」链路。**剩下的一半是 native broker binding 进 guest runtime 进程**：它依赖 Android 独立 UID 启动器（尚不存在），在此之前 `nativeBinding` 仍为 `null`，官方连通性测试仍记 `not_run`、模型请求仍无路由。再往后是每 Bot 可信 MCP caller 绑定与真实 provider 验收。仍不发明跨端协议，不把真实Key写进BYOK yaml/env/descriptor/log，未接broker时明确拒绝模型执行，不加假回答。
 
 收尾只读取得source/candidate日志和API状态；source XML下载遇HTTP403，未本地解析其JUnit明细，故不编造source的f/e/s计数（49是日志启动数）。candidate的t49/f0/e0/s0来自现有结果artifact名称；后续组合验收还须核实际JS分支，而不只计数。
 
@@ -151,7 +151,7 @@ env -u GH_TOKEN -u GITHUB_TOKEN gh run view 41826964500 --json status,conclusion
 - **实测校正**：官方 `models.select()` 只要求 provider 已配置、`enabled !== false`、模型在列表内、`apiKey`/`baseUrl` 非空，**不要求连通性测试通过**；「先测通再选」只对 `saveAndUse` 成立（409 TEST_REQUIRED）。详见[映射笔记](../research/native-model-metadata-mapping.md)第 4c 节。
 - **官方 update 的模型只能合并不能删除**：native 已删的模型会残留在 fork 目录可见但被每轮绑定拒绝，这是已知限制。
 
-**仍未做**：native 侧接线（descriptor 写目录、broker binding 进 guest 进程）、真实 provider 调用、每 Bot 可信 MCP caller 绑定、ARM64/真机、产品 APK、设置热更新（本阶段 boot-only）。
+**仍未做**：native broker binding 进 guest 进程（**依赖 Android 独立 UID 启动器，当前不存在**，因此 `nativeBinding` 仍为 `null`、官方连通性测试仍为 `not_run`）、真实 provider 调用、每 Bot 可信 MCP caller 绑定、ARM64/真机、产品 APK、设置热更新（本阶段 boot-only）。**已做**：native 侧目录产出与 descriptor 携带、guest 从 descriptor 读回并投影（见[T-RuntimeBroker](T-RuntimeBroker.md)与[T-RuntimeHost](T-RuntimeHost.md)最新节）。
 
 先实查真实字段/调用点并写映射表：
 

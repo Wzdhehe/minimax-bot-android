@@ -130,4 +130,45 @@ class ProviderStorageTest {
             base.deleteSharedPreferences(prefix + "minimax_bot_provider")
         }
     }
+
+    @Test
+    fun theGuestCatalogCarriesTheProviderButNoEndpointAndNoCredential() {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val prefix = "mbot-guest-catalog-test-${UUID.randomUUID()}-"
+        val context = object : ContextWrapper(base) {
+            override fun getSharedPreferences(name: String, mode: Int) = base.getSharedPreferences(prefix + name, mode)
+        }
+        val store = BotProviderStore(context)
+        val secret = "test-only-${UUID.randomUUID()}"
+        var id: String? = null
+        try {
+            store.save(mapOf("name" to "Example", "baseUrl" to "https://example.com/v1",
+                "apiFormat" to "openai-completions", "models" to listOf("m1", "m2"), "key" to secret))
+            id = ((store.catalog()["providers"] as List<*>).single() as Map<*, *>)["providerId"] as String
+            store.selectDefault(id, "m1")
+            val guest = store.guestCatalogJson()
+            // The guest learns the provider, its api format and its models.
+            val parsed = JSONObject(guest)
+            val providers = parsed.getJSONArray("providers")
+            assertEquals(1, providers.length())
+            val row = providers.getJSONObject(0)
+            assertEquals(id, row.getString("providerId"))
+            assertEquals("openai-completions", row.getString("apiFormat"))
+            assertEquals(true, row.getBoolean("enabled"))
+            assertEquals(listOf("m1", "m2"), (0 until row.getJSONArray("models").length()).map { row.getJSONArray("models").getString(it) })
+            assertEquals(id, parsed.getString("defaultProviderId"))
+            assertEquals("m1", parsed.getString("defaultModelId"))
+            // The row carries exactly the allow-list, nothing else.
+            assertEquals(setOf("providerId", "name", "apiFormat", "enabled", "models"), row.keys().asSequence().toSet())
+            // No endpoint and no credential may reach the guest catalog.
+            assertFalse(guest.contains("example.com"))
+            assertFalse(guest.contains("baseUrl"))
+            assertFalse(guest.contains("apiKey"))
+            assertFalse(guest.contains("maskedApiKey"))
+            assertFalse(guest.contains(secret))
+        } finally {
+            id?.let { store.delete(it) }
+            base.deleteSharedPreferences(prefix + "minimax_bot_provider")
+        }
+    }
 }

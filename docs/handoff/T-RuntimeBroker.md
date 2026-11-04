@@ -1,8 +1,24 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-04）
 
-## 最新：native 侧待接线的目录契约（2026-11-04）
+## 最新：目录接线闭环已落地，broker binding 仍缺（2026-11-04，commit f23775b）
 
-runtime 侧已完成「native 非密钥目录 → 钉点官方 provider API」的投影与每轮绑定（见 [T-RuntimeHost](T-RuntimeHost.md)）。**native 侧尚未接线**，下一阶段按下述契约补齐，不要另发明协议：
+下面「native 侧待接线的目录契约」的第 1、2 条**已实现**：native 侧现在能产出**剥离后**的非密钥目录，descriptor 携带它，guest 读回后交给钉点官方 provider API 投影。**第 4 条（native broker binding 进 guest 进程）仍未做**，`nativeBinding` 仍为 `null`，所以官方连通性测试仍记 `not_run`，模型请求仍无路由可用。
+
+已落地的部分：
+
+1. **native 产出目录（允许列表）。** 新增 `bot/GuestProviderCatalog.kt`：`GuestProviderRow` + `GuestProviderCatalog.encode(providers, defaultProviderId, defaultModelId)`，只写 `providerId/name/apiFormat/enabled/models` 五个字段。**即便调用方手里的行还带 `baseUrl` 或 Key，构造上也写不出去**。`BotProviderStore.guestCatalogJson()` 是 native 侧唯一目录出口；给设置页用的 `catalog()`（含 `baseUrl`/`maskedApiKey`）原样不动、不得进 descriptor。设备级用例 `ProviderStorageTest.theGuestCatalogCarriesTheProviderButNoEndpointAndNoCredential` 在真实 Keystore 存储上断言 guest 目录**恰好**是那五个字段、且不含端点与凭据。
+2. **descriptor 携带 + 字段名级守卫。** 新增 `runtime/RuntimeDescriptorPayload.kt`（把 `RuntimeDescriptorSession` 与 descriptor 编码从含 `android.*` 的 `RuntimeDescriptor.kt` 拆出，同 package 同名，调用方不变），编码时对目录做**字段名**级校验，规则与 Node 侧 `runtime-catalog-policy.mjs` 一致：凭据类字段名（apiKey/secret/token/…）拒绝、端点类字段名（baseUrl/url/endpoint/host/…）拒绝。只看字段名，所以**读起来像密钥的 model id 不会被误拒**。`RuntimeDescriptor.kt` 只剩文件操作（Os/权限/rename）。
+3. **guest 只从 descriptor 取目录。** `runtime-bundle-entry.mjs` 的 `createBuiltinBotRuntime` 不再收 `catalog` 参数，改为收 **descriptor 对象**；`catalogFromDescriptor(descriptor)`（`runtime-descriptor.mjs` 新增）**重新校验** descriptor 后取目录，手搓 descriptor 不能放宽边界。同文件导出 `readRuntimeDescriptor`，guest bootstrap 用它读回自己的 descriptor。`createBotRuntimeSession` 仍是下层接缝，继续收 `catalog`，不变。
+4. **真实 factory 探针走完整链路。** `tooling/runtime-host-probe/runtime-host-child.mjs` 现在是：native 侧 `writeRuntimeDescriptor` 写 descriptor（含剥离后的目录）→ **guest 侧用 bundle 导出的 `readRuntimeDescriptor` 读回** → 读回的 descriptor 交给 `createBuiltinBotRuntime` → 断言真实 fork 写出的 `config.yaml` 仍是「占位 key + 虚拟 origin + `defaultModel` 生效」。负例：手写的、带 `baseUrl` 的 descriptor 即使是 owner-only 普通文件，也被 guest 读回路径整体拒绝（`descriptor_invalid`）。
+5. **CI 触发面。** `native-model-broker.yml` 的 push/pull_request 路径过滤补上 `main/.../runtime/**`、`test/.../bot/**`、`test/.../runtime/**`；新 JUnit 同时进 `test-native-model-broker.sh`（native-boundary job）与 Gradle `testDebugUnitTest`（android-component-compilation job）。`android-broker-probe` 与 `android-node-probe` 的 `nativeSources` 都补上新文件，否则 `BotProviderStore` 找不到 `GuestProviderCatalog` 会编译失败。
+
+仍然**未做**：native broker binding 进 guest 进程（需要 Android 独立 UID 启动器先存在）、真实 provider 调用、每 Bot 可信 MCP caller 绑定、ARM64/真机、产品 APK。
+
+**远程验收（commit f23775b）**：host **41847283169** success（真实 factory 1/1，日志含 `descriptor read-back`）；native **41847283225** success（`native-boundary` 的 JUnit `OK (40 tests)`、Node 段 53/53/0/0，`provider-sdk-streams` 与 `android-component-compilation` 同 success）；scope **41847283180** success。本机可跑部分：Kotlin 8 项全过、Node 新用例通过、host-contracts 73 项里 64 过 9 失败（失败项与 baseline 完全相同，Windows POSIX 权限位/符号链接限制）。
+
+## native 侧待接线的目录契约（2026-11-04，第 1、2 条已实现，见上节）
+
+runtime 侧已完成「native 非密钥目录 → 钉点官方 provider API」的投影与每轮绑定（见 [T-RuntimeHost](T-RuntimeHost.md)）。本节契约的**第 1、2 条已按此实现**（见上节），**第 4 条仍待接线**；继续按下述契约补齐，不要另发明协议：
 
 **1. descriptor 要带 `catalog`。** 现有 Kotlin `RuntimeDescriptorSession` / `RuntimeDescriptor.encode()` 只写 `entryPath/pinCommit/port/token/broker`。需新增一个**非密钥目录**字段并原样写进 `<dataDir>/runtime-descriptor.json`；Node 侧 `createRuntimeDescriptor` 已接受 `catalog` 并在写盘前校验（凭据类字段 → `descriptor_catalog_contains_credential`，端点类字段 → `descriptor_catalog_forbidden_field`）。
 
