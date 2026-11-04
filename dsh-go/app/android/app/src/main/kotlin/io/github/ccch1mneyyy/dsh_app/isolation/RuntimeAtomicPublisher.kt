@@ -205,5 +205,37 @@ internal class RuntimeAtomicPublisher private constructor(
                 throw if (error is RuntimeDataFailure || error is Error) error else RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
             }
         }
+
+        /** Build a publisher on an already held Main directory capability.
+         *
+         * Ownership is copied: the publisher owns a duplicate descriptor, so
+         * closing the publisher never invalidates the caller's capability and
+         * closing the capability never breaks the publisher. The directory is
+         * never re-resolved by path, so a renamed parent or a replacement
+         * symlink cannot redirect these writes. Publishers derived from the same
+         * directory share its mutation gate. */
+        fun openForHeldDirectory(held: RuntimePrivateDirectory, kernel: RuntimePublicationKernel? = null,
+                                 maxBytes: Int = 1024 * 1024,
+                                 syncDirectory: (FileDescriptor) -> Unit = { Os.fsync(it) }): RuntimeAtomicPublisher {
+            // Refuse before touching native code or copying a descriptor.
+            held.requireWorker()
+            if (maxBytes !in 1..8 * 1024 * 1024) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+            // Resolve/load JNI only after Main/worker admission, before any
+            // descriptor is copied. An unsupported kernel has no fallback.
+            val implementation = try { kernel ?: NativeRuntimePublication }
+                catch (_: LinkageError) { throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }
+                catch (_: Exception) { throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }
+            // Copy the capability: a publisher must never close a borrowed cap,
+            // and a failed construction must leave the caller's cap open.
+            val owned = held.duplicate()
+            var mutationLock: RuntimeDirectoryMutationLock.Lease? = null
+            try {
+                mutationLock = RuntimeDirectoryMutationLock.acquire(owned)
+                return RuntimeAtomicPublisher(owned, implementation, maxBytes, syncDirectory, mutationLock)
+            } catch (error: Throwable) {
+                try { owned.close() } finally { mutationLock?.close() }
+                throw if (error is RuntimeDataFailure || error is Error) error else RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+            }
+        }
     }
 }

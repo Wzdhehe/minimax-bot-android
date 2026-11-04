@@ -58,6 +58,24 @@ internal class RuntimePrivateDirectory private constructor(
         } catch (_: LinkageError) { throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }
         finally { try { child?.close() } catch (_: Exception) { } }
     }
+    /** Copy this capability without re-resolving its path. The copy owns its
+     * own descriptor, so closing either side never invalidates the other, and
+     * a renamed parent or a replacement symlink cannot redirect the copy. */
+    @Synchronized fun duplicate(): RuntimePrivateDirectory {
+        requireWorker()
+        var copy: ParcelFileDescriptor? = null
+        try {
+            val cloned = descriptor.dup()
+            copy = cloned
+            val result = RuntimePrivateDirectory(file, cloned, ownerUid, depth)
+            copy = null
+            return result
+        } catch (_: Exception) {
+            throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        } catch (_: LinkageError) {
+            throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        } finally { try { copy?.close() } catch (_: Exception) { } }
+    }
     @Synchronized override fun close() {
         if (closed) return
         closed = true
