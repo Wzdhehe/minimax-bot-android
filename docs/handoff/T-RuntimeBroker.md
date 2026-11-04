@@ -28,6 +28,8 @@ Node mutation **c8e702d/41779493946 API26/35各35项已通过**，artifact132991
 
 最新append CI：888aa77/41780482419 API35 artifact13299282270/t40通过，API26 artifact13298689447/t40-f1-native_data-lc89失败，位置为transport故障夹具的replace，非整阶段通过。XML下载受限，无完整堆栈；源码显示fake不消费body时六次快速调用可遇四writer的pre-IPC backpressure。只修夹具为按真实wire消费body/EOF并断言4次transact+2次body，保留生产限额/unknown语义、不sleep或重试，两个验收APK1m32s（71 tasks/10 executed/61 up-to-date），原因解释待新44项CI验证，详见T-RuntimeFiles。暂停其他新功能先解决此失败。
 
+最新设备复核：c8e506e/41781117518 API26/35各44项通过（artifact13299313672/13298644649）；transport夹具修正78d49f5/41781774323两个job也success，各44项通过（13300155196/13299303575）。原888aa77/API26首次失败保留，后续可继续新功能，不再把待CI当当前状态。原模型/Key/两PID/WAL断言仍全部保留；只有组件/固定脚本证据，正式Bot APK/真实provider/ARM64真机未验证。
+
 > e03b997/run41686820725的SDK route矩阵已API实查API26/35 success；以下待CI是实现当轮状态。正式resolver/启动器仍未接；FD VFS 的6605508/41700450899已定位Main含目录FD的IPC发送失败，SQLite未执行，不能称持久化已解决。后续46c1c07/run41703671145的四普通文件FD方案已API26/35通过（含WAL、两新PID与既有Key/模型断言）；仍无完整产品runtime，详见 [T-Persistence](T-Persistence.md)。
 
 Main持久数据库文件owner本阶段已加入生产源码，验收Node直接使用；固定四数据FD且不截断已有文件，隔离UID必须拒绝调用owner。两个APK43s构建、Python22过；44c0190/run41760010243的API26/35已各7项通过（hardlink按平台/owner分支边界记录）；完整lease/进程撤销、model resolver/启动器仍缺，见[T-NativeDataFiles](T-NativeDataFiles.md)。

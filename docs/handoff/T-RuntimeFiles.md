@@ -1,9 +1,29 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-RuntimeFiles：Main授予的有界文件提交能力（2026-11-04）
 
-**Main文件移动/删除、显式IPC、Node调用已分别取得API26/35各35项证据（最新Node c8e702d）。append候选888aa77在API35各40项过、API26为40项1失败；Main子目录c8e506e的44项另待CI。当前正修正transport故障夹具的输入消费/边界断言，失败详情见下。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 不修改vendor，不回退同UID Agent/shell。
+**Main文件移动/删除、显式IPC、Node调用已分别取得API26/35各35项证据（最新Node c8e702d）。append候选888aa77首次API26有1失败，历史保留；后续Main子目录c8e506e与transport夹具修正78d49f5已各自API26/35各44项全过，详情见下。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 不修改vendor，不回退同UID Agent/shell。
 
-## 888aa77 API26失败与transport夹具修正（最新）
+## 最新44项设备结果（子目录与transport夹具修正）
+
+**c8e506e/run41781117518 success**：
+
+```text
+API26 id13299313672: node-candidate-results-api-26-t44-f0-e0-s0-passed-l0
+API35 id13298644649: node-candidate-results-api-35-t44-f0-e0-s0-passed-l0
+```
+
+该版本包含append/目录但仍是旧transport夹具，首次888aa77失败不能被抹去。
+
+**78d49f5/run41781774323 两job均success**，输入消费/边界断言修正后：
+
+```text
+API26 id13300155196: node-candidate-results-api-26-t44-f0-e0-s0-passed-l0
+API35 id13299303575: node-candidate-results-api-35-t44-f0-e0-s0-passed-l0
+```
+
+新夹具实际执行、原五append/四目录及旧模型/Key/WAL/两PID回归保留。证明这两个模拟器版本上的组件与固定脚本通过；物理真机/ARM64执行、完整官方Bot/正式launcher/真实provider仍未验证。下面“待新CI”是实现当轮记录。
+
+## 888aa77 API26失败与transport夹具修正（后续78d49f5已通过）
 
 run41780482419：
 
@@ -324,7 +344,7 @@ OK (32 tests)
 
 ## 后续
 
-1. c78faca失败job重跑31项、42fba3a Main35、c1b9aee IPC35及c8e702d Node35已确认；888aa77 API35 t40通过/API26 t40 f1。先查transport夹具修正后的44项与c8e506e结果，不混用旧run；新功能暂停到这个失败得到验证。
+1. c78faca失败job重跑31项、42fba3a Main35、c1b9aee IPC35及c8e702d Node35已确认；888aa77 API35 t40通过/API26 t40 f1。78d49f5夹具修正与c8e506e都已各44项通过，可继续后续实现；首次失败不抹去，不混用旧run。
 2. 移动/删除IPC和Node已通过；有界append候选另查40项。本轮只增加Main子目录cap，不向Agent发目录FD；后续须设计Main选择的子scope/目录操作权限、关闭/drain与Node调用，不能直接把Agent路径当新的Root。
 3. 有界append和Main API目录协调已加入候选；继续扩展真正受控FS所需的stat/list/mkdir/FileHandle/大日志与所有写者约束，适配原JSONL/MemoryStore并运行原恢复测试；不要全局把link改成rename。
 4. full-ICU/正式launcher/model resolver、可信Bot身份与SQLite lease另见HANDOFF，仍未完成。
