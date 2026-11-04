@@ -59,6 +59,10 @@ env -u GH_TOKEN -u GITHUB_TOKEN git ls-remote --heads origin main dev/integratio
 | 夹具修正后的完整回归 | 41781774323，78d49f5 | API26 13300155196、API35 13299303575，各t44/f0/e0/s0；success |
 | 模型native/Android broker回归 | 41781117515 / 41781117566，c8e506e | 两run均success；不能说新增真实provider验收 |
 | 文档CI | 41784617417，860563e | Documentation relative links success；这是文档检查，不构建APK |
+| held-cap publisher 首轮 | 41790384428，7ebc42f | **failure**：artifact `t49-f1-e0-s0-closed_data-lh83`；新测试先关了 publisher 又用已关的 publisher，实现正确、测试时序写错 |
+| held-cap publisher 修一次 | 41792577317，7348fb6 | **failure**：artifact `t49-f1-e0-s0-assertion-lh86`；第二个 publisher 对已存在文件用 publishIfAbsent，正确返回 ALREADY_EXISTS，断言写错 |
+| held-cap publisher 通过 | 41794661470，d558d1d | API26 artifact 13305711005、API35 13305117892，各 `t49-f0-e0-s0-passed-l0`；44 原有 + 5 新增全过 |
+| descriptor 设备测试 | 41794831403，0f88f0f | API26 artifact 13305641051、API35 13305471825，各 19 项 0 失败；含新增 3 项 RuntimeDescriptorTest |
 
 API26首次失败定位transport夹具的replace（lc89），只取得有限artifact/check信息，未取得完整XML堆栈。源码显示原fake立即回false/异常、不消费pipe，六次快速binary调用可先撞到4-writer的**transact前**UNAVAILABLE；修正夹具按真实wire消费声明长度/EOF并计数，不sleep/不重试。后续44项通过与首次失败都保留，不把第一次失败涂成通过，也不把推断写成已读堆栈。
 
@@ -212,7 +216,7 @@ Flash的检查器原交付38测试/9坏链接已复现，修复后39测试；新
 本轮按用户指示把重点从"组件验收"转到"把 Bot App 做完"。读官方 Bot 源码、钉死的 mcode fork 与 fork 的 webui 服务端后，**设备端 runtime 接线有三处硬缺口**，都还没有代码：
 
 1. **rootfs 里没有 Bot 与 mcode。** `dsh-go/runtime/build-runtime.sh` 只打包 Ubuntu Base + Node v24.22.1 + `@deepseek-ai/dsh` 引擎 + proot（产物 `runtime/out/<abi>/assets/runtime/rootfs-<abi>.tar.xz` + `manifest.json`，`manifest.launch.argv` 才是启动命令模板）。**mcode fork、官方 Bot（`runtime/vendor/minimax-bot`）、host adapter（`runtime/minimax-bot-host`）都没有进 guest**。引擎切换 = 往 rootfs 里装这三样 + 改 `launch.argv`。
-2. **descriptor 只有 Node 一半。** `runtime/minimax-bot-host/runtime-descriptor.mjs` 一直宣称"由 Android 宿主写入 0600 的 `runtime-descriptor.json`，runtime 读回"，但**Kotlin 侧此前完全没有实现**。本轮补上 `app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/RuntimeDescriptor.kt`：写入 app 私有目录（即 guest 的 HOME，PRoot 侧 `env["HOME"]=context.filesDir`），`O_EXCL|O_NOFOLLOW` + rename，落地后校验是 owner-only 普通文件；Node 侧契约同步扩展为可选 `broker: {baseUrl, token}`（native model broker 会话，guest 发模型请求要用）。设备用例在 `app/android/app/src/androidTest/.../runtime/RuntimeDescriptorTest.kt`。
+2. **descriptor 只有 Node 一半。** `runtime/minimax-bot-host/runtime-descriptor.mjs` 一直宣称"由 Android 宿主写入 0600 的 `runtime-descriptor.json`，runtime 读回"，但**Kotlin 侧此前完全没有实现**。本轮补上 `app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/RuntimeDescriptor.kt`：写入 app 私有目录（即 guest 的 HOME，PRoot 侧 `env["HOME"]=context.filesDir`），`O_EXCL|O_NOFOLLOW` + rename，落地后校验是 owner-only 普通文件；Node 侧契约同步扩展为可选 `broker: {baseUrl, token}`（native model broker 会话，guest 发模型请求要用）。设备用例在 `app/android/app/src/androidTest/.../runtime/RuntimeDescriptorTest.kt`。**设备已验**：41794831403 API26/35 success，各 19 项、含新增 3 项 descriptor 用例、0 失败（artifact 13305641051 / 13305471825）；Node host 41794831396 success（Windows 上那 4 项失败是平台差异，见第12节）。
 3. **设备侧没有任何东西启动 Bot 服务。** `startBotService`（`runtime/minimax-bot-host/service.mjs`）目前**只有宿主测试在调用**。它是官方 Bot 的 HTTP 服务入口（自带 `authorizeRequest` 要求的 `Bearer <token>` 鉴权、workspace 解析、provider broker），Dart 侧 `MiniMaxBotApi` 本来就支持自定义头，dev 入口 `lib/dev/minimax_bot_main.dart` 只是硬编码 `http://127.0.0.1:8788` 且**不带 token**，所以连真实服务都连不上。
 
 ### mbot 跑在 mcode 上的接缝（已读上游源码确认）
