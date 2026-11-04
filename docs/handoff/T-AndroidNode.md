@@ -1,6 +1,14 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+## 修复后新producer状态（收尾实查）
+
+3d686ee已推并触发**41826964330**，现整体**success**：build（含metadata/归档/upload）和API26/35 verify全部success。两verify日志均Starting 49 tests后BUILD SUCCESSFUL，原用例包含Intl/Key边界；source未prepare-sqlite，因此仍不是新ICU+SQLite组合验收。source XML下载遇HTTP403，未本地解析JUnit明细，不为其补造f/e/s计数。
+
+artifact **13318613900 / node-full-icu-verification-input / 45,047,372字节**；progress13319082930为success-cache-success。当前源码运行原verify-source-run.py通过五输入/仓库/分支/成功producer校验，未放宽守卫。candidate **41826964500** API26/35也success，结果artifact均t49-f0-e0-s0-passed-l0，但PINNED_SOURCE_RUN_ID为空，仍用默认无Intl release。
+
+收尾未修改PINNED_SOURCE_RUN_ID、未启动新组合矩阵。**下一项**：确认artifact未过期、原authority继续通过，再只把android-node-probe.yml的既有PINNED_SOURCE_RUN_ID设为41826964330，单独commit/push验当前SQLite/文件/模型/Key组合。consumer workflow不在五producer输入内；不必重编Node。确切验收与约束见[NEXT-AGENT第4节](NEXT-AGENT.md)。旧41757171111 failure与新run分开，不rerun旧commit期待修复。
+
 ## 最新：第二次编译已链接成功，修复末尾版本报告（2026-11-04）
 
 **41757171111 attempt2实际failure，不再运行中**。已取得完整失败step日志：09:49开始，11:27:36到`[5885/5885] SOLINK lib/libnode.so`，完成strip后110.72MiB和headers安装；随后原`scripts/versions.py`抛出`Build-time version reporting requires --with-intl=none.`，导致record/build-info/归档未完成，verify跳过。不是新的编译超时、内存或磁盘错误。progress artifact13317826081为`node-full-icu-progress-failed-cache-success`，cache保存success；统计**3211/5749命中（55.85%）、2538 miss，cache约0.3/3.0GB**，实际证明第一次保存/第二次复用已生效。
@@ -14,13 +22,13 @@
 
 本地完整Python **32项通过**（source recipe现4项），py_compile/diff通过。真正下载并核验原build.py和versions.py的摘要，生成的两个脚本AST解析成功。另以钉点Node原头文件、已校验archive的mobile头和**模拟full-ICU配置**执行真实生成reporter，得到Node24.22.2、ICU78.3、Unicode17.0、26个字段；这是header/parser smoke，**不是本地新Android编译或Intl执行证据**。
 
-producer权威五输入的校验**没有放宽**。其中两输入发生合理修复，旧失败run当然不能作为当前可复用的成功producer；必须等待新push触发的新producer build/upload成功，再按原verify-source-run校验复用。当前仍没有可下载的成功full-ICU归档或新的Intl设备结果；不要再次rerun旧commit来期待修复生效。
+producer权威五输入的校验**没有放宽**。其中两输入发生合理修复，旧失败run当然不能作为当前可复用的成功producer；必须等待新push触发的新producer build/upload成功，再按原verify-source-run校验复用。上段是修复实现时的验证边界；新的成功归档见本文文首41826964330，Intl设备验证现已success，见文首。不要再次rerun旧commit来期待修复生效。
 
 
-> 最新API实查（2026-11-04 Linux续写）：full-ICU producer **41757171111 attempt1失败**，progress artifact13302870059为`node-full-icu-progress-budget_exhausted-cache-success`，cache-save success但无完整库，verify skipped。已执行`gh run rerun 41757171111 --failed`，**attempt2正在compile**；其cache restore/preflight step成功，不代表已确认cache hits。五个producer权威输入未改，仍无完整full-ICU产物/Intl设备证据；默认候选无Intl。后续先核对attempt2最终产物/cache结果，不重复启动并行长编译。
+> 历史快照（attempt2尚未结束时，已由文首结果覆盖）：full-ICU producer **41757171111 attempt1失败**，progress artifact13302870059为`node-full-icu-progress-budget_exhausted-cache-success`，cache-save success但无完整库，verify skipped。已执行`gh run rerun 41757171111 --failed`，**attempt2正在compile**；其cache restore/preflight step成功，不代表已确认cache hits。五个producer权威输入未改，仍无完整full-ICU产物/Intl设备证据；默认候选无Intl。后续先核对attempt2最终产物/cache结果，不重复启动并行长编译。
 
 
-> 2026-11-04最新：**46c1c07/run41703671145的四普通文件FD候选已API26/35通过**，每台t1/f0/e0/s0，含两次不同PID、WAL/Key/模型。full-ICU重跑41680254279在compile330分钟超时失败、verify skipped，无产物；不能继续写运行中。详见T-Persistence及HANDOFF。
+> 较早快照（已由文首结果覆盖）：**46c1c07/run41703671145的四普通文件FD候选已API26/35通过**，每台t1/f0/e0/s0，含两次不同PID、WAL/Key/模型。full-ICU重跑41680254279在compile330分钟超时失败、verify skipped，无产物；不能继续写运行中。详见T-Persistence及HANDOFF。
 
 ## 缓存workflow配置修复
 

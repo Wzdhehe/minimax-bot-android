@@ -1,46 +1,27 @@
-# 最新接手入口（2026-11-04）
+# 开发接手入口（2026-11-04收尾）
 
-**下一位先读：[详细收尾与接手顺序](handoff/NEXT-AGENT.md)**。包含真实完成边界、最近commit/CI/artifact、Main/Node文件契约、下一项建议、工具链现状与复现命令；不是完整App已完成报告。
+**先读[当前接手合同与完整快照](handoff/NEXT-AGENT.md)**。该文已重写为单一当前版本，列明提交/CI、唯一下一项、允许修改面、验收及禁止推断；旧交接保留在Git历史。下面大表和专题内的逐轮记录只作证据背景，不能当当前TODO。
 
-只在 **feat/t-plugins** 连续开发、阶段验证后及时push并更新文档。用户授权持续推进；不新开分支、不动main/dev/integration、不force push、不建PR、不发布APK。
+用户已要求收尾，等待额度恢复再继续；本轮不再扩功能。当前只在**feat/t-plugins**，阶段成果已推；不另起分支、不动main/dev/integration、不force、不PR、不发布APK。最终纯文档HEAD以远端为准。
 
-## 最新CI与Android ICU收尾
+## 当前已完成与未完成
 
-真实宿主/资源阶段**f937a3e已推，CI全success**：host41824727445（780资源、构建4项、身份8 cases、真实完整factory/Bot API冷启动重开1项，已取日志，CI真实host约3.18秒）、native41824727414、docs41824727413、scope41824727426。仍无模型turn或Android产品启动。
+- d31b379：通过原RuntimeServices精确构建接缝注册内置服务身份，不造第二gateway、不写17ports；8真实gateway/facade生命周期cases过，session执行为桩。
+- f937a3e：780 canonical资源逐blob/inventory校验，构建4项；真实原factory/gateway/session/SQLite + 官方Bot JSON冷启动/重开/鉴权/创建/持久化读回1项（无桩factory）过。**host41824727445、native41824727414、docs41824727413、scope41824727426全success**，已读日志。
+- 3d686ee：修Android full-ICU最后metadata报告，要求真实full配置、读ICU/Unicode头、Ninja前预检；Python32/真实头parser smoke过。新producer **41826964330的build/upload已success**，artifact13318613900为45,047,372字节，authority检查已本地通过；**API26/35 verify也均success，日志均启动49测试后BUILD SUCCESSFUL，Intl/Key验证已过**。candidate41826964500 API26/35均success（结果artifact t49/f0/e0/s0），但它仍用无Intl默认release；新ICU与SQLite组合尚未验证。
+- 旧41757171111 attempt2已实际完成5885/5885和110.72MiB库strip，失败在原versions.py只允许intl=none；cache3211 hits（55.85%）且保存成功。旧失败run不能复用，也不要rerun旧commit期待新修复。
+- **没有模型turn、可用Android Bot APK、真实provider、ARM64/物理真机或profile证据。** 默认App仍DSH；native catalog/model resolver、隔离模型/文件FD、正式启动器、每Bot可信MCP/自主任务仍缺，市场写入关闭。
 
-full-ICU producer41757171111 attempt2已失败，现已读到实际原因：**5885/5885完成链接、110.72MiB库strip后，原版本报告只支持intl=none而失败**。缓存真实3211 hits/5749（55.85%）且再次保存成功。正在修正生成metadata helper并将检查前置到Ninja前；32项Python过，真实头文件parser smoke过，不改编译flags/cache namespace或放宽producer authority。新producer需从修复commit自动触发，旧run不能复用为成功。详见[T-AndroidNode最新节](handoff/T-AndroidNode.md)。
+## 接手第一项（必须按顺序）
 
-## 最新阶段：真实fork宿主与Bot JSON链已宿主验收
+1. 41826964330/41826964500已实查success，不再重复编译。先核artifact未过期和原五输入authority仍通过。
+2. **唯一下一项**：只把android-node-probe.yml的既有PINNED_SOURCE_RUN_ID设为41826964330，单独commit/push跑当前组合矩阵；source自带verify未prepare-sqlite，不能代替该验收。收尾未改此值。禁止伪造SHA/放宽authority；细则见NEXT-AGENT第4节。
+3. 上项明确后先核用户提供的新发行包 **@minimax-web/minimax-code** 的准确来源/版本/现成接口，见[查证任务](research/webui-published-package.md)。官方npm metadata暂404不证明不存在，也不能猜同类包替代。本轮未安装/切pin。再按[NEXT-AGENT第5节](handoff/NEXT-AGENT.md)做native非密钥metadata/model resolver/受控binding。先实查fork类型/模型key，不发明协议，不向BYOK/env放真实Key，不用假回答展示成功。
+4. native I/O与独立UID启动器没验收前，**禁止用同UID DSH/PRoot跑完整Agent**。不重新搭页面、不换Nyral引擎、不适配MiniApp、不开放安装来「绕过卡点」。
 
-canonical资源已纳入pin构建：**780个文件逐blob验证**，源/目标完整inventory检查可拒绝Git ignore内的额外文件；完整图/资源4项测试通过。新增[真实host probe](../dsh-go/tooling/runtime-host-probe/README.md)，固定40个直接依赖版本及npm transitive lock，禁lifecycle脚本，SHA256验证Linux-only SQLite。**原始真实factory/gateway/session/SQLite启动两次、Bot HTTP鉴权/创建/重开读回、关闭及旧port失效已本地通过（1/1、约13秒）**；详细证据见[T-RuntimeHost](handoff/T-RuntimeHost.md)。
+详解：[T-RuntimeHost](handoff/T-RuntimeHost.md)、[T-AndroidNode](handoff/T-AndroidNode.md)、[T-RuntimeBroker](handoff/T-RuntimeBroker.md)。工具链/复现命令及待决定的具体接口都在当前接手合同，文档没定清的不能自行包装为已完成。
 
-这次不再仅是session桩；但没有模型turn/真实provider或Android执行，原Mini App网页不适配。空provider配置的模型目录仍INVALID_ARGUMENTS，下一项是native非密钥metadata/model resolver及模型FD装配，之后继续隔离文件/正式启动器。当前默认App入口仍DSH，插件变更仍关闭。
-
-内置身份阶段**d31b379已推且CI全部成功**：host41821502362（含8生命周期cases及full graph）、native41821502190、docs41821502197、scope41821502161。本资源/真实host阶段的新CI待push后单独核对，不挪用d31b379结果。
-
-## 最新续写：内置服务身份与真实gateway接缝
-
-已新增宿主装配器：在钉点RuntimeServices创建gateway的位置接同一个原gateway，构造完成后注册固定内置服务ID和随机代次，随后复用原facade/agent-port；不造第二个gateway，不手写session端口，不接受请求指定身份。close/abort撤销arena、取消排队/在途请求并阻止旧port复活，并发close等待同一清理。**真实gateway/facade的8项生命周期用例已本地通过**，session/model执行为桩，完整图构建仍单独验收；详见[T-RuntimeHost](handoff/T-RuntimeHost.md)。
-
-真实完整factory的临时Linux启动探测已越过SQLite初始化；缺内置Agent资源的问题已用原copy helper复现/确认，临时补资源后的旧control bundle已启动/关闭成功。正把资源纳入pin构建并验新Bot包装入口。尚未证明完整runtime/Bot产品启动，也未修改正式Android启动器/Key路径。每Bot MCP caller绑定仍缺，不能将内置服务arena注册等同自主任务身份已验。
-
-## 本轮续写：启动会话鉴权（2026-11-04）
-
-从远端7967b9d接手。修复实际 Bot listener 忽略 descriptor token 而另生成凭据的问题；可信启动器可显式传 `authToken`，输入错误在文件/监听副作用前拒绝。Node descriptor 端口/token校验与Kotlin一致，host CI加入descriptor测试。**宿主28项通过**（含实际HTTP鉴权、错误角色token拒绝、重启旧token拒绝）；未修改正式Android启动器，完整APK/真机/真实provider仍**未验证**。详细代码定位、测试命令、剩余装配缺口与环境见[NEXT-AGENT最新快照](handoff/NEXT-AGENT.md)。
-
-重新实查发现：fork公开的 `host.application.miniAppAgent` 不提供 `registerArena`；旧第11节「从公开应用对象注册caller」不是可直接执行的API。下一阶段须接真实内部gateway的宿主注册/撤销生命周期，不能伪造caller，也不能为省事直接用DSH同UID/PRoot跑完整Agent。`miniAppSurface` 已可省略并报OPEN_UNAVAILABLE，继续不适配Mini App容器。
-
-本轮代码阶段**5873c98**已推送。后续加入**完整fork宿主构建图检查**：实际打包2,124个上游输入（逐blob校验）、原session-ports和官方Bot服务，生成13,296,231字节partial bundle；49个外部包引用保持external，3项真实集成测试通过且不执行runtime。已接CI，命令与边界见[钉点文档](UPSTREAM-RUNTIME.md)。这消除了「只有契约文件能打包」的验证空白，仍不代表rootfs/正式启动器/插件市场已运行；动态better-sqlite3等加载及资源仍须单独处理。
-
-同时修正native Key测试遗留的descriptor四字段断言（现有broker字段须严格断言为null），本地完整JUnit32/Node46通过；289f88f的native CI失败日志已读到，JUnit32通过、Node45/46，其他host/docs/scope CI成功。修复后完整native脚本结果及新CI以[NEXT-AGENT](handoff/NEXT-AGENT.md)最新记录为准，不能将旧失败run描述成成功。
-
-本轮随后复核并修复Node descriptor的四处问题：叶文件软链写穿、父目录软链绕开workspace/private排除、writer未投影额外字段、extra环境变量绕过allowlist。四项均先复现失败再修复；现在私有stage原子rename、父路径真实位置校验、同一FD读取/owner权限检查、固定字段序列化及两路同白名单。它仍依赖宿主私有目录所有权，不能替代Main-held cap/独立UID；native路径API及正式启动器本轮未改。本地完整宿主32项、JUnit32项、native/Node50项全通过且0 skipped；文档31份无坏链接，详细验证记录见[NEXT-AGENT](handoff/NEXT-AGENT.md)。
-
-5873c98的远程CI已实查：**host41813024238、native41813024224、docs41813024207、scope41813024280全success**，日志含完整图3/3、JUnit32/Node46及Android组件构建2m29s。这是路径硬化前的阶段证据，不冒充后续新CI。
-
-**最新代码24bdeca的CI也已实查全success**：host41814570291（宿主32、pin23、完整图3）、native41814570242（三个job均成功）、docs41814570339、scope41814570376。新路径/环境回归已在此代码commit运行；不是挪用5873c98结果。没有新增设备仪器运行，也没有完整Bot APK/真实provider/真机证据。纯文档收尾SHA以远端ref为准。
-
-## 当前状态
+## 累积组件证据索引（历史记录，当前任务以上文为准）
 
 | 能力 | 已取得的证据 | 尚未完成 |
 |---|---|---|
@@ -65,7 +46,7 @@ canonical资源已纳入pin构建：**780个文件逐blob验证**，源/目标�
 | 有界append/目录协调 | Main按目录FD inode协调publish/replace/move/remove/append；新增APPEND显式权限与Node JNI，五新增设备用例、原Key/WAL回归保留，两个验收APK2m34s、Python29/host1/scope4/actionlint过 | 888aa77首次API26 t40 f1保留；后续**c8e506e与78d49f5各自API26/35均44项通过**（含追加、目录与夹具修正）；O(文件大小)整文件原子追加/总量1MiB，不是O_APPEND/FileHandle/大JSONL或跨进程锁，见T-RuntimeFiles |
 | Main子目录cap | 固定openat/mkdirat、私有0700/owner/NOFOLLOW、8级上限；四新增用例、两个验收APK1m33s、Python30/scope4及双ABI JNI/16KiB过 | **c8e506e/41781117518及78d49f5/41781774323均API26/35各44项通过**；只Main API，未给Agent目录FD/IPC/Node，不是完整FS，见T-RuntimeFiles |
 | **设备端 runtime 接线（当前阶段）** | 已查清三处硬缺口并补其一：Kotlin 侧 descriptor 写入（0600/O_EXCL/O_NOFOLLOW/rename/owner-only 校验）+ Node 契约同步扩展 broker 会话；**设备已验**：41794831403 API26/35 success（各19项、含新增3项descriptor用例、0失败），41794661470 node矩阵 API26/35 各49项0失败（44+5 held-cap），host 41794831396 success。**pin 已扩展为按整树 blob 校验**（b0d570c），fork runtime 现在可以进 bundle | rootfs 仍只装 DSH 引擎，mcode fork/官方 Bot/host adapter 未进 guest；设备侧无人启动 Bot 服务；**产品 APK 未产出**（Windows 上卡在 Kotlin 增量缓存，见 NEXT-AGENT 第13节）；见 NEXT-AGENT 第11节 |
-| full-ICU Node | 旧41630373256取消、41680254279超330分钟失败。新41757171111 attempt1预算失败/cache保存，attempt2实际链接5885/5885成功后metadata失败，artifact13317826081/cache success，3211 hits（55.85%） | 已补full-ICU版本报告与Ninja前预检，本地Python32/真实header smoke过；两执行输入变化，新producer待push后观察；不放宽authority，不复用旧失败run。尚无成功归档/Intl设备证据 |
+| full-ICU Node | 3d686ee/run41826964330的build、API26/35 verify全部success；成功归档artifact13318613900可按原authority复用。旧41757171111失败已定位/修复，不rerun旧commit | 下一项接consumer既有PINNED_SOURCE_RUN_ID，验新ICU+当前SQLite/FS/模型/Key组合；产品runtime、ARM64/真机未验证 |
 
 正式入口仍DSH；上述都是组件/独立验收APK/假provider，**没有完整mcode/官方Bot产品运行、完整Flutter Bot APK或真实模型验收**。插件变更仍关闭。持久化、可信Bot身份/MCP、工具权限及生产启动器仍缺。不得因组件通过就宣称App已完成。
 
@@ -130,14 +111,9 @@ M3.1 Flash已提交78c8293（仅tooling/docs-links内4文件），本工作区�
 
 ## 接下来优先做
 
-1. 旧full-ICU 41757171111 attempt2已定位「链接后版本metadata不支持Intl」失败，缓存已有实际命中；修复只改生成metadata和预检，关注修复commit的新producer。须build/upload success及后续Intl/SQLite/模型/Key设备矩阵才能结论成功，勿重跑旧commit期待新代码。
-2. 按[NEXT-AGENT最新快照](handoff/NEXT-AGENT.md)接fork完整宿主、可信内部gateway注册和native/独立UID模型/文件能力。held-cap publisher已完成（41794661470 API26/35各49项过），Kotlin descriptor也已设备验证（41794831403各19项过），本轮补了实际Bot服务会话token一致性。不要重做旧held-cap建议，不手写17个会话端口、不伪造注册、不回退同UID shell。rootfs/正式启动器仍缺；单纯改DSH argv不能算安全集成。
-3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
-4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
-5. 总工作区下实现项目管理与 Bot 绑定，遵守路径防护并分开 cwd 和访问许可；补资料库、附件、群聊/记忆/审批等全量 parity 未完成项。
-6. 完整 APK、真机权限/Keystore/通知/后台/手机竖屏/平板横屏及 profile 性能验收。没有设备时如实标未验证。
+唯一当前顺序见本文顶部和[NEXT-AGENT第4—6节](handoff/NEXT-AGENT.md)。旧分轮TODO不再重复列在这里，以免接手模型重做已完成的gateway/held-cap/descriptor或重编已成功的Node。
 
-## 本环境验证工具
+## 历史环境记录（当前路径以NEXT-AGENT第8节实查为准）
 
 环境曾中断，恢复后 `/workspace` 保留，`/tmp` 清空并部分重建。路径须实查。
 
@@ -147,7 +123,7 @@ M3.1 Flash已提交78c8293（仅tooling/docs-links内4文件），本工作区�
 - Widget测试需 `DSH_TEST_FONT_DIR=/workspace/toolchains/test-fonts`；只暂存明确路径，检查pub/analyze产生的无关修改。
 - 完整命令见T-RuntimeBroker；组件APK编译不是完整Flutter Bot APK。
 
-## 最终验证结果
+## 早期UI阶段验证结果（保留来源，不是本次收尾状态）
 
 - 最后完整设置包测试 **27 passed**；包括 4 个 motion 和 5 个插件测试。插件初轮发现测试 tooltip 定位错误和预览期间加载动画未停导致 settle 超时，均修正后完整通过。
 - 最新插件 App 适配/入口 + 设置回归 **3 passed**；此前动画/会话/资料/通知/额度相关 **12 passed**，最终 UI 改动后相关子集 **7 passed**。
