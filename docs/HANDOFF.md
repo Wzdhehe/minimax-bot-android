@@ -14,9 +14,9 @@
 
 ## 接手第一项（必须按顺序）
 
-1. 41826964330/41826964500已实查success，不再重复编译。先核artifact未过期和原五输入authority仍通过。
-2. **唯一下一项**：只把android-node-probe.yml的既有PINNED_SOURCE_RUN_ID设为41826964330，单独commit/push跑当前组合矩阵；source自带verify未prepare-sqlite，不能代替该验收。收尾未改此值。禁止伪造SHA/放宽authority；细则见NEXT-AGENT第4节。
-3. 上项明确后先核用户提供的新发行包 **@minimax-web/minimax-code** 的准确来源/版本/现成接口，见[查证任务](research/webui-published-package.md)。官方npm metadata暂404不证明不存在，也不能猜同类包替代。本轮未安装/切pin。再按[NEXT-AGENT第5节](handoff/NEXT-AGENT.md)做native非密钥metadata/model resolver/受控binding。先实查fork类型/模型key，不发明协议，不向BYOK/env放真实Key，不用假回答展示成功。
+1. **组合矩阵已跑通（2026-11-04 20:54 实查）**：a2c17d5只把android-node-probe.yml的既有PINNED_SOURCE_RUN_ID设为41826964330，未动五个producer权威输入、未放宽任何校验。**41831847047整体success**：API26/35两job均success，Node probe counts **tests=49 failures=0 errors=0 skipped=0**；结果artifact 13324805400(api-26-t49-f0-e0-s0-passed-l0)、13322759984(api-35-t49-f0-e0-s0-passed-l0)。本轮prepare用的是钉住的full-ICU源包，`prepare-probe.py`核对config.gypi后拒绝非ICU源并把`requiresIntl`置真，设备侧`IsolatedNodeModelTest`因此**实际执行**Intl断言（zh-CN locale、Asia/Shanghai时区）——这比「同样49项」是更强的分支证据。仍**没有**真实provider/模型turn、产品APK、ARM64或真机结论。
+2. **唯一下一项**：按[NEXT-AGENT第5节](handoff/NEXT-AGENT.md)做native非密钥metadata投影与默认选择。字段映射已实查并写入[映射笔记](research/native-model-metadata-mapping.md)：native `apiFormat`四取值与fork注册api id一一对应；`provider.minimax_api`会在读取时被丢弃，故MiniMax BYOK必须投影到`minimax_api`树；配置落在`<dataDir>/config.yaml`；真实Key只留在native。仍需确定providerKey命名、metadata刷新时序、多binding路由与每Bot caller绑定（见笔记第4节）。不发明协议，不向BYOK/env放真实Key，不用假回答展示成功。
+3. 用户提供的发行包 **@minimax-web/minimax-code** 仍待确认：2026-11-04复查npm官方registry依旧404，搜索只见旧的`@fectivnfy112358/minimax-code-web`；按[查证任务](research/webui-published-package.md)继续等准确包页/安装命令，不猜同类包替代。本轮未安装/切pin。
 4. native I/O与独立UID启动器没验收前，**禁止用同UID DSH/PRoot跑完整Agent**。不重新搭页面、不换Nyral引擎、不适配MiniApp、不开放安装来「绕过卡点」。
 
 详解：[T-RuntimeHost](handoff/T-RuntimeHost.md)、[T-AndroidNode](handoff/T-AndroidNode.md)、[T-RuntimeBroker](handoff/T-RuntimeBroker.md)。工具链/复现命令及待决定的具体接口都在当前接手合同，文档没定清的不能自行包装为已完成。

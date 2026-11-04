@@ -1,6 +1,22 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+## 组合矩阵已接入钉住的full-ICU产物（2026-11-04 20:54 实查）
+
+**a2c17d5**只把`.github/workflows/android-node-probe.yml`的既有`PINNED_SOURCE_RUN_ID`填为**41826964330**：五个producer权威输入未动、校验未放宽、未编造SHA。**41831847047整体success**，两job均success：
+
+```text
+isolated-node (26)  success  12:44:19Z → 12:53:06Z   Node probe counts tests=49 failures=0 errors=0 skipped=0
+isolated-node (35)  success  12:44:19Z → 12:54:16Z   Node probe counts tests=49 failures=0 errors=0 skipped=0
+artifact 13324805400  node-candidate-results-api-26-t49-f0-e0-s0-passed-l0
+artifact 13322759984  node-candidate-results-api-35-t49-f0-e0-s0-passed-l0
+```
+
+**为什么这次比「同样49项」更强**：`prepare-probe.py`在带源包时核对`config.gypi`，`v8_enable_i18n_support`未开或`icu_small`非假即拒绝，并把`node-validation.json`的`requiresIntl`置真；设备侧`IsolatedNodeModelTest.kt:166-169`在该标志为真时**实际断言**`intlAvailable`、`zh-CN` locale与`Asia/Shanghai`时区。因此本轮跑的是ICU分支本身，而不是默认无Intl release的同计数。
+
+与上一轮default release候选（41826964500，均t49/f0/e0/s0）的差别正是这一点：计数相同，但断言集合不同。**仍然不是**真实provider/模型turn、产品APK、ARM64或物理真机证据；这三项仍需独立验收。
+
+
 ## 修复后新producer状态（收尾实查）
 
 3d686ee已推并触发**41826964330**，现整体**success**：build（含metadata/归档/upload）和API26/35 verify全部success。两verify日志均Starting 49 tests后BUILD SUCCESSFUL，原用例包含Intl/Key边界；source未prepare-sqlite，因此仍不是新ICU+SQLite组合验收。source XML下载遇HTTP403，未本地解析JUnit明细，不为其补造f/e/s计数。

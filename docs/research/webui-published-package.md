@@ -20,3 +20,7 @@
 6. 升级也必须保留native-only真实Key、无网络fallback、独立UID/FD、Main目录能力、不做远控/手机操控/Mini App容器、市场写入政策等边界。至少跑新的真实factory/Bot重开、身份/取消、native模型/Key回归；Android/真实provider另验。
 
 不在本轮收尾执行升级。准确来源未确认时，不让接手模型擅自npm install一个「看起来相似」的包，不编写假接口，不以发行包功能丰富为由宣称Android App完成。
+
+## 2026-11-04 20:5x 复查（组合矩阵推进期间）
+
+再次直接查询 npm 官方 registry：`https://registry.npmjs.org/@minimax-web/minimax-code` 仍返回 **404**；registry 搜索 `minimax-code` 只出现旧的 `@fectivnfy112358/minimax-code-web@0.1.0-preview.3`、`@minimax-ai/code` 等，**没有** `@minimax-web/minimax-code`。结论与上条一致：**这不是该包不存在的证据**，仍需用户给出准确包页/registry/安装命令。期间未安装、未切 pin、未用同类包替代。

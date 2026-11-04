@@ -102,6 +102,8 @@ runtime-host-probe固定40个直接依赖版本（核原pnpm-lock），transitiv
 
 ## 4. 接手第一项：先核对这些CI，不扩新功能
 
+> **2026-11-04 20:54 更新：本节末段的「下一项」已完成。** a2c17d5只把android-node-probe.yml的既有`PINNED_SOURCE_RUN_ID`填为41826964330（未动五个producer权威输入、未放宽任何校验、未编造SHA），**41831847047整体success**：API26/35两job均success，Node probe counts **tests=49 failures=0 errors=0 skipped=0**；结果artifact 13324805400(api-26-t49-f0-e0-s0-passed-l0)、13322759984(api-35-t49-f0-e0-s0-passed-l0)。本轮prepare用的是钉住的full-ICU源包：`prepare-probe.py`核对config.gypi后拒绝非ICU源并把`requiresIntl`置真，设备侧`IsolatedNodeModelTest`在该标志为真时**实际断言**`intlAvailable`、`zh-CN` locale与`Asia/Shanghai`时区，因此这是ICU分支的执行证据，不只是「同样49项」。仍**没有**真实provider/模型turn、产品APK、ARM64或真机结论。
+
 | run / 对应代码 | 收尾时状态与边界 |
 |---|---|
 | host41824727445 / f937a3e | success，日志已取：资源4、身份8 cases、真实host重开1，0 skipped |
@@ -109,6 +111,7 @@ runtime-host-probe固定40个直接依赖版本（核原pnpm-lock），transitiv
 | docs41824727413、scope41824727426 / f937a3e | 均success |
 | source41826964330 / 3d686ee | **整体success，build及verify(26)/(35)全部success**。日志两设备均Starting 49 tests后BUILD SUCCESSFUL；原验证包含Intl/Key断言。artifact13318613900（45,047,372字节），progress13319082930 success-cache-success。旧run未重跑 |
 | candidate41826964500 / 3d686ee | **整体及API26/35均success**；结果artifact两者均t49-f0-e0-s0-passed-l0。当前PINNED_SOURCE_RUN_ID仍空，默认release无Intl，因此不是新ICU产物的SQLite组合验证 |
+| candidate41831847047 / a2c17d5 | **整体及API26/35均success**；pin=41826964330后prepare的是钉住full-ICU源包，Node probe counts tests=49 failures=0 errors=0 skipped=0；artifact13324805400(api-26)、13322759984(api-35)均t49-f0-e0-s0-passed-l0。Intl断言实际执行（requiresIntl为真时断言zh-CN/Asia-Shanghai）。仍非真实provider/产品APK/真机 |
 | docs41826964360、scope41826964345 / 3d686ee | 均success |
 
 ```bash
@@ -126,7 +129,7 @@ env -u GH_TOKEN -u GITHUB_TOKEN gh run view 41826964500 --json status,conclusion
 5. candidate默认release的49项通过，也**不能证明Intl**。零skipped/相同计数不是相同功能路径证明。
 6. 记录commit/run/实际结果和未验证项，更新HANDOFF/T-AndroidNode；阶段push，不动main/dev。
 
-**下一项只接入已成功producer并验当前组合矩阵**：在android-node-probe.yml将既有PINNED_SOURCE_RUN_ID填为41826964330，其他输入/守卫/测试不变，单独commit/push后观察API26/35。这只改consumer workflow，不在五个producer权威输入内。若main未注册workflow_dispatch而返回404，不改main、不靠rerun旧commit；用上述既有pin方式。artifact已过期或五输入变化则先查证原因，不能填过期/失败run。
+**上项已完成**（a2c17d5 / 41831847047，见本节文首更新）。**下一项**：按第5节做native非密钥metadata投影与默认选择，字段映射实查见[映射笔记](../research/native-model-metadata-mapping.md)。本项只做非密钥投影与默认选择的最小可验阶段：真实Key留在native，投影里只出现供应商名/Base URL/模型清单/默认模型；仍要确定providerKey命名规则、metadata刷新时序、一个runtime下多binding路由、每Bot会话到MCP caller的可信绑定（映射笔记第4节）。不发明跨端协议，不把真实Key写进BYOK yaml/env/descriptor/log，未接broker时明确拒绝模型执行，不加假回答。
 
 收尾只读取得source/candidate日志和API状态；source XML下载遇HTTP403，未本地解析其JUnit明细，故不编造source的f/e/s计数（49是日志启动数）。candidate的t49/f0/e0/s0来自现有结果artifact名称；后续组合验收还须核实际JS分支，而不只计数。
 
