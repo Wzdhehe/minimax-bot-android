@@ -3,6 +3,21 @@
 
 **Node读取/size已585f082在API26/35各30项通过；stage FD改造c78faca已两版本31项过（API35首次0结果失败、重跑通过）。Main move/remove已42fba3a两版本35项通过；本轮新增显式权限IPC，设备待新CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 不修改vendor，不回退同UID Agent/shell。
 
+## Node move/rename/remove JNI（本轮，设备待新CI）
+
+验收linked binding追加三个固定异步方法：move(source,target)独占移动，rename(source,target)覆盖移动，remove(name)仅删普通文件。仍复用最多4个libuv任务与隔离Kotlin client→Main授予的文件cap；不传根、任意flags、目录FD、Key或nonce给JS。source/target仅字符串与有限长度/arity，Main再做完整basename/身份/操作权限检查。JNI进入mutation后结果丢失仍返回outcome_unknown，不能错误沿用查询的unavailable；remove只回removed或unknown，有限已知拒绝用code。
+
+固定APK脚本在**两次新PID**各创建临时文件→独占移动→读回/原名缺失→冲突保留双方→rename替换→读回→remove→缺失，并拒绝越界/同名/类型/arity/保留前缀；Main新增必需fileMutations字段与六项拒绝断言，精确目录最终仍仅原三文件。原六次模型认证注入、SSE/取消、Key/session/descriptor/env/log/实际文件与WAL两进程检查保留。只是固定脚本验收，不提供正式node:fs或生产launcher；不把通用link别名为move。
+
+当前已按钉点重准备Node JNI与SQLite addon，Python28/精确APK host1与git diff --check通过；同一恢复工具链、`/home/agent/.gradle`缓存，offline两个验收APK成功：
+
+```text
+BUILD SUCCESSFUL in 1m 11s
+71 actionable tasks: 17 executed, 54 up-to-date
+```
+
+无本地adb/真机。设备仍须查本轮新commit/run，不能使用下面c1b9aee或42fba3a的35项证明Node新分支执行。
+
 ## move/remove显式IPC授权（本轮，设备待新CI）
 
 v1追加MOVE/MOVE_REPLACE/REMOVE，不携带文件正文或目录FD。Main默认不授予移动/删除；MOVE要求allowMove，MOVE_REPLACE同时要求allowMove与allowReplace，REMOVE只由allowRemove授权。读取权、覆盖权、发布权均不能推导删除权。Main仍先核对真实isolated UID、nonce、控制Parcel预算、严格basename/保留前缀/不同源目标/无尾随字段，再admit操作；close之后拒绝，已进入mutation仍允许完成并drain。

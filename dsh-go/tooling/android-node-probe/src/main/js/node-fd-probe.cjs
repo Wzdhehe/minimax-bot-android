@@ -165,6 +165,38 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       invalidPath: await queryRefused('read', '../outside', 'runtime_data_invalid'),
       invalidMetadata: await queryRefused('size', '../outside', 'runtime_data_invalid'),
     };
+    probePhase = 'file_mutation';
+    async function mutationRefused(operation, args, code) {
+      try { await files[operation](...args); return false; }
+      catch (error) { return error.code === code; }
+    }
+    const first = new Uint8Array([17, 0, 255]);
+    const second = new Uint8Array([42]);
+    const created = await files.publish('node-move.tmp', first);
+    const moved = await files.move('node-move.tmp', 'node-moved.json');
+    const movedBytes = await files.read('node-moved.json');
+    const sourceMissing = await queryRefused('read', 'node-move.tmp', 'runtime_data_not_found');
+    const createdConflict = await files.publish('node-conflict.tmp', second);
+    const conflict = await files.move('node-conflict.tmp', 'node-moved.json');
+    const preserved = (await files.read('node-conflict.tmp'))[0] === 42 &&
+      (await files.read('node-moved.json'))[0] === 17;
+    const renamed = await files.rename('node-conflict.tmp', 'node-moved.json');
+    const replacement = await files.read('node-moved.json');
+    const removed = await files.remove('node-moved.json');
+    report.fileMutations = {
+      created, createdConflict, moved, conflict, renamed, removed, sourceMissing, preserved,
+      readback: movedBytes.length === first.length && movedBytes.every((value, i) => value === first[i]),
+      replacement: replacement.length === 1 && replacement[0] === 42,
+      missing: await mutationRefused('remove', ['node-moved.json'], 'runtime_data_not_found'),
+      invalid: [
+        await mutationRefused('move', ['node-state.bin', '../outside'], 'runtime_data_invalid'),
+        await mutationRefused('rename', ['../outside', 'node-state.bin'], 'runtime_data_invalid'),
+        await mutationRefused('move', ['node-state.bin', 'node-state.bin'], 'runtime_data_invalid'),
+        await mutationRefused('move', ['node-state.bin', {}], 'runtime_data_invalid'),
+        await mutationRefused('remove', ['node-state.bin', true], 'runtime_data_invalid'),
+        await mutationRefused('remove', ['.native-publish-reserved.tmp'], 'runtime_data_invalid'),
+      ],
+    };
   }
   // Owner inspects the bounded result privately. No console/log response dump.
   fs.writeSync(Number(result), JSON.stringify(report));

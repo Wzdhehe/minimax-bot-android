@@ -129,7 +129,8 @@ class ResultReportingTest(unittest.TestCase):
         self.assertEqual(status.read_text(), 't1-f1-e0-s0-file_truncated-lc62\n')
 
     def test_node_file_bridge_diagnostics_never_include_native_capabilities(self):
-        for phase, failure in [('file_commit', 'runtime_data_unavailable'), ('file_read', 'runtime_data_not_found')]:
+        for phase, failure in [('file_commit', 'runtime_data_unavailable'), ('file_read', 'runtime_data_not_found'),
+                               ('file_mutation', 'runtime_data_denied')]:
             with self.subTest(phase=phase):
                 code, output = self.run_report('private-capability-marker '
                     f'node_probe_failed_at_{phase}_code_{failure} at x(IsolatedNodeModelTest.kt:161)')

@@ -116,7 +116,7 @@ class IsolatedNodeModelTest {
                                 assertTrue(identity.data.getBoolean("database_owner_denied"))
                                 assertTrue(identity.data.getBoolean("publication_owner_denied"))
                                 NativeModelRequestHost(identity.uid, providerId!!, "normal", probe.peerBinder(), channels::open, channels::close).use { host ->
-                                RuntimeFileCommitHost.open(context, "node-state", identity.uid, probe.peerBinder(), allowReplace = true, allowRead = true).use { fileHost ->
+                                RuntimeFileCommitHost.open(context, "node-state", identity.uid, probe.peerBinder(), allowReplace = true, allowRead = true, allowMove = true, allowRemove = true).use { fileHost ->
                                 val id = UUID.randomUUID().toString()
                                 val data = Bundle().apply {
                                     putString("id", id)
@@ -222,6 +222,18 @@ class IsolatedNodeModelTest {
                                 for (name in listOf("binary", "original", "empty", "missing", "invalidPath", "invalidMetadata")) {
                                     assertTrue(fileReads.getBoolean(name))
                                 }
+                                val mutations = report.getJSONObject("fileMutations")
+                                for (name in listOf("created", "createdConflict", "moved", "renamed")) {
+                                    assertEquals("published", mutations.getString(name))
+                                }
+                                assertEquals("already_exists", mutations.getString("conflict"))
+                                assertEquals("removed", mutations.getString("removed"))
+                                for (name in listOf("readback", "sourceMissing", "preserved", "replacement", "missing")) {
+                                    assertTrue(mutations.getBoolean(name))
+                                }
+                                val invalidMutations = mutations.getJSONArray("invalid")
+                                assertEquals(6, invalidMutations.length())
+                                repeat(6) { assertTrue(invalidMutations.getBoolean(it)) }
                                 val committed = File(dataDirectory, "minimax-bot-runtime/files/node-state")
                                 assertEquals(listOf("node-empty.bin", "node-snapshot.bin", "node-state.bin"), committed.list()!!.sorted())
                                 assertTrue(fileProbeBytes(false).contentEquals(File(committed, "node-snapshot.bin").readBytes()))

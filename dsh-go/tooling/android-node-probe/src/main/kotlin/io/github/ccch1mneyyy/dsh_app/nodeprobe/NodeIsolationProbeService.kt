@@ -16,6 +16,7 @@ import io.github.ccch1mneyyy.dsh_app.isolation.ModelRequestClient
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDatabaseFiles
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeAtomicPublisher
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitClient
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDeletionResult
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimePublicationResult
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataCode
@@ -56,6 +57,27 @@ internal object NodeProbeRuntime {
         } catch (error: RuntimeDataFailure) {
             fileError(error.code)
         } catch (_: Exception) { 2 }
+    }
+    fun moveRuntimeFile(source: String, target: String, replace: Boolean): Int {
+        val client = fileClient ?: return 6
+        return try {
+            when (client.move(source, target, replace)) {
+                RuntimePublicationResult.PUBLISHED -> 0
+                RuntimePublicationResult.ALREADY_EXISTS -> 1
+                RuntimePublicationResult.OUTCOME_UNKNOWN -> 2
+            }
+        } catch (error: RuntimeDataFailure) { fileError(error.code) }
+        catch (_: Exception) { 2 }
+    }
+    fun removeRuntimeFile(name: String): Int {
+        val client = fileClient ?: return 6
+        return try {
+            when (client.remove(name)) {
+                RuntimeDeletionResult.REMOVED -> 0
+                RuntimeDeletionResult.OUTCOME_UNKNOWN -> 2
+            }
+        } catch (error: RuntimeDataFailure) { fileError(error.code) }
+        catch (_: Exception) { 2 }
     }
     fun openModelFd(id: String, body: String): Int = try { modelClient?.open(id, body)?.detachFd() ?: -1 } catch (_: Exception) { -1 }
     fun cancelModelFd(id: String) { try { modelClient?.cancel(id) } catch (_: Exception) { } }
