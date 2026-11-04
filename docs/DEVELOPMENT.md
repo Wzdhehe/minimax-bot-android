@@ -23,6 +23,15 @@ Android工具与实际命令见专题卡；`tooling/android-broker-probe`编译�
 
 Main文件发布JNI现由App/Node验收工程共用生产CMake构建，需NDK27.3.13750724、SDK CMake3.22.1；`RuntimeAtomicPublisher.open`在Main worker admission后加载。组件17项设备基线与生产JNI迁移后的设备结果须区分，见[T-RuntimeFS](handoff/T-RuntimeFS.md)。
 
+## 文档链接检查（2026-11-04）
+
+```bash
+python3 -m unittest discover -s tooling/docs-links -p 'test_*.py' -v
+python3 tooling/docs-links/check_links.py --root . README.md docs tooling/docs-links
+```
+
+Python标准库即可，当前39项测试通过。新`docs-links.yml`在README/docs/检查器变化时运行同一命令。它只验证所支持的单行相对文件链接，不验证标题锚点、远程URL或完整CommonMark；约束见[检查器说明](../tooling/docs-links/README.md)。目录读取失败须退出2，不能吞错记成功；已修复历史搬移造成的9处坏链接。不要把这套文档检查当作Android构建/设备验收。
+
 ## 产品边界
 
 Android 本机多 Bot，参考 Grok Bot 布局及官方 MiniMax Bot 功能。用户在设置中输入 MiniMax 的 API Key、Base URL 和模型；模型服务需要联网，无需自建云或远控。手机固定竖屏，平板允许旋转并根据窗口宽度展开。不要加入手机 UI 操控或通用 Agent 工作台。

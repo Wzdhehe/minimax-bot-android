@@ -156,3 +156,18 @@ python3 tooling/docs-links/check_links.py --root . dsh-go
 - 检查器、测试、README 均已就位；`tooling/docs-links/` 之外**没有任何改动**。
 - 上面列出的 9 处失效链接**未修复** —— 修复需要改 `docs/handoff/RuntimeBroker-2026-11-03-history.md`，超出本卡写入范围。
 - 本卡不改 CI 接入、不改总 HANDOFF；由主 agent 验收并记录。
+
+## 主 agent 验收与接入（2026-11-04）
+
+已快进接收外部提交78c8293，原始38项测试及上述9处问题均在主工作区复现。上文是交付时快照，保留不覆写。本轮已修复历史文档的9处相对链接，并在根.gitignore添加`__pycache__/`与`*.py[cod]`。
+
+额外验收复现：目录scandir抛PermissionError时，原os.walk默认忽略错误，脚本返回0并报告checked 0 document(s)。已增加onerror向上传播和退出码2回归，避免CI把未扫描当成功。另将两个symlink测试的外部目标移入每用例TemporaryDirectory的受管兄弟目录，避免写入共享/tmp固定路径并留下文件。
+
+```text
+Ran 39 tests in 0.221s
+
+OK
+checked 29 document(s), found 0 issue(s)
+```
+
+上面扫描含README.md、docs及本检查器目录；退出码0。后续新增交接/研究文件会改变文档数量，见最新总交接。新增`.github/workflows/docs-links.yml`，只读contents权限，Python3.12，运行相同unittest和扫描；远程CI结果另查，不把本地通过写成Actions已通过。本轮未构建Android，检查器也不证明链接锚点/远程URL可用。

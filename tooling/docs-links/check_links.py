@@ -158,6 +158,11 @@ def check_document(root: Path, source: Path) -> list[Issue]:
     return issues
 
 
+def _raise_walk_error(error: OSError) -> None:
+    """An unreadable subtree must fail the scan, not look like empty docs."""
+    raise error
+
+
 def collect_files(root: Path, targets: list[str]) -> tuple[list[Path], list[Issue]]:
     """Resolves the requested paths into the documents to scan.
 
@@ -175,7 +180,7 @@ def collect_files(root: Path, targets: list[str]) -> tuple[list[Path], list[Issu
         if not candidate.exists():
             raise ValueError(f"path does not exist: {requested}")
         if candidate.is_dir():
-            for directory, subdirectories, filenames in os.walk(candidate):
+            for directory, subdirectories, filenames in os.walk(candidate, onerror=_raise_walk_error):
                 kept = []
                 for name in sorted(subdirectories):
                     child = Path(directory) / name

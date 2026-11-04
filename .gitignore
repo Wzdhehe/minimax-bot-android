@@ -6,3 +6,7 @@ local.properties
 .idea/
 *.jks
 *.keystore
+
+# Python test and tooling bytecode
+__pycache__/
+*.py[cod]

@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+name: Documentation relative links
+on:
+  push:
+    paths:
+      - 'README.md'
+      - 'docs/**'
+      - 'tooling/docs-links/**'
+      - '.github/workflows/docs-links.yml'
+  pull_request:
+    paths:
+      - 'README.md'
+      - 'docs/**'
+      - 'tooling/docs-links/**'
+      - '.github/workflows/docs-links.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify the checker with isolated fixtures
+        run: python3 -m unittest discover -s tooling/docs-links -p 'test_*.py' -v
+      - name: Check relative files in the project and checker documentation
+        run: python3 tooling/docs-links/check_links.py --root . README.md docs tooling/docs-links

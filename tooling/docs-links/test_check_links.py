@@ -10,6 +10,7 @@ the test happens to run in.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import io
 import os
@@ -17,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
@@ -30,7 +32,8 @@ class RepoTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         self._temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self._temporary.name).resolve()
+        self.root = Path(self._temporary.name).resolve() / "repo"
+        self.root.mkdir()
         self.addCleanup(self._temporary.cleanup)
 
     def write(self, relative: str, content: str) -> Path:
@@ -239,7 +242,7 @@ class TestRepositoryBoundary(RepoTestCase):
         self.assertEqual(issues[0].reason, check_links.REASON_OUTSIDE_REPOSITORY)
 
     def test_symlink_escaping_the_root_is_refused(self):
-        outside = Path(self._temporary.name).resolve().parent / "outside-target"
+        outside = self.root.parent / "outside-target"
         outside.mkdir(exist_ok=True)
         (outside / "secret.md").write_text("secret\n", encoding="utf-8")
         (self.root / "docs").mkdir(parents=True, exist_ok=True)
@@ -250,7 +253,7 @@ class TestRepositoryBoundary(RepoTestCase):
         self.assertEqual(issues[0].reason, check_links.REASON_OUTSIDE_REPOSITORY)
 
     def test_a_symlinked_file_escaping_the_root_is_not_scanned(self):
-        outside = Path(self._temporary.name).resolve().parent / "outside-target.md"
+        outside = self.root.parent / "outside-target.md"
         outside.write_text("[x](also-missing.md)\n", encoding="utf-8")
         (self.root / "docs").mkdir(parents=True, exist_ok=True)
         os.symlink(outside, self.root / "docs" / "linked.md")
@@ -295,6 +298,17 @@ class TestScanning(RepoTestCase):
         self.write("docs/deep/notes.txt", "[x](missing-c.md)\n")
         issues = self.scan(["docs"])
         self.assertEqual([issue.source for issue in issues], ["docs/a.md", "docs/deep/b.md"])
+
+    def test_unreadable_directory_is_an_input_error_not_a_successful_empty_scan(self):
+        self.write("docs/a.md", "[x](missing.md)\n")
+        denied = PermissionError(errno.EACCES, "Permission denied")
+        with patch.object(check_links.os, "scandir", side_effect=denied):
+            code, stdout, stderr = self.run_cli(["--root", str(self.root), "docs"])
+        self.assertEqual(code, check_links.EXIT_INPUT_ERROR)
+        self.assertEqual(stdout, "")
+        self.assertIn("cannot read a requested path", stderr)
+        self.assertNotIn("checked 0", stderr)
+        self.assertNotIn("Traceback", stderr)
 
     def test_the_default_targets_are_readme_and_docs(self):
         self.write("README.md", "[x](missing-readme.md)\n")

@@ -61,9 +61,9 @@ dev/integration 891aefa
 - 页面要流畅、有过渡/轻量骨架，尊重减少动态效果/DSH 性能降级；不宣称未测的真机 FPS。
 - Mini App 是另一个可视化程序类型，暂不适配。mcode 插件市场单独做，不能把能从 GitHub 下载等同于在 Android 上可安装执行。
 
-## 外部 agent 独立任务（用户拟派 M3.1 Flash）
+## 外部 agent 任务验收：文档链接检查器
 
-任务卡：[文档相对链接检查器](../tooling/docs-links/TASK.md)。唯一写入范围`tooling/docs-links/`，标准库Python脚本/unittest/README/真实扫描报告；不碰App/runtime/CI/本HANDOFF。主agent避开其交付文件，负责验收与后续CI接入。仍在feat/t-plugins，正常提交推送；不改main/dev、不force、不PR。当前只是建立任务卡，**没有声称外部agent已开工或完成**。
+M3.1 Flash已提交78c8293（仅tooling/docs-links内4文件），本工作区已fetch并快进接收。38项测试与9处失效链接已独立复现；主agent修复history文档的9处链接、加入根Python缓存忽略规则。补上“目录读取失败被os.walk吞掉而误报成功”的回归，现39项通过；symlink测试外部目标也改为受管临时兄弟目录，避免共享/tmp固定文件。已新增只读、Python3.12的docs-links workflow；本地README/docs/检查器文档扫描29份0问题，**远程CI待新推送实查**。原交付报告和主验收补记均见[REPORT](../tooling/docs-links/REPORT.md)。
 
 ## 新增参考：Nyral
 
