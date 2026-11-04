@@ -31,7 +31,7 @@ KINDS = {
 }
 KINDS.update({'runtime_file_probe_' + stage: 'file_' + stage for stage in (
     'setup', 'exclusive', 'replacement', 'nonce', 'path', 'pipe_shape', 'truncated',
-    'overlong', 'oversize', 'timeout', 'closed', 'drain', 'read', 'output', 'unknown')})
+    'overlong', 'oversize', 'timeout', 'closed', 'drain', 'read', 'output', 'mutation', 'unknown')})
 
 
 def tag(element):

@@ -1,9 +1,37 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-RuntimeFiles：Main授予的有界文件提交能力（2026-11-04）
 
-**Node读取/size已585f082在API26/35各30项通过；stage FD改造c78faca已API26各31项过、API35首次0结果失败并已重跑。新增Main move/remove已编译，35项设备候选待新CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 不修改vendor，不回退同UID Agent/shell。
+**Node读取/size已585f082在API26/35各30项通过；stage FD改造c78faca已两版本31项过（API35首次0结果失败、重跑通过）。Main move/remove已42fba3a两版本35项通过；本轮新增显式权限IPC，设备待新CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 不修改vendor，不回退同UID Agent/shell。
 
-## Main普通文件move/remove（最新，尚未暴露IPC，设备待CI）
+## move/remove显式IPC授权（本轮，设备待新CI）
+
+v1追加MOVE/MOVE_REPLACE/REMOVE，不携带文件正文或目录FD。Main默认不授予移动/删除；MOVE要求allowMove，MOVE_REPLACE同时要求allowMove与allowReplace，REMOVE只由allowRemove授权。读取权、覆盖权、发布权均不能推导删除权。Main仍先核对真实isolated UID、nonce、控制Parcel预算、严格basename/保留前缀/不同源目标/无尾随字段，再admit操作；close之后拒绝，已进入mutation仍允许完成并drain。
+
+client对新mutation沿用保守结果：transact开始后false、异常、未知/多余回复为OUTCOME_UNKNOWN；Main已知拒绝才抛有限code。删除有REMOVED或OUTCOME_UNKNOWN，没有自动重试。重用同一结果解析器，原byte-array提交仍经有界pipe。
+
+原真实isolated UID矩阵扩展成功移动、独占冲突保留source、覆盖、删除/缺失；额外两个同scope grant分别只允许移动、只允许覆盖，证明覆盖移动必须同时有两种授权，并保持普通移动可用。publish-only不能移动/删除；越过client的非法源/目标、REMOVE尾随字段、伪nonce、close均拒绝。transport false/异常/未知回复覆盖三种mutation，原模型/Key/两PID/WAL与35项计数保留。新增检查不等于Node已接入，更不等于完整fs或正式launcher。
+
+本轮实际Python28、精确APK JS host1、scope4与git diff --check通过；恢复环境后首次offline因插件缓存metadata不完整失败，改用系统proxy/CA解析依赖后两个验收APK构建成功：
+
+```text
+BUILD SUCCESSFUL in 3m 10s
+71 actionable tasks: 15 executed, 56 up-to-date
+```
+
+实际工具：Temurin21.0.13+9 `/tmp/mbot-jdk21`、Gradle9.3.1 `/tmp/mbot-gradle/gradle-9.3.1/bin/gradle`、SDK `/tmp/mbot-android-sdk`，缓存`/home/agent/.gradle`。除原任务参数外加`-Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080 -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts`，不再用旧/tmp缓存。SDK仍提示未安装platform-tools，assemble成功，不伪造许可或设备执行；没有本地adb/物理真机。当前新增IPC须等新commit的CI，不能引用42fba3a当它已过。
+
+## 42fba3a设备结果（Main move/remove组件）
+
+run41777415973 **success**，API实查：
+
+```text
+API26 id13298390227: node-candidate-results-api-26-t35-f0-e0-s0-passed-l0
+API35 id13297479533: node-candidate-results-api-35-t35-f0-e0-s0-passed-l0
+```
+
+同期native41777415976、broker设备41777415932、scope41777415965均success。这份证据只有Main组件，没有本轮新IPC。
+
+## Main普通文件move/remove（42fba3a设备通过，以下为实现当轮记录）
 
 原Store/MemoryStore/JSONL真正需要rename与rm，不能只靠完整byte-array发布。Main组件增加同目录move（独占或替换）和普通文件remove：严格basename/保留前缀拒绝，Main目录cap与worker，source必须私有REG/Main-owned，symlink/目录/宽权限拒绝。remove内核用fstatat(AT_SYMLINK_NOFOLLOW)检查，unlinkat固定flags=0，不递归、不删目录；publication-only注入内核默认ENOSYS，不隐式授权删除/覆盖。
 
@@ -22,7 +50,7 @@ BUILD SUCCESSFUL in 2m 25s
 
 run41776354659首次attempt：API26已success，artifact13297083049 `node-candidate-results-api-26-t31-f0-e0-s0-passed-l0`。API35 **failure**，artifact13297635503 `node-candidate-results-api-35-t0-f0-e0-s0-unclassified-l0`；不能说31项失败，也不能说通过。emulator step05:00:35→05:01:08、没有XML；check126397527852只给exit1/sh failed与计数0，没有足够原因，**不推断是代码、模拟器、Ubuntu迁移或flaky**。
 
-已执行`gh run rerun 41776354659 --failed`，只重跑失败job；结果须另查。原signed Azure日志下载受限，不回显签名URL；先看job/check/有限artifact元数据。后续35项也保留所有stage测试，可提供另一个commit的证据，不能涂掉本次失败。
+已执行`gh run rerun 41776354659 --failed`，只重跑失败job；attempt2已success，新增artifact13297459617 `node-candidate-results-api-35-t31-f0-e0-s0-passed-l0`，API26沿用首次31项。首次0结果失败仍按上文记录。原signed Azure日志下载受限，不回显签名URL；先看job/check/有限artifact元数据。后续35项也保留所有stage测试，可提供另一个commit的证据，不能涂掉本次失败。
 
 ## stage创建/清理改用Main目录FD（最新，设备待CI）
 
@@ -136,23 +164,23 @@ API35 id13294617445: node-candidate-results-api-35-t25-f0-e0-s0-passed-l0
 
 ## 授权边界
 
-可信Main launcher先观察隔离服务的真实UID/Binder，然后调用`RuntimeFileCommitHost.open(context, scopeId, isolatedUid, peer, allowReplace)`。只能在Main worker创建；同Main UID、无效scope或预算拒绝。根固定为：
+可信Main launcher先观察隔离服务的真实UID/Binder，然后调用`RuntimeFileCommitHost.open(context, scopeId, isolatedUid, peer, allowReplace=…, allowRead=…, allowMove=…, allowRemove=…)`。只能在Main worker创建；同Main UID、无效scope或预算拒绝。根固定为：
 
 ```text
 context.noBackupFilesDir/minimax-bot-runtime/files/<Main选择的scopeId>/
 ```
 
-即使scopeId为v2也不会覆盖`v2/sqlite`，Key prefs/Keystore及workspace均不在此子树。scopeId不是Agent参数，目录FD/真实根路径不传隔离端。客户端只提交严格basename；不支持子目录/绝对路径/穿越/保留stage前缀。Main默认仅授予目标不存在发布，必须显式allowReplace才可替换；备份区不能因为Agent选了REPLACE就获得覆盖权限。
+即使scopeId为v2也不会覆盖`v2/sqlite`，Key prefs/Keystore及workspace均不在此子树。scopeId不是Agent参数，目录FD/真实根路径不传隔离端。客户端只提交严格basename；不支持子目录/绝对路径/穿越/保留stage前缀。Main默认仅授予目标不存在发布，必须显式allowReplace才可替换；allowRead/allowMove/allowRemove也默认false，覆盖移动需要allowMove且allowReplace。备份区不能因为Agent选了mutation opcode就获得额外权限。
 
 每个host绑定真实Binder callingUid、随机64hex会话和peer死亡。不信任请求中的UID、root或scope，也没有这些协议字段；session仅交隔离Kotlin客户端，不进Node环境/argv。10be45f验收只接隔离Kotlin矩阵；新增Node文件JNI见顶部，仍没有正式launcher分配这些host。
 
 ## v1协议与结果
 
-`RuntimeFileCommit.v1` descriptor；两个transaction PUBLISH/REPLACE。请求为session、basename、声明字节数、一个pipe读端FD。控制Parcel最多8KiB；正文最大1MiB，一律经匿名pipe传输，不把文件塞进Binder。文件是二进制字节，不套模型UTF8/JSON解码规则。
+`RuntimeFileCommit.v1` descriptor；PUBLISH/REPLACE请求为session、basename、声明字节数、一个pipe读端FD。READ/SIZE为session、basename；MOVE/MOVE_REPLACE为session、source basename、target basename；REMOVE为session、basename，控制请求不能有尾随字段。控制Parcel最多8KiB；正文最大1MiB，一律经匿名pipe传输，不把文件塞进Binder。文件是二进制字节，不套模型UTF8/JSON解码规则。
 
 UID/session/操作/名称/长度/admission检查均在分配正文缓冲及文件创建前。每host最多4个已admit调用；客户端进程最多4个pipe writer及有界executor。FIFO类型检查、nonblocking poll、声明长度恰好读满并要求EOF，截断/多余字节/非pipe拒绝；默认绝对5秒读取截止，每次最多100ms观察close。读取截止不代表能中断存储fsync。
 
-稳定结果：published、already_exists（仅PUBLISH）、outcome_unknown；稳定拒绝仅RuntimeDataCode白名单，平台异常、正文、私有根、会话不回显。客户端在transact开始后遇到false/异常/未知或畸形回复，保守返回OUTCOME_UNKNOWN，不能说没有写入。已明确的Main拒绝才抛稳定RuntimeDataFailure。没有自动重试，也没有以replace降级publish。
+稳定结果：published（发布/移动）、removed（删除）、already_exists（仅PUBLISH/MOVE）、outcome_unknown；稳定拒绝仅RuntimeDataCode白名单，平台异常、正文、私有根、会话不回显。客户端在transact开始后遇到false/异常/未知或畸形回复，保守返回OUTCOME_UNKNOWN，不能说没有写入。已明确的Main拒绝才抛稳定RuntimeDataFailure。没有自动重试，也没有以replace降级publish。
 
 Main内部仍由RuntimeAtomicPublisher先同步完整stage，再选独占发布/原子替换，最后同步目录。OUTCOME_UNKNOWN的恢复/operationId/revision协调仍由未来真实调用方完成；没有CAS、append或跨文件事务。
 
@@ -205,7 +233,7 @@ OK (32 tests)
 
 ## 后续
 
-1. 查c78faca失败job重跑与本轮Main mutation35项结果，分别记录；不能混用旧run或把0结果说成测试通过。
-2. move/remove组件通过后，才在文件broker显式加入Main的移动/删除权限及有限事务，补真实isolated UID/关闭/结果未知断言，再接Node与原模块；不能从PUBLISH推导删除权或把通用fs.link替换为移动。
+1. c78faca失败job重跑31项与42fba3a两版本35项已确认；继续查本轮新IPC的35项结果，不混用旧run。
+2. 显式移动/删除IPC已实现并补真实isolated UID/权限组合/关闭/结果未知断言；验证后接Node与原模块，不能从PUBLISH推导删除权或把通用fs.link替换为移动。
 3. 再扩展真正受控FS所需的read/stat/list/mkdir/append/FileHandle与全写者协调，适配原JSONL/MemoryStore并运行原恢复测试；不要全局把link改成rename。
 4. full-ICU/正式launcher/model resolver、可信Bot身份与SQLite lease另见HANDOFF，仍未完成。

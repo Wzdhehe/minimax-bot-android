@@ -16,6 +16,8 @@ Node读取已**585f082/41775322136 API26/35各30项通过**。再将Main stage�
 
 c78faca/41776354659首次API26已31项过，API35在33秒内exit1且没有测试XML（t0），原因未取得；已`gh run rerun --failed`，待实查，不改写成通过。Main另新增普通文件move/remove及四项用例，APK2m25s、双ABI/Python28过，35项设备待新CI；未暴露IPC，后续须显式移动/删除授权。详见T-RuntimeFiles。
 
+最新API实查：c78faca/41776354659失败job重跑已success，API35新增artifact13297459617/t31，首次t0失败记录保留；42fba3a/41777415973 API26/35各35项通过，artifact13298390227/13297479533，同期native/broker设备/scope均success。本轮增加文件MOVE/MOVE_REPLACE/REMOVE控制IPC与Main显式allowMove/allowRemove，覆盖移动还需allowReplace，真实isolated UID矩阵增加单独移动/覆盖授权、拒绝、关闭及unknown测试；本轮Python28/host1/scope4与两个验收APK构建通过（3m10s，71 tasks/15 executed/56 up-to-date）；本轮设备结果待新CI，Node入口尚未接。模型Key边界未放宽，见T-RuntimeFiles最新节。
+
 > e03b997/run41686820725的SDK route矩阵已API实查API26/35 success；以下待CI是实现当轮状态。正式resolver/启动器仍未接；FD VFS 的6605508/41700450899已定位Main含目录FD的IPC发送失败，SQLite未执行，不能称持久化已解决。后续46c1c07/run41703671145的四普通文件FD方案已API26/35通过（含WAL、两新PID与既有Key/模型断言）；仍无完整产品runtime，详见 [T-Persistence](T-Persistence.md)。
 
 Main持久数据库文件owner本阶段已加入生产源码，验收Node直接使用；固定四数据FD且不截断已有文件，隔离UID必须拒绝调用owner。两个APK43s构建、Python22过；44c0190/run41760010243的API26/35已各7项通过（hardlink按平台/owner分支边界记录）；完整lease/进程撤销、model resolver/启动器仍缺，见[T-NativeDataFiles](T-NativeDataFiles.md)。

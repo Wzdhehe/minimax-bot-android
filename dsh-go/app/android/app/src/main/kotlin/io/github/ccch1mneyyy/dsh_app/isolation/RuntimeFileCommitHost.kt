@@ -32,6 +32,8 @@ internal class RuntimeFileCommitHost private constructor(
     private val allowReplace: Boolean,
     private val readTimeoutMs: Long,
     private val readDirectory: RuntimePrivateDirectory?,
+    private val allowMove: Boolean,
+    private val allowRemove: Boolean,
 ) : Binder(), Closeable {
     val session = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
     private val lock = Any()
@@ -44,7 +46,7 @@ internal class RuntimeFileCommitHost private constructor(
     init { peer.linkToDeath(death, 0) }
 
     override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
-        if (code !in RuntimeFileCommitWire.PUBLISH..RuntimeFileCommitWire.SIZE) return super.onTransact(code, data, reply, flags)
+        if (code !in RuntimeFileCommitWire.PUBLISH..RuntimeFileCommitWire.REMOVE) return super.onTransact(code, data, reply, flags)
         if (reply == null) return true
         var admitted = false
         var enteredCommit = false
@@ -58,13 +60,19 @@ internal class RuntimeFileCommitHost private constructor(
             if (nonce == null || nonce.length != 64 || !MessageDigest.isEqual(session.toByteArray(Charsets.US_ASCII), nonce.toByteArray(Charsets.UTF_8))) {
                 throw RuntimeDataFailure(RuntimeDataCode.DENIED)
             }
-            if (code == RuntimeFileCommitWire.REPLACE && !allowReplace) throw RuntimeDataFailure(RuntimeDataCode.DENIED)
+            if ((code == RuntimeFileCommitWire.REPLACE || code == RuntimeFileCommitWire.MOVE_REPLACE) && !allowReplace) throw RuntimeDataFailure(RuntimeDataCode.DENIED)
             val query = code == RuntimeFileCommitWire.READ || code == RuntimeFileCommitWire.SIZE
+            val move = code == RuntimeFileCommitWire.MOVE || code == RuntimeFileCommitWire.MOVE_REPLACE
+            val remove = code == RuntimeFileCommitWire.REMOVE
+            if ((move && !allowMove) || (remove && !allowRemove)) throw RuntimeDataFailure(RuntimeDataCode.DENIED)
             if (query && readDirectory == null) throw RuntimeDataFailure(RuntimeDataCode.DENIED)
             val name = data.readString() ?: throw RuntimeDataFailure(RuntimeDataCode.INVALID)
-            val length = if (query) 0 else data.readInt()
+            val target = if (move) data.readString() ?: throw RuntimeDataFailure(RuntimeDataCode.INVALID) else null
+            val controlOnly = query || move || remove
+            val length = if (controlOnly) 0 else data.readInt()
             if (!RuntimeFileCommitWire.validTarget(name) || length !in 0..RuntimeFileCommitWire.MAX_BYTES) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
-            if (query && data.dataAvail() != 0) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+            if (move && (!RuntimeFileCommitWire.validTarget(target!!) || name == target)) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+            if (controlOnly && data.dataAvail() != 0) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
             synchronized(lock) {
                 if (closed) throw RuntimeDataFailure(RuntimeDataCode.CLOSED)
                 if (active + outgoing >= 4) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
@@ -77,21 +85,27 @@ internal class RuntimeFileCommitHost private constructor(
                     if (isClosed()) throw RuntimeDataFailure(RuntimeDataCode.CLOSED)
                     reply.writeString("ok"); reply.writeLong(size)
                 }
+            } else if (move || remove) {
+                synchronized(lock) {
+                    if (closed) throw RuntimeDataFailure(RuntimeDataCode.CLOSED)
+                    enteredCommit = true
+                }
+                if (remove) reply.writeString(when (publisher.remove(name)) {
+                    RuntimeDeletionResult.REMOVED -> "removed"
+                    RuntimeDeletionResult.OUTCOME_UNKNOWN -> "outcome_unknown"
+                })
+                else reply.writeString(publicationCode(publisher.move(name, target!!, code == RuntimeFileCommitWire.MOVE_REPLACE)))
             } else {
-            val bytes = ParcelFileDescriptor.CREATOR.createFromParcel(data).use { input ->
-                if (data.dataAvail() != 0) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
-                readBoundedRequestPipe(input, length, RuntimeFileCommitWire.MAX_BYTES, readTimeoutMs, ::isClosed)
-            }
-            synchronized(lock) {
-                if (closed) throw RuntimeDataFailure(RuntimeDataCode.CLOSED)
-                enteredCommit = true
-            }
-            val result = if (code == RuntimeFileCommitWire.REPLACE) publisher.replace(name, bytes) else publisher.publishIfAbsent(name, bytes)
-            reply.writeString(when (result) {
-                RuntimePublicationResult.PUBLISHED -> "published"
-                RuntimePublicationResult.ALREADY_EXISTS -> "already_exists"
-                RuntimePublicationResult.OUTCOME_UNKNOWN -> "outcome_unknown"
-            })
+                val bytes = ParcelFileDescriptor.CREATOR.createFromParcel(data).use { input ->
+                    if (data.dataAvail() != 0) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+                    readBoundedRequestPipe(input, length, RuntimeFileCommitWire.MAX_BYTES, readTimeoutMs, ::isClosed)
+                }
+                synchronized(lock) {
+                    if (closed) throw RuntimeDataFailure(RuntimeDataCode.CLOSED)
+                    enteredCommit = true
+                }
+                val result = if (code == RuntimeFileCommitWire.REPLACE) publisher.replace(name, bytes) else publisher.publishIfAbsent(name, bytes)
+                reply.writeString(publicationCode(result))
             }
         } catch (error: Exception) {
             reply.setDataSize(0); reply.setDataPosition(0)
@@ -105,6 +119,11 @@ internal class RuntimeFileCommitHost private constructor(
         return true
     }
     private fun isClosed() = synchronized(lock) { closed }
+    private fun publicationCode(result: RuntimePublicationResult): String = when (result) {
+        RuntimePublicationResult.PUBLISHED -> "published"
+        RuntimePublicationResult.ALREADY_EXISTS -> "already_exists"
+        RuntimePublicationResult.OUTCOME_UNKNOWN -> "outcome_unknown"
+    }
     /** Trusted Main shutdown accounting, never part of the Agent protocol. */
     val inFlightOperations: Int get() = synchronized(lock) { active + outgoing }
 
@@ -173,7 +192,8 @@ internal class RuntimeFileCommitHost private constructor(
         private val producers = ThreadPoolExecutor(4, 4, 30, TimeUnit.SECONDS, ArrayBlockingQueue<Runnable>(4),
             { task -> Thread(task, "mbot-file-snapshot").apply { isDaemon = true } }).apply { allowCoreThreadTimeOut(true) }
         fun open(context: Context, scopeId: String, isolatedUid: Int, peer: IBinder,
-                 allowReplace: Boolean = false, readTimeoutMs: Long = 5_000, allowRead: Boolean = false): RuntimeFileCommitHost {
+                 allowReplace: Boolean = false, readTimeoutMs: Long = 5_000, allowRead: Boolean = false,
+                 allowMove: Boolean = false, allowRemove: Boolean = false): RuntimeFileCommitHost {
             RuntimePrivateDirectory.requireOwnerWorker(context)
             if (!RuntimePrivateDirectory.validName(scopeId) || isolatedUid <= 0 || isolatedUid == Process.myUid() || readTimeoutMs !in 100..10_000) {
                 throw RuntimeDataFailure(RuntimeDataCode.INVALID)
@@ -184,7 +204,7 @@ internal class RuntimeFileCommitHost private constructor(
             var reader: RuntimePrivateDirectory? = null
             try {
                 if (allowRead) reader = RuntimePrivateDirectory.open(context, listOf("files", scopeId))
-                return RuntimeFileCommitHost(publisher, isolatedUid, peer, allowReplace, readTimeoutMs, reader)
+                return RuntimeFileCommitHost(publisher, isolatedUid, peer, allowReplace, readTimeoutMs, reader, allowMove, allowRemove)
             }
             catch (_: Exception) {
                 try { publisher.close() } catch (_: Exception) { }

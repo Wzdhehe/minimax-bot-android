@@ -10,6 +10,7 @@ import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitClient
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitWire
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimePublicationResult
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDeletionResult
 
 /** Fixed verification-only matrix, never an Agent-supplied script or path. */
 internal fun runFileCommitProbe(data: Bundle): String {
@@ -27,10 +28,14 @@ internal fun runFileCommitProbe(data: Bundle): String {
         val closedSession = data.getString("closed_session") ?: return stage
         val backup = RuntimeFileCommitClient(backupHost, backupSession)
         val state = RuntimeFileCommitClient(stateHost, stateSession)
+        val moveOnly = RuntimeFileCommitClient(data.getBinder("move_host") ?: return stage, data.getString("move_session") ?: return stage)
+        val replaceOnly = RuntimeFileCommitClient(data.getBinder("replace_host") ?: return stage, data.getString("replace_session") ?: return stage)
         stage = "exclusive"
         check(backup.publishIfAbsent("memory.bak", "original".toByteArray()) == RuntimePublicationResult.PUBLISHED)
         check(backup.publishIfAbsent("memory.bak", "replacement".toByteArray()) == RuntimePublicationResult.ALREADY_EXISTS)
         denied(RuntimeDataCode.DENIED) { backup.replace("memory.bak", byteArrayOf()) }
+        denied(RuntimeDataCode.DENIED) { backup.move("memory.bak", "moved.bak", false) }
+        denied(RuntimeDataCode.DENIED) { backup.remove("memory.bak") }
         stage = "replacement"
         check(state.publishIfAbsent("payload.bin", fileProbeBytes(false)) == RuntimePublicationResult.PUBLISHED)
         check(state.replace("payload.bin", fileProbeBytes(true)) == RuntimePublicationResult.PUBLISHED)
@@ -44,9 +49,36 @@ internal fun runFileCommitProbe(data: Bundle): String {
         check(state.size("empty.bin") == 0L)
         denied(RuntimeDataCode.NOT_FOUND) { state.read("missing.bin") }
         denied(RuntimeDataCode.INVALID) { state.read("../outside") }
+        stage = "mutation"
+        state.publishIfAbsent("source.tmp", "source".toByteArray())
+        check(state.move("source.tmp", "moved.json", false) == RuntimePublicationResult.PUBLISHED)
+        state.publishIfAbsent("conflict.tmp", "replacement".toByteArray())
+        check(state.move("conflict.tmp", "moved.json", false) == RuntimePublicationResult.ALREADY_EXISTS)
+        check(state.read("conflict.tmp").toString(Charsets.UTF_8) == "replacement")
+        denied(RuntimeDataCode.DENIED) { moveOnly.move("conflict.tmp", "moved.json", true) }
+        denied(RuntimeDataCode.DENIED) { moveOnly.remove("conflict.tmp") }
+        denied(RuntimeDataCode.DENIED) { replaceOnly.move("conflict.tmp", "moved.json", false) }
+        denied(RuntimeDataCode.DENIED) { replaceOnly.move("conflict.tmp", "moved.json", true) }
+        denied(RuntimeDataCode.DENIED) { replaceOnly.remove("conflict.tmp") }
+        check(moveOnly.move("conflict.tmp", "moved.json", false) == RuntimePublicationResult.ALREADY_EXISTS)
+        check(moveOnly.move("conflict.tmp", "spare.tmp", false) == RuntimePublicationResult.PUBLISHED)
+        check(moveOnly.move("spare.tmp", "conflict.tmp", false) == RuntimePublicationResult.PUBLISHED)
+        check(state.move("conflict.tmp", "moved.json", true) == RuntimePublicationResult.PUBLISHED)
+        check(state.read("moved.json").toString(Charsets.UTF_8) == "replacement")
+        check(state.remove("moved.json") == RuntimeDeletionResult.REMOVED)
+        denied(RuntimeDataCode.NOT_FOUND) { state.remove("moved.json") }
+        denied(RuntimeDataCode.INVALID) { state.move("../outside", "target.json", true) }
+        // Bypass client name checks to exercise Main's new control-only wire.
+        check(rawFileMutation(stateHost, stateSession, RuntimeFileCommitWire.MOVE, "../outside", "target.json") == RuntimeDataCode.INVALID.wire)
+        check(rawFileMutation(stateHost, stateSession, RuntimeFileCommitWire.MOVE, "payload.bin", "../outside") == RuntimeDataCode.INVALID.wire)
+        check(rawFileMutation(stateHost, stateSession, RuntimeFileCommitWire.REMOVE, "../outside") == RuntimeDataCode.INVALID.wire)
+        check(rawFileMutation(stateHost, stateSession, RuntimeFileCommitWire.REMOVE, "payload.bin", "unexpected") == RuntimeDataCode.INVALID.wire)
         stage = "nonce"
         val forged = (if (stateSession[0] == '0') "1" else "0") + stateSession.substring(1)
         denied(RuntimeDataCode.DENIED) { RuntimeFileCommitClient(stateHost, forged).publishIfAbsent("forged.bin", byteArrayOf()) }
+        val forgedClient = RuntimeFileCommitClient(stateHost, forged)
+        denied(RuntimeDataCode.DENIED) { forgedClient.move("payload.bin", "forged.bin", true) }
+        denied(RuntimeDataCode.DENIED) { forgedClient.remove("payload.bin") }
         stage = "path"
         for (name in listOf("../outside", "/private/key", ".native-publish-reserved.tmp", "subdir/file")) {
             denied(RuntimeDataCode.INVALID) { state.publishIfAbsent(name, byteArrayOf()) }
@@ -90,6 +122,9 @@ internal fun runFileCommitProbe(data: Bundle): String {
         }
         stage = "closed"
         denied(RuntimeDataCode.CLOSED) { RuntimeFileCommitClient(closedHost, closedSession).publishIfAbsent("late.bin", byteArrayOf()) }
+        val closed = RuntimeFileCommitClient(closedHost, closedSession)
+        denied(RuntimeDataCode.CLOSED) { closed.move("source.tmp", "target.json", false) }
+        denied(RuntimeDataCode.CLOSED) { closed.remove("source.tmp") }
         return "passed"
     } catch (_: Exception) { return stage }
 }
@@ -136,6 +171,18 @@ private fun rawFileCommit(host: IBinder, session: String, name: String, length: 
         data.writeString(session); data.writeString(name); data.writeInt(length)
         body.writeToParcel(data, 0)
         check(host.transact(RuntimeFileCommitWire.PUBLISH, data, reply, 0))
+        return reply.readString()
+    } finally { data.recycle(); reply.recycle() }
+}
+
+private fun rawFileMutation(host: IBinder, session: String, op: Int, source: String, target: String? = null): String? {
+    val data = Parcel.obtain()
+    val reply = Parcel.obtain()
+    try {
+        data.writeInterfaceToken(RuntimeFileCommitWire.DESCRIPTOR)
+        data.writeString(session); data.writeString(source)
+        if (target != null) data.writeString(target)
+        check(host.transact(op, data, reply, 0))
         return reply.readString()
     } finally { data.recycle(); reply.recycle() }
 }

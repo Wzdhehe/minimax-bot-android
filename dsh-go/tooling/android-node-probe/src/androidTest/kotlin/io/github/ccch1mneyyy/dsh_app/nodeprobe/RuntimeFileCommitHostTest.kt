@@ -13,6 +13,7 @@ import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitClient
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitHost
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimePublicationResult
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDeletionResult
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -38,20 +39,23 @@ class RuntimeFileCommitHostTest {
                 val identity = peer.identity().get(10, TimeUnit.SECONDS)
                 assertNotEquals(Process.myUid(), identity.uid)
                 hosts.add(RuntimeFileCommitHost.open(context, "$prefix-backup", identity.uid, peer.peerBinder()))
-                hosts.add(RuntimeFileCommitHost.open(context, "$prefix-state", identity.uid, peer.peerBinder(), allowReplace = true, readTimeoutMs = 1_000, allowRead = true))
-                hosts.add(RuntimeFileCommitHost.open(context, "$prefix-closed", identity.uid, peer.peerBinder()))
+                hosts.add(RuntimeFileCommitHost.open(context, "$prefix-state", identity.uid, peer.peerBinder(), allowReplace = true, readTimeoutMs = 1_000,
+                    allowRead = true, allowMove = true, allowRemove = true))
+                hosts.add(RuntimeFileCommitHost.open(context, "$prefix-closed", identity.uid, peer.peerBinder(), allowMove = true, allowRemove = true))
+                hosts.add(RuntimeFileCommitHost.open(context, "$prefix-state", identity.uid, peer.peerBinder(), allowMove = true))
+                hosts.add(RuntimeFileCommitHost.open(context, "$prefix-state", identity.uid, peer.peerBinder(), allowReplace = true))
                 hosts[2].closeAsync().get(5, TimeUnit.SECONDS)
                 // A correct session from Main is still unauthorized: the host
                 // must use Binder callingUid rather than the payload identity.
                 expectFailure(RuntimeDataCode.DENIED) { RuntimeFileCommitClient(hosts[1], hosts[1].session).publishIfAbsent("wrong-uid.bin", byteArrayOf()) }
                 val result = peer.run(Bundle().apply {
                     putString("id", UUID.randomUUID().toString())
-                    listOf("backup", "state", "closed").forEachIndexed { index, name ->
+                    listOf("backup", "state", "closed", "move", "replace").forEachIndexed { index, name ->
                         putBinder(name + "_host", hosts[index]); putString(name + "_session", hosts[index].session)
                     }
                 }, what = 4).get(15, TimeUnit.SECONDS)
                 assertEquals(identity.uid, result.uid)
-                val allowed = setOf("setup", "exclusive", "replacement", "read", "nonce", "path", "pipe_shape", "truncated", "overlong", "oversize", "timeout", "closed", "passed")
+                val allowed = setOf("setup", "exclusive", "replacement", "read", "mutation", "nonce", "path", "pipe_shape", "truncated", "overlong", "oversize", "timeout", "closed", "passed")
                 val code = result.data.getString("code").takeIf { it in allowed } ?: "unknown"
                 assertTrue("runtime_file_probe_$code", code == "passed")
                 assertEquals("original", File(roots[0], "memory.bak").readText())
@@ -83,6 +87,8 @@ class RuntimeFileCommitHostTest {
             val client = RuntimeFileCommitClient(binder, "a".repeat(64))
             assertEquals("RuntimeFileCommitClient(REDACTED)", client.toString())
             assertEquals(RuntimePublicationResult.OUTCOME_UNKNOWN, client.replace("document.json", byteArrayOf()))
+            assertEquals(RuntimePublicationResult.OUTCOME_UNKNOWN, client.move("source.tmp", "target.json", true))
+            assertEquals(RuntimeDeletionResult.OUTCOME_UNKNOWN, client.remove("document.json"))
         }
     }
 
@@ -131,6 +137,9 @@ class RuntimeFileCommitHostTest {
         val client = RuntimeFileCommitClient(binder, "a".repeat(64))
         expectFailure(RuntimeDataCode.INVALID) { client.publishIfAbsent("../outside", byteArrayOf()) }
         expectFailure(RuntimeDataCode.INVALID) { client.publishIfAbsent("large.bin", ByteArray(1024 * 1024 + 1)) }
+        expectFailure(RuntimeDataCode.INVALID) { client.move("source.tmp", "../outside", false) }
+        expectFailure(RuntimeDataCode.INVALID) { client.move("source.tmp", "source.tmp", false) }
+        expectFailure(RuntimeDataCode.INVALID) { client.remove(".native-publish-reserved.tmp") }
         val result = AtomicReference<RuntimeDataCode>()
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             try { client.publishIfAbsent("document.json", byteArrayOf()) }

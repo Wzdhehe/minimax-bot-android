@@ -16,6 +16,9 @@ internal object RuntimeFileCommitWire {
     const val REPLACE = IBinder.FIRST_CALL_TRANSACTION + 1
     const val READ = IBinder.FIRST_CALL_TRANSACTION + 2
     const val SIZE = IBinder.FIRST_CALL_TRANSACTION + 3
+    const val MOVE = IBinder.FIRST_CALL_TRANSACTION + 4
+    const val MOVE_REPLACE = IBinder.FIRST_CALL_TRANSACTION + 5
+    const val REMOVE = IBinder.FIRST_CALL_TRANSACTION + 6
     const val MAX_BYTES = 1024 * 1024
     const val MAX_WIRE_BYTES = 8 * 1024
     fun validTarget(name: String) = RuntimePrivateDirectory.validName(name) && !name.startsWith(".native-publish-")
@@ -33,6 +36,14 @@ internal class RuntimeFileCommitClient(private val host: IBinder, private val se
     }
     fun publishIfAbsent(name: String, bytes: ByteArray) = commit(RuntimeFileCommitWire.PUBLISH, name, bytes)
     fun replace(name: String, bytes: ByteArray) = commit(RuntimeFileCommitWire.REPLACE, name, bytes)
+    fun move(source: String, target: String, replace: Boolean): RuntimePublicationResult {
+        validate(source)
+        if (!RuntimeFileCommitWire.validTarget(target) || source == target) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+        val op = if (replace) RuntimeFileCommitWire.MOVE_REPLACE else RuntimeFileCommitWire.MOVE
+        return publication(mutate(op, source) { it.writeString(target) })
+    }
+    fun remove(name: String): RuntimeDeletionResult =
+        if (mutate(RuntimeFileCommitWire.REMOVE, name) {} == "removed") RuntimeDeletionResult.REMOVED else RuntimeDeletionResult.OUTCOME_UNKNOWN
     fun read(name: String): ByteArray = query(RuntimeFileCommitWire.READ, name) { reply ->
         if (reply.dataAvail() < 4) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
         val length = reply.readInt()
@@ -77,9 +88,6 @@ internal class RuntimeFileCommitClient(private val host: IBinder, private val se
         if (!slots.tryAcquire()) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
         var scheduled = false
         var pipe: Array<ParcelFileDescriptor>? = null
-        val data = Parcel.obtain()
-        val reply = Parcel.obtain()
-        var attempted = false
         try {
             val snapshot = bytes.copyOf()
             val created = ParcelFileDescriptor.createPipe()
@@ -90,27 +98,49 @@ internal class RuntimeFileCommitClient(private val host: IBinder, private val se
                 finally { slots.release() }
             }
             scheduled = true
-            data.writeInterfaceToken(RuntimeFileCommitWire.DESCRIPTOR)
-            data.writeString(session); data.writeString(name); data.writeInt(snapshot.size)
-            created[0].writeToParcel(data, 0)
-            attempted = true
-            if (!host.transact(op, data, reply, 0)) return RuntimePublicationResult.OUTCOME_UNKNOWN
-            val code = reply.readString()
-            if (reply.dataAvail() != 0) return RuntimePublicationResult.OUTCOME_UNKNOWN
-            return when (code) {
-                "published" -> RuntimePublicationResult.PUBLISHED
-                "already_exists" -> if (op == RuntimeFileCommitWire.PUBLISH) RuntimePublicationResult.ALREADY_EXISTS else RuntimePublicationResult.OUTCOME_UNKNOWN
-                "outcome_unknown" -> RuntimePublicationResult.OUTCOME_UNKNOWN
-                else -> throw RuntimeDataFailure(RuntimeDataCode.entries.firstOrNull { it.wire == code }
-                    ?: return RuntimePublicationResult.OUTCOME_UNKNOWN)
-            }
+            return publication(mutate(op, name) { data ->
+                data.writeInt(snapshot.size)
+                created[0].writeToParcel(data, 0)
+            })
         } catch (error: Exception) {
-            if (error is RuntimeDataFailure) throw error
-            if (attempted) return RuntimePublicationResult.OUTCOME_UNKNOWN
-            throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+            throw if (error is RuntimeDataFailure) error else RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
         } finally {
             pipe?.forEach { try { it.close() } catch (_: Exception) { } }
             if (!scheduled) slots.release()
+        }
+    }
+    private fun publication(code: String): RuntimePublicationResult = when (code) {
+        "published" -> RuntimePublicationResult.PUBLISHED
+        "already_exists" -> RuntimePublicationResult.ALREADY_EXISTS
+        else -> RuntimePublicationResult.OUTCOME_UNKNOWN
+    }
+    private fun mutate(op: Int, name: String, encode: (Parcel) -> Unit): String {
+        validate(name)
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        var attempted = false
+        try {
+            data.writeInterfaceToken(RuntimeFileCommitWire.DESCRIPTOR)
+            data.writeString(session); data.writeString(name)
+            encode(data)
+            if (data.dataSize() > RuntimeFileCommitWire.MAX_WIRE_BYTES) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+            attempted = true
+            if (!host.transact(op, data, reply, 0) || reply.dataSize() > RuntimeFileCommitWire.MAX_WIRE_BYTES) return "outcome_unknown"
+            val code = reply.readString()
+            if (reply.dataAvail() != 0) return "outcome_unknown"
+            return when (code) {
+                "published" -> if (op != RuntimeFileCommitWire.REMOVE) code else "outcome_unknown"
+                "removed" -> if (op == RuntimeFileCommitWire.REMOVE) code else "outcome_unknown"
+                "already_exists" -> if (op == RuntimeFileCommitWire.PUBLISH || op == RuntimeFileCommitWire.MOVE) code else "outcome_unknown"
+                "outcome_unknown" -> code
+                else -> throw RuntimeDataFailure(RuntimeDataCode.entries.firstOrNull { it.wire == code }
+                    ?: return "outcome_unknown")
+            }
+        } catch (error: Exception) {
+            if (error is RuntimeDataFailure) throw error
+            if (attempted) return "outcome_unknown"
+            throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        } finally {
             data.recycle(); reply.recycle()
         }
     }
