@@ -5,8 +5,8 @@ The current persistence candidate hands off four precreated regular data FDs.
 The owner syncs the files and directory before handoff; no directory FD crosses
 Binder. Sidecar deletion syncs its truncated file, while the physical directory
 entries remain immutable. The earlier five-FD candidate failed at Main's IPC
-send on API26/35 before SQLite ran; the four-FD candidate still needs device
-validation. See [T-Persistence](../../../docs/handoff/T-Persistence.md) for evidence,
+send on API26/35 before SQLite ran; the four-FD candidate passed API26/35 emulator validation in run41703671145
+(including two fresh isolated processes). Physical devices/ARM64 remain unverified. See [T-Persistence](../../../docs/handoff/T-Persistence.md) for evidence,
 preconditions and the limits of this verification target.
 
 This is a separate instrumentation target with no launcher, not a product runtime.

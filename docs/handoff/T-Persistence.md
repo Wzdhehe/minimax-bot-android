@@ -1,7 +1,20 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-Persistence：预创建数据FD的SQLite VFS（2026-11-03）
 
-**当前是独立验收候选，不是正式产品runtime。新4文件FD候选尚未通过Android验证；不要把宿主成功写成Android成功。** 默认App仍DSH，没有完整mcode/官方Bot APK或物理真机/ARM64证据。
+**当前是独立验收候选，4文件FD已通过API26/35；不是正式产品runtime或完整FS。** 默认App仍DSH，没有完整mcode/官方Bot APK或物理真机/ARM64证据。
+
+## 2026-11-04：Android四普通文件FD验收通过
+
+**46c1c07 / run41703671145 success**，两版本artifact元数据实际读取：
+
+```text
+API26 id13264018422: node-candidate-results-api-26-t1-f0-e0-s0-passed-l0
+API35 id13263928937: node-candidate-results-api-35-t1-f0-e0-s0-passed-l0
+```
+
+这一个仪器用例在每台执行两次全新isolated Node启动并确认PID不同：WAL、并行只读、写入后重开、integrity=ok、第二进程读回首进程两条；同时保留Keystore/Main-only Key、descriptor/env/log/数据文件不含Key、模型流/取消/回显拒绝、84KB请求和SDK route工具事件断言。现在可确认移除目录FD后IPC与上述SQLite路径执行成功；依然没有SELinux原始policy日志，不扩大具体原因的断言。
+
+物理真机/ARM64、Android进程崩溃/断电恢复、正式数据lease与整个mcode FS未验证。下文旧5FD失败为历史依据，四FD无需重复等待旧CI。
 
 ## 已拿到的实际失败位置
 
@@ -62,7 +75,7 @@ BUILD SUCCESSFUL in 1m 27s
 
 此前22s构建是仍传目录FD的同步修复版本，以本次新四FD构建为准。
 
-Android固定用例计划完整保留模型/SDK/84KB/取消/Key边界，额外WAL/并行只读/重开/integrity及两次不同PID启动；每次unbind等待service Binder死亡。**新四FD的Android执行尚未验证。**
+Android固定用例计划完整保留模型/SDK/84KB/取消/Key边界，额外WAL/并行只读/重开/integrity及两次不同PID启动；每次unbind等待service Binder死亡。**本用例已在上述API26/35运行通过；物理真机未验证。**
 
 ## 有限诊断与接手顺序
 
@@ -77,8 +90,8 @@ env -u GH_TOKEN -u GITHUB_TOKEN gh api \
 
 report-results.py兼容属性、正文、namespace、suite级failure/嵌套堆栈。只输出白名单阶段/code/异常类别和数字测试行号，以及计数；同一有限result_id进入GITHUB_OUTPUT和artifact name。没有异常原文/env/响应/平台诊断。未知值归一化，不通过通配符将任意error.code输出。XML仍是七天私有测试artifact。Keystore随机测试Key的断言不包含原始报告作为失败信息。
 
-1. 观察新四FD run，先确认越过Main IPC；若失败，按真实phase/类别/行号修复，不自动退回同UID、宽存储或内存周期快照。
+1. 四FD已过API26/35，不必重新猜旧IPC失败；先做正式native数据lease/完整FS与ICU进度复用，保留这些断言。
 2. 真正native runtime-data lease尚未实现。只允许专用数据文件，不给Key prefs/Keystore/整个filesDir/workspace；cwd不是权限。owner关闭副本不能撤销dup，撤销需终止隔离执行单元；正式launcher须验证若存在子进程也一起退出。当前仅等service Binder死亡，不证明fork/FD转交场景撤销。
 3. 固定mcode DatabaseClient明确v1/v2双连接，并用独立只读连接验backup。online backup、临时文件、mkdirSync/dataDir、JSON/历史/插件FS与物理inode替换仍缺，不能将本VFS当完整FS桥。
 4. Android设备上的进程崩溃恢复、所有FD关闭、物理真机/ARM64/16KiB页面、断电/存储满尚未验证。宿主crash恢复不能代替它们。
-5. full-ICU producer41680254279仍未完成，默认候选无Intl，完整官方Bot仍不能启动。ee40005已支持经过同repo/branch/精确build inputs验证后的私有产物复用，下载/组合设备路径未验证；见T-AndroidNode。
+5. full-ICU producer41680254279已在330分钟编译超时失败，无产物、verify skipped；默认候选无Intl，完整官方Bot仍不能启动。ee40005已支持经过同repo/branch/精确build inputs验证后的私有产物复用，下载/组合设备路径未验证；见T-AndroidNode。

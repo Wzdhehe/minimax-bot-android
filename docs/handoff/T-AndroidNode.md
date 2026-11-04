@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
-> 最新覆盖：6605508/run41700450899两版本有限artifact元数据均ipc-l252，定位到Main向隔离服务Messenger.send失败，SQLite尚未执行。新候选移除目录FD交接，Main先同步预创建目录项、只交四普通文件FD，Android待验证。以 [T-Persistence](T-Persistence.md) 和 [HANDOFF](../HANDOFF.md) 为准；下文5FD/待CI只记当时实现。
+> 2026-11-04最新：**46c1c07/run41703671145的四普通文件FD候选已API26/35通过**，每台t1/f0/e0/s0，含两次不同PID、WAL/Key/模型。full-ICU重跑41680254279在compile330分钟超时失败、verify skipped，无产物；不能继续写运行中。详见T-Persistence及HANDOFF。
 
 ## full-ICU产物复用入口（待端到端验收）
 
@@ -9,7 +9,7 @@ Node源码构建耗时很长，候选验收workflow现在支持复用已成功�
 
 复用前 `verify-source-run.py` 必须通过：run ID仅整数、同repo/同feat/t-plugins、producer workflow路径/事件/commit正确、build job（含上传）success，且producer commit的源码pin、build-source.py、source workflow与当前逐字节一致。随后download-artifact按固定name取私有产物；归档SHA交prepare-probe继续校验source manifest/config/ABI/ICU及recipe。没有任意artifact URL或静默回退。仅申请Actions只读权限，不触碰release/APK发布。
 
-17项Python检查通过（新增5项覆盖source authority/非法ID不触网/fork等拒绝/未完成producer拒绝/recipe或workflow变更拒绝）。**source产物下载/组合设备验收仍未验证**，当前producer尚未完成；过期/缺失artifact应失败，不能假造SHA。原source job的旧verify仅验它当时commit的固定脚本，不能代替当前SQLite/WAL组合测试。
+17项Python检查通过（新增5项覆盖source authority/非法ID不触网/fork等拒绝/未完成producer拒绝/recipe或workflow变更拒绝）。**source产物下载/组合设备验收仍未验证**，producer41680254279已在330分钟编译超时失败，无产物；过期/缺失artifact应失败，不能假造SHA。原source job的旧verify仅验它当时commit的固定脚本，不能代替当前SQLite/WAL组合测试。
 
 ## 历史：五FD VFS候选（IPC失败，四FD候选见顶部）
 
