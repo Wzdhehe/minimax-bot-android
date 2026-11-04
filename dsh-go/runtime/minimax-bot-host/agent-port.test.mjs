@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
 import { createBotAgentPort } from './agent-port.mjs';
+import { NativeBindingError } from './native-model-binding.mjs';
 import { start } from '../vendor/minimax-bot/miniapp/node/server.mjs';
 
 test('preserves the host identity and forwards cancellation, interaction and failures', async () => {
@@ -89,4 +90,99 @@ test('official Bot service can send two turns through the agent port', async (t)
   assert.equal(calls.length, 2);
   assert.equal(calls[1].sessionId, 'owned-session');
   assert.deepEqual(calls[0].caller, { pluginId: 'builtin-bot', runId: 'registered-run' });
+});
+
+test('runs the turn inside the bound native route', async () => {
+  const order = [];
+  const binding = {
+    runForModelKey: (key, operation) => { order.push(['bind', key]); return operation(); },
+    install() {},
+  };
+  const agent = {
+    run: async () => { order.push(['run']); return 'ok'; },
+    models: async () => [], reply: async () => {}, answer: async () => {},
+  };
+  const port = createBotAgentPort({ agent, caller: { pluginId: 'builtin:minimax-bot', runId: 'r1' }, binding });
+  const result = await port.run({ text: 'hi', sessionId: 's1', model: 'custom_provider:minimax/m1' });
+  assert.equal(result, 'ok');
+  assert.deepEqual(order, [['bind', 'custom_provider:minimax/m1'], ['run']]);
+});
+
+test('resolves the session model when the caller does not name one', async () => {
+  const binding = { runForModelKey: (key) => key };
+  const agent = {
+    run: async () => 'ok', models: async () => [], reply: async () => {}, answer: async () => {},
+  };
+  const port = createBotAgentPort({
+    agent, caller: { pluginId: 'builtin:minimax-bot', runId: 'r1' }, binding,
+    resolveModelKey: async () => 'custom_provider:minimax/m2',
+  });
+  assert.equal(await port.run({ text: 'hi', sessionId: 's1' }), 'custom_provider:minimax/m2');
+});
+
+test('accepts the upstream model selection object as the turn model', async () => {
+  const order = [];
+  const binding = {
+    runForModelKey: (key, operation) => { order.push(key); return operation(); },
+    install() {},
+  };
+  const agent = {
+    run: async () => 'ok', models: async () => [], reply: async () => {}, answer: async () => {},
+  };
+  const port = createBotAgentPort({
+    agent, caller: { pluginId: 'builtin:minimax-bot', runId: 'r1' }, binding,
+  });
+  await port.run({ text: 'hi', sessionId: 's1', model: { providerId: 'custom_provider:minimax', modelId: 'm3' } });
+  assert.deepEqual(order, ['custom_provider:minimax/m3']);
+});
+
+test('refuses a turn whose model is not in the native catalog', async () => {
+  const binding = {
+    runForModelKey: () => { throw new NativeBindingError('model_not_available'); },
+    install() {},
+  };
+  const agent = {
+    run: async () => 'ok', models: async () => [], reply: async () => {}, answer: async () => {},
+  };
+  const port = createBotAgentPort({ agent, caller: { pluginId: 'builtin:minimax-bot', runId: 'r1' }, binding });
+  await assert.rejects(() => port.run({ text: 'hi', sessionId: 's1', model: 'custom_provider:other/m1' }),
+    (error) => error.code === 'model_not_available');
+});
+
+test('refuses a turn when no model can be resolved at all', async () => {
+  const binding = { runForModelKey: (key, operation) => operation(), install() {} };
+  const agent = {
+    run: async () => 'ok', models: async () => [], reply: async () => {}, answer: async () => {},
+  };
+  const port = createBotAgentPort({
+    agent, caller: { pluginId: 'builtin:minimax-bot', runId: 'r1' }, binding,
+    resolveModelKey: async () => null,
+  });
+  await assert.rejects(() => port.run({ text: 'hi', sessionId: 's1' }),
+    (error) => error instanceof NativeBindingError && error.code === 'model_not_available');
+});
+
+test('binds the answer turn as well', async () => {
+  const order = [];
+  const binding = {
+    runForModelKey: (key, operation) => { order.push(key); return operation(); },
+    install() {},
+  };
+  const agent = {
+    run: async () => 'ok', models: async () => [], reply: async () => {}, answer: async () => {},
+  };
+  const port = createBotAgentPort({ agent, caller: { pluginId: 'builtin:minimax-bot', runId: 'r1' }, binding });
+  await port.answer({ sessionId: 's1', requestId: 'q', answers: [], model: 'custom_provider:minimax/m1' });
+  assert.deepEqual(order, ['custom_provider:minimax/m1']);
+});
+
+test('keeps the unbound behaviour when no binding is configured', async () => {
+  const calls = [];
+  const agent = {
+    run: async (input) => { calls.push(['run', input.model]); return 'ok'; },
+    models: async () => ({}), reply: async () => {}, answer: async () => {},
+  };
+  const port = createBotAgentPort({ agent, caller: { pluginId: 'builtin:minimax-bot', runId: 'r1' } });
+  assert.equal(await port.run({ text: 'hi', model: 'custom_provider:minimax/m1' }), 'ok');
+  assert.deepEqual(calls, [['run', 'custom_provider:minimax/m1']]);
 });
