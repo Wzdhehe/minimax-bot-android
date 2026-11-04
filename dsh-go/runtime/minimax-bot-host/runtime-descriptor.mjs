@@ -13,7 +13,7 @@
 // token inside a descriptor is a session-scoped loopback credential, not the
 // provider API key; the provider key never reaches this process.
 
-import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { findCatalogViolation } from './runtime-catalog-policy.mjs';
 
@@ -21,6 +21,7 @@ export const RUNTIME_DESCRIPTOR_FILENAME = 'runtime-descriptor.json';
 
 /** Permissions a descriptor file must have: owner only. */
 const OWNER_ONLY = 0o600;
+const MAX_DESCRIPTOR_BYTES = 1024 * 1024;
 
 /** Environment names the runtime is allowed to inherit from the host. */
 const ENV_ALLOWLIST = Object.freeze([
@@ -230,6 +231,66 @@ export function readRuntimeDescriptor({ path, allowedRoots = [], workspaceRoot =
     throw descriptorFailure(error.code === 'ELOOP' ? 'descriptor_not_a_regular_file' : 'descriptor_missing');
   } finally {
     if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/**
+ * Consume a read-only descriptor FD granted by the trusted Android owner.
+ * The expected owner UID is supplied by the native launcher, not the Agent
+ * or the descriptor itself. An isolated UID cannot open the owner's private
+ * pathname; it reads only this explicitly granted regular file. Ownership of
+ * fd transfers here and the FD is closed on every valid-FD success/failure.
+ */
+export function readRuntimeDescriptorFd({ fd, expectedOwnerUid } = {}) {
+  if (!Number.isSafeInteger(fd) || fd < 3) throw descriptorFailure('descriptor_invalid');
+  try {
+    if (!Number.isSafeInteger(expectedOwnerUid) || expectedOwnerUid < 0) throw descriptorFailure('descriptor_invalid');
+    const stats = fstatSync(fd);
+    // An already-granted generation may have been atomically replaced and
+    // therefore have zero directory links; the open FD still owns its inode.
+    if (!stats.isFile() || stats.nlink > 1) throw descriptorFailure('descriptor_not_a_regular_file');
+    if ((stats.mode & 0o077) !== 0 || stats.uid !== expectedOwnerUid) throw descriptorFailure('descriptor_permissions');
+    if (!Number.isSafeInteger(stats.size) || stats.size < 1 || stats.size > MAX_DESCRIPTOR_BYTES) {
+      throw descriptorFailure('descriptor_invalid');
+    }
+    const bytes = Buffer.alloc(stats.size);
+    for (let offset = 0; offset < bytes.length;) {
+      const count = readSync(fd, bytes, offset, bytes.length - offset, offset);
+      if (count <= 0) throw descriptorFailure('descriptor_invalid');
+      offset += count;
+    }
+    const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    assertTransferredDescriptorShape(raw);
+    return createRuntimeDescriptor(raw);
+  } catch (error) {
+    if (typeof error?.code === 'string' && error.code.startsWith('descriptor_')) throw error;
+    throw descriptorFailure('descriptor_invalid');
+  } finally {
+    try { closeSync(fd); } catch {}
+  }
+}
+
+// The native encoder uses an allowlist. Refuse extra fields in the transferred
+// representation rather than silently accepting a forgotten sensitive field.
+function assertTransferredDescriptorShape(raw) {
+  const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const only = (value, names) => object(value) && Object.keys(value).every((name) => names.includes(name));
+  if (!only(raw, ['entryPath', 'pinCommit', 'port', 'token', 'broker', 'catalog'])) throw descriptorFailure('descriptor_invalid');
+  if (raw.broker != null && !only(raw.broker, ['baseUrl', 'token'])) throw descriptorFailure('descriptor_invalid');
+  const catalog = raw.catalog;
+  if (catalog == null) return;
+  if (!only(catalog, ['providers', 'defaultProviderId', 'defaultModelId']) ||
+      (catalog.providers !== undefined && !Array.isArray(catalog.providers))) throw descriptorFailure('descriptor_invalid');
+  for (const row of catalog.providers ?? []) {
+    if (!only(row, ['providerId', 'name', 'apiFormat', 'enabled', 'models', 'hasApiKey']) ||
+        (row.models !== undefined && (!Array.isArray(row.models) || row.models.some((value) => typeof value !== 'string'))) ||
+        ['providerId', 'name', 'apiFormat'].some((key) => row[key] !== undefined && typeof row[key] !== 'string') ||
+        ['enabled', 'hasApiKey'].some((key) => row[key] !== undefined && typeof row[key] !== 'boolean')) {
+      throw descriptorFailure('descriptor_invalid');
+    }
+  }
+  for (const key of ['defaultProviderId', 'defaultModelId']) {
+    if (catalog[key] != null && typeof catalog[key] !== 'string') throw descriptorFailure('descriptor_invalid');
   }
 }
 

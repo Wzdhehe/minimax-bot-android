@@ -24,6 +24,7 @@ test('real pinned runtime boots with native host SQLite and serves the official 
   assert.equal(result.status, 0, result.stdout + result.stderr + (result.error?.message ?? ''));
   assert.match(result.stdout, /PASS: real fork factory cold-start\/reopen/);
   assert.match(result.stdout, /projected non-secret provider catalog/);
+  assert.match(result.stdout, /descriptor read-back by path and FD/);
   assert.match(result.stdout, /unbound model turn refused/);
   assert.ok(!result.stdout.includes('native-broker-placeholder'));
   t.diagnostic(result.stdout.match(/PASS: real fork factory[^\n]*/)[0]);

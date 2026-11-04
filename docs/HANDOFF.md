@@ -6,7 +6,8 @@
 
 ## 当前已完成与未完成
 
-- Android隔离Node验收已增加生产`native-model-binding`的真实JNI/Binder模型链：无scope先拒绝，两个binding先后经过相同授权模型/流，关闭一个后另一个继续；仪器用例核对工具事件、生成Key只在native注入且不进入报告/文件。Linux实际FD夹具2项、Python32、SQLite VFS宿主验证和两个验收APK编译已通过；**API26/35新设备结果待本阶段CI，真实provider/产品launcher仍未完成**。
+- 已实现隔离descriptor只读FD交接组件：Main原子写入、校验owner和权限后提供只读FD，isolated Node按可信owner UID、大小、文件类型和字段白名单验证并关闭；支持已被替换的旧inode。Kotlin允许broker为null，不伪造isolated无法使用的loopback模型broker。新跨UID仪器用例已编写，需以本阶段CI结果为准；正式launcher仍未接入。
+- Android隔离Node验收已增加生产`native-model-binding`的真实JNI/Binder模型链：无scope先拒绝，两个binding先后经过相同授权模型/流，关闭一个后另一个继续；仪器用例核对工具事件、生成Key只在native注入且不进入报告/文件。Linux实际FD夹具2项、Python32、SQLite VFS宿主验证和两个验收APK编译已通过；**a3c2056 / 41856965389 API26/35模拟器均success，artifact各t49/f0/e0/s0；真实provider/产品launcher仍未完成**。
 - 本轮修复多个runtime共享fetch时的路由冲突：共享AsyncLocalStorage、按target引用计数与在飞operation收尾，任一runtime关闭不能让另一runtime退回原始fetch；未绑定请求拒绝。此路由仍不是进程/UID隔离，孤儿异步任务及真实launcher的进程终止须另行处理。
 - 本轮修复缺失native binding时的绕过：Bot的run/answer现在返回`native_binding_unavailable`，不会调用上游gateway；带绑定的turn仍走scope。真实gateway生命周期新增负例。目录仍可展示；native broker接线与正式启动器尚未完成。
 

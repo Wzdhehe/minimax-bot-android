@@ -4,12 +4,13 @@
 const modelModuleUrl = "__MBOT_FD_MODULE_URL__";
 const nativeRouteModuleUrl = "__MBOT_NATIVE_ROUTE_MODULE_URL__";
 const nativeBindingModuleUrl = "__MBOT_NATIVE_BINDING_MODULE_URL__";
+const descriptorModuleUrl = "__MBOT_DESCRIPTOR_MODULE_URL__";
 const fs = require('node:fs');
 let probePhase = 'bootstrap';
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
 
 (async () => {
-  const [normal, stalled, echo, result, privatePath, nativeLibraryDir, providerId, ...dataFdArgs] = process.argv.slice(1);
+  const [normal, stalled, echo, result, privatePath, nativeLibraryDir, providerId, descriptorFd, descriptorOwnerUid, ...dataFdArgs] = process.argv.slice(1);
   const { streamNativeModelFd } = await import(modelModuleUrl);
   async function consume(fd, cancel) {
     const controller = new AbortController();
@@ -103,6 +104,20 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     echoed: await consume(echo, false),
   };
   if (providerId) {
+    probePhase = 'descriptor_transfer';
+    const { readRuntimeDescriptorFd } = await import(descriptorModuleUrl);
+    const descriptorNumber = Number(descriptorFd);
+    const guestDescriptor = readRuntimeDescriptorFd({ fd: descriptorNumber, expectedOwnerUid: Number(descriptorOwnerUid) });
+    let descriptorClosed = false;
+    try { fs.fstatSync(descriptorNumber); } catch (error) { descriptorClosed = error.code === 'EBADF'; }
+    const row = guestDescriptor.catalog?.providers?.find((provider) => provider.providerId === providerId);
+    report.descriptorTransfer = {
+      pin: guestDescriptor.pinCommit === '97818b2890b4acae1c6bd1200a226ff506680628',
+      provider: !!row && row.models.includes('normal') && row.apiFormat === 'openai-completions',
+      generation: guestDescriptor.port === 43117,
+      brokerAbsent: guestDescriptor.broker === null,
+      closed: descriptorClosed,
+    };
     probePhase = 'model_dynamic';
     const binding = process._linkedBinding('mbot_model_bridge');
     const request = JSON.stringify({ providerId, modelId: 'normal', messages: [{ role: 'user', content: 'Hi dynamic' }] });
@@ -247,7 +262,8 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
   const codes = new Set(['SQLITE_CANTOPEN', 'SQLITE_IOERR', 'SQLITE_IOERR_SHMOPEN', 'SQLITE_BUSY', 'SQLITE_READONLY',
     'SQLITE_ERROR', 'SQLITE_PERM', 'SQLITE_MISUSE', 'SQLITE_NOTFOUND', 'fd_vfs_unavailable', 'fd_vfs_input_invalid',
     'runtime_data_invalid', 'runtime_data_denied', 'runtime_data_closed', 'runtime_data_unavailable',
-    'runtime_data_not_found', 'runtime_data_too_large']);
+    'runtime_data_not_found', 'runtime_data_too_large', 'descriptor_invalid', 'descriptor_permissions',
+    'descriptor_not_a_regular_file']);
   const code = codes.has(error?.code) ? error.code : codes.has(error?.message) ? error.message :
     error?.message === 'Cannot open database because the directory does not exist' ? 'sqlite_parent_missing' : 'unknown';
   try {

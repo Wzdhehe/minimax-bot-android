@@ -9,24 +9,26 @@ import org.json.JSONObject
  * The trusted hand-off from the Android host to the guest runtime.
  *
  * The descriptor carries the guest entry path, the pinned upstream commit, the
- * loopback port and the session token of the local Bot service, plus the
- * native model broker session the guest uses for model requests. The host
- * writes it into its own private directory - the guest's HOME - with mode
- * 0600, and the guest reads it back.
+ * loopback port and the session token of the local Bot service, plus an
+ * optional native model broker session. The host
+ * writes it into its own private directory with mode 0600. An isolated guest
+ * cannot open that pathname; the trusted host must explicitly transfer a
+ * read-only FD via [RuntimeDescriptor.writeForTransfer].
  *
  * It never travels through argv or the environment: a process list, an
  * inherited variable or a world-readable file would hand a live session to
  * the Agent. A descriptor that is not an owner-only regular file owned by
- * this app is refused on both sides, and a pre-existing symlink is replaced
- * rather than followed.
+ * the trusted owner is refused, and a pre-existing symlink is replaced rather
+ * than followed. A loopback broker URL here does not imply network access from
+ * an isolated UID; model requests use the separate native capability.
  */
 internal class RuntimeDescriptorSession(
     val entryPath: String,
     val pinCommit: String,
     val port: Int,
     val token: String,
-    val brokerBaseUrl: String,
-    val brokerToken: String,
+    val brokerBaseUrl: String? = null,
+    val brokerToken: String? = null,
     /**
      * The non-secret provider catalog, encoded by [io.github.ccch1mneyyy.dsh_app.bot.GuestProviderCatalog].
      * Absent when native has no provider configured yet.
@@ -53,8 +55,11 @@ internal object RuntimeDescriptorPayload {
 
     /** Encode the descriptor fields. The catalog is spliced in verbatim. */
     fun encode(session: RuntimeDescriptorSession): String {
-        val broker = "{\"baseUrl\":" + quote(session.brokerBaseUrl) +
-            ",\"token\":" + quote(session.brokerToken) + "}"
+        val baseUrl = session.brokerBaseUrl
+        val token = session.brokerToken
+        require((baseUrl == null) == (token == null)) { "broker session incomplete" }
+        val broker = if (baseUrl == null || token == null) "null" else
+            "{\"baseUrl\":" + quote(baseUrl) + ",\"token\":" + quote(token) + "}"
         val catalog = session.catalogJson?.let { json ->
             require(json.isNotBlank()) { "catalog must not be empty" }
             require(json.startsWith("{") && json.endsWith("}")) { "catalog must be a JSON object" }

@@ -24,7 +24,7 @@ abstract class SharedModelSources : DefaultTask() {
 }
 val productionSources by tasks.registering(SharedModelSources::class) {
     inputDir.set(file("../../app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app"))
-    includes.set(listOf("model/**", "bot/BotProviderStore.kt", "bot/BotSettingsStore.kt", "bot/GuestProviderCatalog.kt", "bot/NativeModelChannel.kt", "bot/NativeModelRequestHost.kt", "isolation/ModelRequestClient.kt", "isolation/RuntimeDatabaseFiles.kt", "isolation/RuntimePrivateDirectory.kt", "isolation/RuntimeDirectoryMutationLock.kt", "isolation/RuntimeAtomicPublisher.kt", "isolation/NativeRuntimePublication.kt", "isolation/BoundedPipe*.kt", "isolation/RuntimeFileCommit*.kt", "isolation/RuntimeFileSnapshot.kt"))
+    includes.set(listOf("model/**", "bot/BotProviderStore.kt", "bot/BotSettingsStore.kt", "bot/GuestProviderCatalog.kt", "bot/NativeModelChannel.kt", "bot/NativeModelRequestHost.kt", "runtime/RuntimeDescriptor.kt", "runtime/RuntimeDescriptorPayload.kt", "isolation/ModelRequestClient.kt", "isolation/RuntimeDatabaseFiles.kt", "isolation/RuntimePrivateDirectory.kt", "isolation/RuntimeDirectoryMutationLock.kt", "isolation/RuntimeAtomicPublisher.kt", "isolation/NativeRuntimePublication.kt", "isolation/BoundedPipe*.kt", "isolation/RuntimeFileCommit*.kt", "isolation/RuntimeFileSnapshot.kt"))
     outputDir.set(layout.buildDirectory.dir("shared-model"))
 }
 val productionResources by tasks.registering(SharedModelSources::class) {

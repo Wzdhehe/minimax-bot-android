@@ -51,6 +51,15 @@ class ResultReportingTest(unittest.TestCase):
         self.assertNotIn('phase=', output)
         self.assertIn('Node probe counts tests=1 failures=1', output)
 
+    def test_descriptor_and_scoped_route_diagnostics_are_finite(self):
+        for phase, failure in [('descriptor_transfer', 'descriptor_permissions'),
+                               ('scoped_model_route', 'unknown')]:
+            with self.subTest(phase=phase):
+                code, output = self.run_report('private-sentinel node_probe_failed_at_' + phase + '_code_' + failure)
+                self.assertEqual(code, 1)
+                self.assertIn('Node probe phase=' + phase + ' code=' + failure, output)
+                self.assertNotIn('private-sentinel', output)
+
     def test_no_results_is_failure(self):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(self.module.report(self.root), 1)

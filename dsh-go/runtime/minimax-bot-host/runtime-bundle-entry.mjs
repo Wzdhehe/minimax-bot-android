@@ -3,13 +3,13 @@
 // Agent, open a listener, register a caller, or change the Android launcher.
 import { createWebuiRuntimeHost } from '@mcode-runtime/assembly';
 import { createBotRuntimeSession } from './runtime-host-session.mjs';
-import { catalogFromDescriptor, readRuntimeDescriptor } from './runtime-descriptor.mjs';
+import { catalogFromDescriptor, readRuntimeDescriptor, readRuntimeDescriptorFd } from './runtime-descriptor.mjs';
 export { createWebuiRuntimeHost };
 
 // The guest reads the descriptor the Android host wrote into its own private
 // directory. This is the only channel that carries the native provider
 // catalog into the guest.
-export { readRuntimeDescriptor };
+export { readRuntimeDescriptor, readRuntimeDescriptorFd };
 
 // Trusted controller factory; defining it does not launch a process/listener.
 // Android must still assemble its independent-UID model/files adapters first.

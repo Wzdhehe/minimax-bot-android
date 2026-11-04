@@ -2,6 +2,7 @@
 // Keyless real-factory probe: no replacement gateway/session/model factory.
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
+import { constants, openSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
@@ -11,7 +12,7 @@ import { UPSTREAM_RUNTIME_COMMIT } from '../../runtime/minimax-bot-host/upstream
 import { writeRuntimeDescriptor } from '../../runtime/minimax-bot-host/runtime-descriptor.mjs';
 
 const [bundle, root] = process.argv.slice(2);
-const { createBuiltinBotRuntime, readRuntimeDescriptor, startBotService } = await import(pathToFileURL(join(bundle, 'runtime-host.partial.mjs')).href);
+const { createBuiltinBotRuntime, readRuntimeDescriptor, readRuntimeDescriptorFd, startBotService } = await import(pathToFileURL(join(bundle, 'runtime-host.partial.mjs')).href);
 const token = randomBytes(32).toString('hex');
 // A non-secret catalog: the guest may learn the provider, its api format and
 // its models. The real endpoint and the real credential stay on the native
@@ -44,7 +45,10 @@ for (let pass = 0; pass < 2; pass++) {
     allowedRoots: [descriptorDir],
   });
   // The guest reads the descriptor back and learns the catalog from it.
-  const descriptor = readRuntimeDescriptor({ path: descriptorPath, allowedRoots: [descriptorDir] });
+  const byPath = readRuntimeDescriptor({ path: descriptorPath, allowedRoots: [descriptorDir] });
+  const fd = openSync(descriptorPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const descriptor = readRuntimeDescriptorFd({ fd, expectedOwnerUid: process.getuid() });
+  assert.deepEqual(descriptor, byPath);
   assert.deepEqual(descriptor.catalog, CATALOG);
   if (!pass) {
     // A descriptor that carries a real endpoint or a credential is refused by
@@ -113,4 +117,4 @@ for (let pass = 0; pass < 2; pass++) {
     await assert.rejects(runtime.agent.models(), (error) => error.code === 'AGENT_UNAVAILABLE');
   }
 }
-console.log('PASS: real fork factory cold-start/reopen, descriptor read-back with projected non-secret provider catalog with placeholder credential and virtual origin, registered gateway with SQLite lookup, unbound model turn refused, authenticated official Bot create/persist/read, shared close and stale-port rejection; no model turn or Android execution');
+console.log('PASS: real fork factory cold-start/reopen, descriptor read-back by path and FD with projected non-secret provider catalog with placeholder credential and virtual origin, registered gateway with SQLite lookup, unbound model turn refused, authenticated official Bot create/persist/read, shared close and stale-port rejection; no model turn or Android execution');

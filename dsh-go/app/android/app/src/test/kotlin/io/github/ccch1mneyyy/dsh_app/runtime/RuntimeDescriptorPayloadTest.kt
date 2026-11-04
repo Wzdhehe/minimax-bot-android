@@ -31,6 +31,29 @@ class RuntimeDescriptorPayloadTest {
     }
 
     @Test
+    fun `an isolated guest needs no loopback broker session`() {
+        val existing = session(catalog)
+        val isolated = RuntimeDescriptorSession(existing.entryPath, existing.pinCommit, existing.port,
+            existing.token, catalogJson = catalog)
+        val descriptor = JSONObject(RuntimeDescriptorPayload.encode(isolated))
+        assertTrue(descriptor.isNull("broker"))
+        assertEquals("p1", descriptor.getJSONObject("catalog").getString("defaultProviderId"))
+    }
+
+    @Test
+    fun `a partial loopback broker session is refused`() {
+        val existing = session()
+        for ((baseUrl, token) in listOf("http://127.0.0.1:43117" to null, null to "a".repeat(64))) {
+            var refused = false
+            try {
+                RuntimeDescriptorPayload.encode(RuntimeDescriptorSession(existing.entryPath, existing.pinCommit,
+                    existing.port, existing.token, baseUrl, token))
+            } catch (_: IllegalArgumentException) { refused = true }
+            assertTrue(refused)
+        }
+    }
+
+    @Test
     fun `a descriptor carries the non-secret catalog`() {
         val descriptor = JSONObject(RuntimeDescriptorPayload.encode(session(catalog)))
         assertEquals(6, descriptor.length())

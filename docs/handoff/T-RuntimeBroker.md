@@ -1,5 +1,15 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-04）
 
+## 继续开发：descriptor只读FD交接（仪器验收待CI）
+
+此前Linux factory使用Node同UID writer，不能证明Android Main→isolated交接。现`RuntimeDescriptor.writeForTransfer`在同一writer锁内原子写入并打开Main私有owner-only普通文件，校验UID、模式、单链接和1MiB上限，只交出只读PFD；可信父目录仍是前提。已发PFD在后续原子替换后仍指向旧inode。`RuntimeDescriptorSession`允许broker成对为空，对齐Node已有契约，isolated不伪造loopback模型连接；只填一半时拒绝。
+
+Node新增`readRuntimeDescriptorFd`：只接受可信启动器传入的owner UID及FD，限制普通文件/权限/大小、UTF-8、字段白名单，读取并始终关闭FD；已替换的旧inode允许nlink=0，硬链接nlink>1拒绝。目录只投影允许的非密钥字段，真实端点和Key不由writer生成。真实fork宿主验收已用相同FD reader投影，但仍是Linux同UID，不是Android实证。
+
+本地实跑：`test-native-model-broker.sh`的JUnit42和Node56全部通过，含Key不进入descriptor/env/log/Agent文件；Node descriptor单测18通过（含旧generation替换、错owner/权限/硬链接/超限/非法UTF-8）；真实fork工厂/SQLite/Bot宿主重开1项通过，reader走FD。Node验收脚本宿主2项、Python33通过；两个独立Android验收工程的debug与instrumentation APK编译通过（broker `BUILD SUCCESSFUL in 5m 5s`、Node `BUILD SUCCESSFUL in 2m 26s`）。本地Node包用默认release，`requiresIntl=false`、`requiresSqlite=false`；组合分支依赖CI。broker Gradle的`testDebugUnitTest --offline`曾因本机缺org.json/MockWebServer缓存而停止，后用独立脚本真实跑JUnit42、单独编译两个APK成功，不把离线Gradle失败写成通过。
+
+Android验收脚本新增真实Main Kotlin写入+只读PFD交给独立UID Node：先发旧FD再在Main写新generation，Node断言读到旧generation、正确provider、broker为null、FD关闭；Main检查Key/端点不在descriptor、Key和两个Bot会话token不在报告。设备用例已写，推送后须看API26/35矩阵，不能提前称通过。正式product launcher、生产资源/文件适配和真实provider仍未完成。
+
 ## 继续开发：多个模型binding共享fetch生命周期（2026-11-04）
 
 原实现每个binding独占global fetch：先后装两个binding时，前一个turn读取的是后一个scope；先关闭前一个还会把原始fetch提前恢复。已先用并发与反序close负例复现，再改为默认共享AsyncLocalStorage、按目标引用计数，最后一个绑定且其在飞operation结束后才恢复原属性；关闭的binding在返回的operation仍运行时拒绝其延迟fetch。不同scope竞争同一target拒绝，不覆盖外部改动。

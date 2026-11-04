@@ -9,15 +9,17 @@
 
 用户已要求继续开发；本轮从远端20c4516快进。实查41847283176重跑后整体success：API26/35结果artifact均t49/f0/e0/s0；首次API35模拟器包下载损坏的失败历史保留。41850609902等是GitHub Android模拟器，不能称物理真机。
 
+新descriptor FD组件已加入：Main `RuntimeDescriptor.writeForTransfer`生成只读PFD，Node `readRuntimeDescriptorFd`按可信owner UID验收并消费；1MiB、owner/mode/单链接及字段白名单均限制，已替换的旧inode nlink=0允许，broker可为null。Android仪器用例已写：Main发布旧FD后覆盖新generation，isolated Node读取旧版本并核provider/FD关闭；实际API26/35结果以本轮CI为准。此组件尚未接产品launcher，也不能解决全部runtime文件或Bot listener传输。 本地JUnit42/Node56、descriptor单测18、真实fork工厂FD读回1项、probe宿主2项/Python33通过；broker和Node两个验收工程各自debug+instrumentation APK编译通过（Node本地默认release无Intl/SQLite）。broker离线Gradle单元任务因缺依赖缓存失败，独立JUnit脚本42项通过；本机无设备。
+
 本轮复核发现`createBotAgentPort`无binding时原来仍调用上游gateway，与既定「未接broker时拒绝模型」相矛盾。现`run`与`answer`在进入gateway前返回`native_binding_unavailable`；`models`/`reply`不变。真实钉点gateway测试覆盖无binding拒绝且无session/turn发生；原身份/取消用例显式使用假路由，其模型执行仍为桩。真实完整factory另覆盖已投影模型但无binding时拒绝。**修复不是Android launcher或真实模型已接通。**
 
 并发模型路由也已修：`native-model-binding.mjs`给默认binding共享AsyncLocalStorage，并按fetch target记录owner数。多个绑定并发按turn上下文寻路，任一关闭不恢复活跃实例的原始fetch；关闭时在飞operation的后续fetch会拒绝，等待返回的operation Promise结束后才释放该binding的安装引用。两个关闭顺序、无绑定fetch、延迟请求及不兼容dispatcher均有回归。**此机制不是安全沙箱**；无法跟踪已返回operation Promise后脱离的孤儿任务，正式独立UID进程的生命周期/退出与native撤销仍须独立设计验证。
 
-最新验收扩展：精确Android Node脚本现把生产`native-model-binding`经linked JNI→隔离Kotlin→Main native broker实际执行；新增双binding依次发流、首个关闭后第二个继续、无scope拒绝的断言。Linux真实FD夹具2项和Python32通过，验收APK/仪器APK本地编译成功；API26/35新设备结果待push后CI，尚未证明产品launcher、多provider或真实provider。详见[T-AndroidNode](T-AndroidNode.md)。
+最新验收扩展：精确Android Node脚本现把生产`native-model-binding`经linked JNI→隔离Kotlin→Main native broker实际执行；新增双binding依次发流、首个关闭后第二个继续、无scope拒绝的断言。Linux真实FD夹具2项和Python32通过，验收APK/仪器APK本地编译成功；a3c2056 / 41856965389的API26/35模拟器已success（artifact各t49/f0/e0/s0），尚未证明产品launcher、多provider或真实provider。详见[T-AndroidNode](T-AndroidNode.md)。
 
 本机验证：绑定/目录/端口46项、真实钉点gateway生命周期10项（session/model执行为桩）、现有3种SDK/真实FD工具流9项通过；无Android或真实provider新结果。8bb3153对应host41854640522、scope41854640344、docs41854640341已success，native41854640524尚在进行，需继续实查。
 
-后续继续独立UID launcher、可信broker与文件能力接线；每个阶段必须可验、保留fail-closed与Key只在native。特别注意：Linux真实factory探针实际用Node writer模拟descriptor，不是Kotlin writer→隔离UID guest；现有Kotlin路径writer写Main私有0600文件，隔离UID不能直接按该路径读取。须先设计并验收由Main授权的只读FD交付，不得以同UID路径测试冒充跨UID闭环。
+后续继续独立UID launcher、可信broker与文件能力接线；每个阶段必须可验、保留fail-closed与Key只在native。特别注意：Linux真实factory探针实际用Node writer模拟descriptor，不是Kotlin writer→隔离UID guest；现有Kotlin路径writer写Main私有0600文件，隔离UID不能直接按该路径读取。现已编写Main只读FD交付组件及独立UID仪器用例，设备结果以本轮CI为准；不得以同UID宿主测试冒充跨UID闭环。
 
 ## 1. 先认清交付状态
 

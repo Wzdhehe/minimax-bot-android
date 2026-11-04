@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, fstatSync, linkSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -11,6 +11,7 @@ import {
   catalogFromDescriptor,
   createRuntimeDescriptor,
   readRuntimeDescriptor,
+  readRuntimeDescriptorFd,
   writeRuntimeDescriptor,
 } from './runtime-descriptor.mjs';
 
@@ -34,6 +35,61 @@ test('a descriptor needs an absolute entry, a pinned commit, a port and a token'
   assert.throws(() => createRuntimeDescriptor({ entryPath: '/x', pinCommit: '97818b2', port: 8080, token: 'b'.repeat(64) }), /pinned/);
   assert.throws(() => createRuntimeDescriptor({ entryPath: '/x', pinCommit: PIN, port: 0, token: 'b'.repeat(64) }), /port/);
   assert.throws(() => createRuntimeDescriptor({ entryPath: '/x', pinCommit: PIN, port: 80, token: 'short' }), /token/);
+});
+
+test('a transferred descriptor is read by FD using its trusted owner UID and then closed', () => {
+  const { priv } = makeDirs();
+  const descriptor = createRuntimeDescriptor({ entryPath: '/private/entry.mjs', pinCommit: PIN, port: 43117,
+    token: 'a'.repeat(64), catalog: { providers: [{ providerId: 'p', models: ['m'] }] } });
+  const path = writeRuntimeDescriptor({ dir: priv, descriptor, allowedRoots: [priv] });
+  const fd = openSync(path, 'r');
+  assert.deepEqual(readRuntimeDescriptorFd({ fd, expectedOwnerUid: process.getuid() }), descriptor);
+  assert.throws(() => fstatSync(fd), (error) => error.code === 'EBADF');
+});
+
+test('a transferred FD keeps its original generation after atomic descriptor replacement', () => {
+  const { priv } = makeDirs();
+  const old = createRuntimeDescriptor({ entryPath: '/private/entry.mjs', pinCommit: PIN, port: 43117, token: 'a'.repeat(64) });
+  const path = writeRuntimeDescriptor({ dir: priv, descriptor: old, allowedRoots: [priv] });
+  const fd = openSync(path, 'r');
+  const newer = createRuntimeDescriptor({ ...old, port: 43118, token: 'b'.repeat(64) });
+  writeRuntimeDescriptor({ dir: priv, descriptor: newer, allowedRoots: [priv] });
+  assert.deepEqual(readRuntimeDescriptorFd({ fd, expectedOwnerUid: process.getuid() }), old);
+  assert.deepEqual(readRuntimeDescriptor({ path, allowedRoots: [priv] }), newer);
+});
+
+test('transferred descriptors reject incorrect ownership, unsafe modes, extra fields and oversized data', () => {
+  const { priv } = makeDirs();
+  const descriptor = createRuntimeDescriptor({ entryPath: '/private/entry.mjs', pinCommit: PIN, port: 43117, token: 'a'.repeat(64) });
+  const path = writeRuntimeDescriptor({ dir: priv, descriptor, allowedRoots: [priv] });
+  const uid = process.getuid();
+  let fd = openSync(path, 'r');
+  assert.throws(() => readRuntimeDescriptorFd({ fd, expectedOwnerUid: uid + 1 }), (error) => error.code === 'descriptor_permissions');
+  assert.throws(() => fstatSync(fd), (error) => error.code === 'EBADF');
+  chmodSync(path, 0o644);
+  fd = openSync(path, 'r');
+  assert.throws(() => readRuntimeDescriptorFd({ fd, expectedOwnerUid: uid }), (error) => error.code === 'descriptor_permissions');
+  chmodSync(path, 0o600);
+  writeFileSync(path, JSON.stringify({ ...descriptor, apiKey: 'fixture-must-not-cross' }));
+  fd = openSync(path, 'r');
+  assert.throws(() => readRuntimeDescriptorFd({ fd, expectedOwnerUid: uid }), (error) => error.code === 'descriptor_invalid');
+  writeFileSync(path, JSON.stringify({ ...descriptor, catalog: { providers: [{ providerId: 'p', baseUrl: 'https://example.invalid' }] } }));
+  fd = openSync(path, 'r');
+  assert.throws(() => readRuntimeDescriptorFd({ fd, expectedOwnerUid: uid }), (error) => error.code === 'descriptor_invalid');
+  writeFileSync(path, Buffer.from([0xff, 0xfe]));
+  fd = openSync(path, 'r');
+  assert.throws(() => readRuntimeDescriptorFd({ fd, expectedOwnerUid: uid }), (error) => error.code === 'descriptor_invalid');
+  assert.throws(() => fstatSync(fd), (error) => error.code === 'EBADF');
+  writeFileSync(path, Buffer.alloc(1024 * 1024 + 1, 0x20));
+  fd = openSync(path, 'r');
+  assert.throws(() => readRuntimeDescriptorFd({ fd, expectedOwnerUid: uid }), (error) => error.code === 'descriptor_invalid');
+  fd = openSync(priv, 'r');
+  assert.throws(() => readRuntimeDescriptorFd({ fd, expectedOwnerUid: uid }), (error) => error.code === 'descriptor_not_a_regular_file');
+  const alias = join(priv, 'hardlink.json');
+  linkSync(path, alias);
+  fd = openSync(path, 'r');
+  assert.throws(() => readRuntimeDescriptorFd({ fd, expectedOwnerUid: uid }), (error) => error.code === 'descriptor_not_a_regular_file');
+  unlinkSync(alias);
 });
 
 test('the descriptor carries an optional loopback broker session for model requests', () => {

@@ -28,6 +28,8 @@ import io.github.ccch1mneyyy.dsh_app.model.NativeModelBroker
 import io.github.ccch1mneyyy.dsh_app.model.ProviderCall
 import io.github.ccch1mneyyy.dsh_app.model.ProviderResponse
 import io.github.ccch1mneyyy.dsh_app.model.ProviderTransport
+import io.github.ccch1mneyyy.dsh_app.runtime.RuntimeDescriptor
+import io.github.ccch1mneyyy.dsh_app.runtime.RuntimeDescriptorSession
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
@@ -105,7 +107,23 @@ class IsolatedNodeModelTest {
                             .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", "Hi"))).toString())
                         val modelFds = listOf(modelFd("normal"), modelFd("stalled"), modelFd("echo"))
                         val resultPair = ParcelFileDescriptor.createSocketPair()
+                        var descriptorFd: ParcelFileDescriptor? = null
                         try {
+                            val descriptorSession = RuntimeDescriptorSession(
+                                "/runtime/probe.mjs", "97818b2890b4acae1c6bd1200a226ff506680628", 43117,
+                                RuntimeDescriptorSession.randomToken(), catalogJson = store.guestCatalogJson())
+                            val descriptorDirectory = File(dataDirectory, "descriptor")
+                            descriptorFd = RuntimeDescriptor.writeForTransfer(descriptorDirectory, descriptorSession)
+                            val encoded = File(descriptorDirectory, RuntimeDescriptor.FILE_NAME).readText()
+                            assertFalse(encoded.contains(secret))
+                            assertFalse(encoded.contains("https://example.invalid"))
+                            assertTrue(JSONObject(encoded).isNull("broker"))
+                            // The granted FD must retain its generation even if
+                            // the Main owner atomically publishes a new one.
+                            val newerDescriptor = RuntimeDescriptorSession(
+                                descriptorSession.entryPath, descriptorSession.pinCommit, 43119,
+                                RuntimeDescriptorSession.randomToken(), catalogJson = store.guestCatalogJson())
+                            RuntimeDescriptor.write(descriptorDirectory, newerDescriptor)
                             Os.setsockoptTimeval(resultPair[0].fileDescriptor, OsConstants.SOL_SOCKET, OsConstants.SO_RCVTIMEO,
                                 StructTimeval.fromMillis(5000))
                             Os.setsockoptTimeval(resultPair[1].fileDescriptor, OsConstants.SOL_SOCKET, OsConstants.SO_SNDTIMEO,
@@ -125,6 +143,7 @@ class IsolatedNodeModelTest {
                                     putBinder("file_host", fileHost); putString("file_session", fileHost.session)
                                     putParcelable("normal", modelFds[0]); putParcelable("stalled", modelFds[1])
                                     putParcelable("echo", modelFds[2]); putParcelable("result", resultPair[1])
+                                    putParcelable("runtime_descriptor", descriptorFd)
                                     listOf("db", "wal", "shm", "journal").forEachIndexed { i, name -> putParcelable(name, dataDescriptors[i]) }
                                 }
                                 assertFalse(data.toString().contains(secret))
@@ -150,13 +169,16 @@ class IsolatedNodeModelTest {
                                 assertFalse(text.contains(broker.session.token))
                                 assertFalse(text.contains(host.session))
                                 assertFalse(text.contains(fileHost.session))
+                                assertFalse(text.contains(descriptorSession.token))
+                                assertFalse(text.contains(newerDescriptor.token))
                                 val report = if (text.isBlank()) JSONObject() else JSONObject(text)
                                 if (reply.data.getString("code") != "ok") {
                                     val phases = setOf("bootstrap", "sqlite_load", "sqlite_memory", "vfs_register", "vfs_open", "vfs_wal",
-                                        "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "model_dynamic", "sdk_route", "scoped_model_route", "file_commit", "file_read")
+                                        "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "descriptor_transfer", "model_dynamic", "sdk_route", "scoped_model_route", "file_commit", "file_read", "file_mutation", "file_append")
                                     val codes = setOf("SQLITE_CANTOPEN", "SQLITE_IOERR", "SQLITE_IOERR_SHMOPEN", "SQLITE_BUSY", "SQLITE_READONLY",
                                         "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "sqlite_parent_missing",
-                                        "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable", "runtime_data_not_found", "runtime_data_too_large")
+                                        "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable", "runtime_data_not_found", "runtime_data_too_large",
+                                        "descriptor_invalid", "descriptor_permissions", "descriptor_not_a_regular_file")
                                     val phase = report.optString("failedPhase").takeIf { it in phases } ?: "unknown"
                                     val code = report.optString("failureCode").takeIf { it in codes } ?: "unknown"
                                     fail("node_probe_failed_at_${phase}_code_${code}")
@@ -196,6 +218,8 @@ class IsolatedNodeModelTest {
                                 previousPid = currentPid
                                 assertEquals(reply.uid, report.getInt("uid"))
                                 assertTrue(report.getBoolean("privateDenied"))
+                                val descriptorReport = report.getJSONObject("descriptorTransfer")
+                                for (name in listOf("pin", "provider", "generation", "brokerAbsent", "closed")) assertTrue(descriptorReport.getBoolean(name))
                                 assertEquals("done", report.getJSONObject("normal").getString("code"))
                                 assertEquals("hello", report.getJSONObject("normal").getJSONArray("events").getJSONObject(0).getString("delta"))
                                 assertEquals("broker_cancelled", report.getJSONObject("cancelled").getString("code"))
@@ -260,6 +284,7 @@ class IsolatedNodeModelTest {
                                 }
                             }
                         } finally {
+                            try { descriptorFd?.close() } catch (_: Exception) { }
                             modelFds.forEach { try { it.close() } catch (_: Exception) { } }
                             resultPair.forEach { try { it.close() } catch (_: Exception) { } }
                         }

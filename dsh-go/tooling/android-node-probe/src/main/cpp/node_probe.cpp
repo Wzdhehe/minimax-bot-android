@@ -305,12 +305,14 @@ std::string ReadString(JNIEnv* env, jstring value) {
 // This is a fixed-script test entry, loaded only by a private isolated service.
 // No credential, network endpoint or arbitrary command is accepted here.
 jint Start(JNIEnv* env, jobject owner, jstring script, jint normal, jint stalled,
-           jint echo, jint result, jstring private_path, jstring native_dir, jstring provider_id, jintArray data_fds) {
+           jint echo, jint result, jstring private_path, jstring native_dir, jstring provider_id,
+           jint descriptor_fd, jint owner_uid, jintArray data_fds) {
   std::vector<std::string> args{
       "mbot-node-probe", "--no-warnings", "-e", ReadString(env, script),
       std::to_string(normal), std::to_string(stalled), std::to_string(echo),
-      std::to_string(result), ReadString(env, private_path), ReadString(env, native_dir), ReadString(env, provider_id)};
-  if (env->ExceptionCheck() || !data_fds || env->GetArrayLength(data_fds) != 4) return -1;
+      std::to_string(result), ReadString(env, private_path), ReadString(env, native_dir), ReadString(env, provider_id),
+      std::to_string(descriptor_fd), std::to_string(owner_uid)};
+  if (env->ExceptionCheck() || descriptor_fd < 3 || owner_uid < 0 || !data_fds || env->GetArrayLength(data_fds) != 4) return -1;
   jint descriptors[4];
   env->GetIntArrayRegion(data_fds, 0, 4, descriptors);
   if (env->ExceptionCheck()) return -1;
@@ -349,7 +351,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   file_append_method = env->GetMethodID(type, "appendRuntimeFile", "(Ljava/lang/String;[B)I");
   if (!open_method || !cancel_method || !file_method || !file_read_method || !file_size_method || !file_move_method || !file_remove_method || !file_append_method) return JNI_ERR;
   JNINativeMethod method{const_cast<char*>("start"),
-      const_cast<char*>("(Ljava/lang/String;IIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;[I)I"), reinterpret_cast<void*>(Start)};
+      const_cast<char*>("(Ljava/lang/String;IIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;II[I)I"), reinterpret_cast<void*>(Start)};
   if (env->RegisterNatives(type, &method, 1) != JNI_OK) return JNI_ERR;
   return JNI_VERSION_1_6;
 }

@@ -2,7 +2,10 @@
 package io.github.ccch1mneyyy.dsh_app.runtime
 
 import android.os.Process
+import android.os.ParcelFileDescriptor
+import android.system.ErrnoException
 import android.system.Os
+import android.system.OsConstants
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
@@ -66,6 +69,33 @@ class RuntimeDescriptorTest {
         assertTrue(RuntimeDescriptor.descriptorIsOwnerOnly(path))
     }
 
+    @Test fun theTransferredFdIsReadOnlyAndKeepsItsOwnPublishedGeneration() = fixture { root ->
+        RuntimeDescriptor.writeForTransfer(root, session(port = 8788)).use { transferred ->
+            val info = Os.fstat(transferred.fileDescriptor)
+            assertEquals(Process.myUid(), info.st_uid)
+            assertEquals(0, info.st_mode and 63)
+            try {
+                Os.write(transferred.fileDescriptor, byteArrayOf(1), 0, 1)
+                fail("descriptor_must_be_read_only")
+            } catch (error: ErrnoException) { assertEquals(OsConstants.EBADF, error.errno) }
+            // Atomic replacement must not change the already-granted FD.
+            RuntimeDescriptor.write(root, session(port = 9001))
+            val text = ParcelFileDescriptor.AutoCloseInputStream(transferred.dup()).bufferedReader().use { it.readText() }
+            assertEquals(8788, JSONObject(text).getInt("port"))
+            assertEquals(9001, JSONObject(File(root, RuntimeDescriptor.FILE_NAME).readText()).getInt("port"))
+        }
+    }
+
+    @Test fun anOversizedCatalogIsRefusedBeforeWritingAFile() = fixture { root ->
+        val largeCatalog = "{\"providers\":[{\"name\":\"" + "a".repeat(1024 * 1024) + "\"}]}"
+        val normal = session()
+        val oversized = RuntimeDescriptorSession(normal.entryPath, normal.pinCommit, normal.port, normal.token,
+            normal.brokerBaseUrl, normal.brokerToken, largeCatalog)
+        try { RuntimeDescriptor.writeForTransfer(root, oversized); fail("descriptor_expected_refusal") }
+        catch (_: IllegalArgumentException) { }
+        assertFalse(File(root, RuntimeDescriptor.FILE_NAME).exists())
+    }
+
     @Test fun aMalformedSessionIsRefusedBeforeAnythingIsWritten() = fixture { root ->
         val cases = listOf(
             session(entryPath = "relative/entry.mjs"),
@@ -74,6 +104,10 @@ class RuntimeDescriptorTest {
             session(token = "short"),
             session(brokerBaseUrl = "http://10.0.0.1:8080"),
             session(brokerToken = "short"),
+            RuntimeDescriptorSession("/data/app/runtime/entry.mjs", commit, 8788, "b".repeat(64),
+                "http://127.0.0.1:43117", null),
+            RuntimeDescriptorSession("/data/app/runtime/entry.mjs", commit, 8788, "b".repeat(64),
+                null, "a".repeat(64)),
         )
         for (invalid in cases) {
             try { RuntimeDescriptor.write(root, invalid); fail("descriptor_expected_refusal") }
