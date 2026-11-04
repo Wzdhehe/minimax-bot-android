@@ -13,7 +13,7 @@
 | 数据文件FD能力（当前研究） | 单个明确授予FD的读/写同步/截断/锁/RW映射五用例已编译，broker目标1m23s成功；按私有路径open必须继续拒绝 | d7d65ad/run41683691783已API26/35通过；不是VFS/持久化已实现 |
 | **SDK→JNI路由（当前阶段）** | 虚拟SDK URL/placeholder→可信binding；JUnit32+Node44、SDK9/pi-ai8通过，Node APK43s构建成功 | e03b997/run41686820725已API26/35通过；正式resolver未装配 |
 | FD SQLite VFS Android候选 | **46c1c07/run41703671145 API26/35 success**，artifact各t1/f0/e0/s0；WAL/并行只读/重开/integrity、两次不同PID读回、既有模型/Key断言通过；宿主另有writer/reader争用、crash恢复、sync故障注入 | 临时验收四普通文件FD；不是正式native数据lease、完整FS或产品runtime；ARM64/真机/Android crash恢复未验证 |
-| full-ICU Node | 首轮41630373256超4小时取消；**重跑41680254279也因compile 330分钟超时而失败**，check annotation实查，verify skipped | 无产物/ICU设备证据；已补ccache/300分钟预算+失败也保存cache，host/NDK真实hits2+group-timeout smoke过、Python21过；CI cache保存/恢复及完整编译未验证。默认候选没有Intl |
+| full-ICU Node | 首轮41630373256超4小时取消；**重跑41680254279也因compile 330分钟超时而失败**，check annotation实查，verify skipped | 无产物/ICU设备证据；已补ccache/300分钟预算+失败也保存cache，host/NDK真实hits2+group-timeout smoke过、Python21过；首推41756717823因job-env的runner上下文不合法未创建job，已用actionlint复现并移到step env；Python21过，修后CI/cache保存恢复/完整编译待验证。默认候选没有Intl |
 
 正式入口仍DSH；上述都是组件/独立验收APK/假provider，**没有完整mcode/官方Bot产品运行、完整Flutter Bot APK或真实模型验收**。插件变更仍关闭。持久化、可信Bot身份/MCP、工具权限及生产启动器仍缺。不得因组件通过就宣称App已完成。
 

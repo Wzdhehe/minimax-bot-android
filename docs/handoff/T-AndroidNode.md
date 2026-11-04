@@ -3,6 +3,12 @@
 
 > 2026-11-04最新：**46c1c07/run41703671145的四普通文件FD候选已API26/35通过**，每台t1/f0/e0/s0，含两次不同PID、WAL/Key/模型。full-ICU重跑41680254279在compile330分钟超时失败、verify skipped，无产物；不能继续写运行中。详见T-Persistence及HANDOFF。
 
+## 缓存workflow配置修复
+
+ec2f1b2/run41756717823在创建job前失败，`gh run view --verbose`提示workflow file issue。临时工具actionlint1.7.12（release SHA256 `8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8` 验证）本地明确复现：job级env不允许runner上下文。将CCACHE_DIR的runner.temp移到compile step的env，restore/save依然使用同一runner.temp路径；其他job级env仅github/常量。修后source/probe两个workflow的actionlint表达式检查通过（外部shellcheck/pyflakes未启用，bash -n另过），Python21项过。
+
+**这一轮未编译、未保存cache，更不能当full-ICU成功**。新push后先确认job实际创建与cache/timeout预检步骤通过，再观察长编译。工具只在/tmp、不提交；下次CI配置变更宜先跑actionlint再push，不能仅凭YAML解析断言GitHub上下文合法。
+
 ## 2026-11-04：源码编译缓存与预算（CI待实跑）
 
 41680254279的check明确 `Compile pinned x86_64 Node with full ICU has timed out after 330 minutes`；build开始17:02、compile17:04到22:34，verify skipped，无归档。不能只再次增加超时。实际读取并核对摘要的上游scripts/build.py，以及同commit的prepare.py：prepare每次拒绝已有source目录，因此直接缓存out目录不构成受支持的续编。

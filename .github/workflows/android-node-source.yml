@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      CCACHE_DIR: ${{ runner.temp }}/mbot-node-ccache
       CCACHE_BASEDIR: ${{ github.workspace }}/upstream-node-mobile
       CCACHE_COMPILERCHECK: content
       CCACHE_MAXSIZE: 3G
@@ -70,6 +69,8 @@ jobs:
       - name: Compile pinned x86_64 Node with full ICU
         timeout-minutes: 330
         id: build
+        env:
+          CCACHE_DIR: ${{ runner.temp }}/mbot-node-ccache
         run: |
           ccache --zero-stats
           source_status=0
