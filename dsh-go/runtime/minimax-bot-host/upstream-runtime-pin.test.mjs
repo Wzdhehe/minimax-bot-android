@@ -37,6 +37,7 @@ import {
   checkUpstreamRuntimePin,
   contractIntegrityErrors,
   pinDocumentPath,
+  pinnedTreeFileError,
   readDocumentPin,
 } from './upstream-runtime-pin-check.mjs';
 
@@ -188,6 +189,32 @@ test('the checker rejects upstream files whose bytes do not match the pin', (t) 
     result.errors.some((error) => error.includes('does not match the pinned bytes')),
     `expected a fingerprint mismatch, got: ${result.errors.join(' | ')}`,
   );
+});
+
+test('an upstream file outside the fingerprint list is accepted when the pinned tree holds the same bytes', (t) => {
+  const source = makeGitFixture(t, { 'packages/extra/runtime.ts': 'export const extra = 1;\n' });
+  const tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: source, encoding: 'utf8' }).trim();
+  assert.equal(pinnedTreeFileError({ source, tree, path: 'packages/extra/runtime.ts' }), null);
+});
+
+test('an upstream file that the pinned tree does not hold is refused', (t) => {
+  const source = makeGitFixture(t, { 'packages/extra/runtime.ts': 'export const extra = 1;\n' });
+  const tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: source, encoding: 'utf8' }).trim();
+  const error = pinnedTreeFileError({ source, tree, path: 'packages/extra/other.ts' });
+  assert.ok(error && error.includes('not in the pinned tree'), `expected a tree refusal, got: ${error}`);
+});
+
+test('an upstream file whose bytes changed after the commit is refused', (t) => {
+  const source = makeGitFixture(t, { 'packages/extra/runtime.ts': 'export const extra = 1;\n' });
+  const tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: source, encoding: 'utf8' }).trim();
+  writeFileSync(join(source, 'packages/extra/runtime.ts'), 'export const extra = 2;\n');
+  const error = pinnedTreeFileError({ source, tree, path: 'packages/extra/runtime.ts' });
+  assert.ok(error && error.includes('does not match the pinned tree bytes'), `expected a byte refusal, got: ${error}`);
+});
+
+test('an upstream file is not verified without a source checkout', () => {
+  const error = pinnedTreeFileError({ source: '', tree: UPSTREAM_RUNTIME_TREE, path: 'packages/shared/src/miniapp-surface.ts' });
+  assert.ok(error && error.includes('without a source checkout'), `expected a missing-source refusal, got: ${error}`);
 });
 
 test('the checker rejects a pin document with a changed field', (t) => {

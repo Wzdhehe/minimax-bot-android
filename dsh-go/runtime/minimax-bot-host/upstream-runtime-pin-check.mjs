@@ -146,6 +146,37 @@ function runGit(sourceDir, args) {
 }
 
 /**
+ * Verify that a file in the checkout is byte-identical to the same path in a
+ * pinned tree.
+ *
+ * A tree object is a content address, so a matching blob id proves the bytes
+ * are the pinned bytes. That lets a bundle carry the upstream files it really
+ * needs without a hand-maintained fingerprint list per file: every upstream
+ * input is checked against the pinned tree instead of against a fixed set.
+ *
+ * Returns null when the file matches, or a message describing the refusal.
+ */
+export function pinnedTreeFileError({ source, tree, path }) {
+  if (typeof source !== 'string' || !source) {
+    return 'the upstream file cannot be verified without a source checkout';
+  }
+  if (typeof tree !== 'string' || !/^[0-9a-f]{40,64}$/.test(tree)) {
+    return 'the pinned tree is not a tree object';
+  }
+  if (typeof path !== 'string' || !path || path.startsWith('/') || path.split('/').includes('..')) {
+    return `the upstream file path is not a tree path: ${path}`;
+  }
+  const blob = runGit(source, ['rev-parse', `${tree}:${path}`]);
+  if (!blob.ok) return `the upstream file is not in the pinned tree: ${path}`;
+  const actual = runGit(source, ['hash-object', join(source, path)]);
+  if (!actual.ok) return `cannot hash the upstream file: ${path}`;
+  if (actual.stdout.trim() !== blob.stdout.trim()) {
+    return `the upstream file does not match the pinned tree bytes: ${path}`;
+  }
+  return null;
+}
+
+/**
  * Resolves the commit of a WebUI checkout.
  *
  * A git checkout is read from HEAD. When HEAD cannot be resolved (an exported
@@ -301,7 +332,12 @@ export function checkUpstreamRuntimePin({
         const pinnedPaths = Object.keys(UPSTREAM_RUNTIME_BUNDLE_SHA256);
         for (const path of upstreamInputs) {
           if (!pinnedPaths.includes(path)) {
-            errors.push(`the bundle consumed an upstream file that is not pinned: ${path}`);
+            // A file outside the hand-listed fingerprints is still allowed when
+            // it is byte-identical to the pinned tree: the tree is the content
+            // address of the whole pinned upstream, so this proves the same
+            // thing the fingerprints prove, for every file the bundle needs.
+            const treeError = pinnedTreeFileError({ source, tree: UPSTREAM_RUNTIME_TREE, path });
+            if (treeError) errors.push(treeError);
           }
         }
         for (const path of pinnedPaths) {
