@@ -3,6 +3,19 @@
 
 **尚未实现完整runtime FS。** 当前WAL/两进程读取、Main四文件owner已有各自设备证据，不能代替本卡。Mini App可视化程序仍不适配；下述官方Bot的miniapp/node目录是复用其业务后端，不新增Mini App浏览器。
 
+## 原子发布设备结果（最新）
+
+**7406bb3/run41761635832已API26/35全部success**；实际artifact元数据：
+
+```text
+API26 id13291626069: node-candidate-results-api-26-t11-f0-e0-s0-passed-l0
+API35 id13291012496: node-candidate-results-api-35-t11-f0-e0-s0-passed-l0
+```
+
+四个Main出版探测+此前七项全通过，证明当前模拟器中renameat2(NOREPLACE)可用，已有目标保留、并发恰好一winner、完整目标和输入拒绝断言执行成功。目录只在Main持有，没有权限放宽或Agent入口。这仍不是完整FS/一般link语义，也不是物理真机/ARM64/断电证明。
+
+另在宿主临时用精确Kotlin native入口和同一C++源码编译JNI库，验证JVM注册、独占发布、EEXIST原内容保留和穿越拒绝；这是宿主辅助证据，设备证据以上述run为准。
+
 ## 实查到的调用方
 
 mcode源码是UPSTREAM-RUNTIME.md的完整commit `97818b2890b4acae1c6bd1200a226ff506680628`；官方mbot保持vendor快照不改。
@@ -36,13 +49,13 @@ BUILD SUCCESSFUL in 2m 7s
 69 actionable tasks: 16 executed, 53 up-to-date
 ```
 
-Python23项过（新增errno/固定文件名元数据不泄露）；host固定脚本与workflow检查结果见本轮记录。**Android syscall是否可用、是否受seccomp/SELinux限制尚未验证，不能把NDK编译当设备支持。** 原owner7项与模型/Key/WAL用例保留。
+Python23项过（新增errno/固定文件名元数据不泄露）；host固定脚本与workflow检查结果见本轮记录。**本probe已在顶部API26/35真实通过；不扩大为所有Android/OEM支持，更不替代生产FS。** 原owner7项与模型/Key/WAL用例保留。
 
 report-results允许固定FilePublicationProbeTest位置（artifact后缀lpN）及0..4095 errno整数，除此之外仍不打印异常正文/路径/env/响应。新probe输出不包含用户数据或凭据。
 
 ## 接着做
 
-1. 看本次API26/35结果，先取得Main受限原子发布的实际支持证据；失败按errno/固定行号处理，不放宽权限。
+1. Main受限原子发布已取得API26/35证据；接着做有提交结果语义的Main文件发布组件，再绑定受控FS能力。保留现有输入/冲突/并发测试，不开放泛化syscall。
 2. 然后设计Main持有的专用runtime-data FS能力与提交/恢复语义，再适配固定JSONL/MemoryStore调用并跑原实现测试。还需明确读写预算、流、原子替换、exclusive publication、所有写者同步和退出生命周期；目前没有这些生产接口。
 3. 完整online backup、JSON/history、uploads/assets与模型配置安全投影都仍缺；不能因数据库owner或本探测通过就切正式入口。
 4. 官方server.mjs确实创建HTTP server并listen；isolated UID的UI传输也需独立native桥接（未实现）。只在宿主临时验证过HTTP server可通过connection事件处理已连接Unix FD而不listen，不是Android或完整官方后端已接通。
