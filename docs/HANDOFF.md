@@ -4,6 +4,14 @@
 
 只在 **feat/t-plugins** 连续开发、阶段验证后及时push并更新文档。用户授权持续推进；不新开分支、不动main/dev/integration、不force push、不建PR、不发布APK。
 
+## 最新阶段：真实fork宿主与Bot JSON链已宿主验收
+
+canonical资源已纳入pin构建：**780个文件逐blob验证**，源/目标完整inventory检查可拒绝Git ignore内的额外文件；完整图/资源4项测试通过。新增[真实host probe](../dsh-go/tooling/runtime-host-probe/README.md)，固定40个直接依赖版本及npm transitive lock，禁lifecycle脚本，SHA256验证Linux-only SQLite。**原始真实factory/gateway/session/SQLite启动两次、Bot HTTP鉴权/创建/重开读回、关闭及旧port失效已本地通过（1/1、约13秒）**；详细证据见[T-RuntimeHost](handoff/T-RuntimeHost.md)。
+
+这次不再仅是session桩；但没有模型turn/真实provider或Android执行，原Mini App网页不适配。空provider配置的模型目录仍INVALID_ARGUMENTS，下一项是native非密钥metadata/model resolver及模型FD装配，之后继续隔离文件/正式启动器。当前默认App入口仍DSH，插件变更仍关闭。
+
+内置身份阶段**d31b379已推且CI全部成功**：host41821502362（含8生命周期cases及full graph）、native41821502190、docs41821502197、scope41821502161。本资源/真实host阶段的新CI待push后单独核对，不挪用d31b379结果。
+
 ## 最新续写：内置服务身份与真实gateway接缝
 
 已新增宿主装配器：在钉点RuntimeServices创建gateway的位置接同一个原gateway，构造完成后注册固定内置服务ID和随机代次，随后复用原facade/agent-port；不造第二个gateway，不手写session端口，不接受请求指定身份。close/abort撤销arena、取消排队/在途请求并阻止旧port复活，并发close等待同一清理。**真实gateway/facade的8项生命周期用例已本地通过**，session/model执行为桩，完整图构建仍单独验收；详见[T-RuntimeHost](handoff/T-RuntimeHost.md)。

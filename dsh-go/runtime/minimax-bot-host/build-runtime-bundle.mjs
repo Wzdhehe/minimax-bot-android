@@ -12,6 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkUpstreamRuntimePin } from './upstream-runtime-pin-check.mjs';
 import { UPSTREAM_RUNTIME_PIN } from './upstream-runtime-pin.mjs';
 import { runtimeBuildWiring } from './runtime-build-plugin.mjs';
+import { stageRuntimeAssets } from './runtime-assets.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const options = {};
@@ -111,7 +112,7 @@ try {
     knownOpaqueLoads: ['better-sqlite3 (createRequire in upstream SQLite drivers)'],
     limitations: [
       'Third-party packages are external and not installed, locked or executed by this build.',
-      'Computed loads, runtime assets and import.meta.url-relative resources need separate packaging review.',
+      'Canonical Agent/model resources are packaged; other computed loads, native dependencies and worker entry points need separate review.',
       'Bot caller registration is wired at the pinned gateway constructor; full runtime boot and Android native model/files/SQLite adapters still need validation.',
       'Do not launch this bundle through the same-UID DSH/PRoot process.',
     ],
@@ -121,9 +122,12 @@ try {
   ownsOutput = true;
   writeFileSync(join(outDir, artifactName), bytes, { flag: 'wx' });
   writeFileSync(join(outDir, 'metafile.json'), JSON.stringify(metafile, null, 2), { flag: 'wx' });
+  Object.assign(report, await stageRuntimeAssets({ source, outputDir: outDir }));
+  requirePin();
   writeFileSync(join(outDir, 'manifest.json'), `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx' });
   execFileSync(process.execPath, ['--check', join(outDir, artifactName)], { stdio: 'pipe' });
   console.log(`Verified ${upstreamInputs.length} pinned upstream inputs; ${report.externalPackages.length} external package specifiers; ${bytes.length} bundle bytes.`);
+  console.log(`Verified ${report.assets.length} packaged runtime resources against pinned Git blobs.`);
   console.log('Build graph and syntax passed. Runtime boot, Android and real providers are NOT verified.');
   for (const note of checked.notes) console.log(note);
 } catch (error) {

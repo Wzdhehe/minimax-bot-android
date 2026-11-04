@@ -26,6 +26,10 @@ Android工具与实际命令见专题卡；`tooling/android-broker-probe`编译�
 
 Main文件发布JNI现由App/Node验收工程共用生产CMake构建，需NDK27.3.13750724、SDK CMake3.22.1；`RuntimeAtomicPublisher.open`在Main worker admission后加载。组件17项设备基线与生产JNI迁移后的设备结果须区分，见[T-RuntimeFS](handoff/T-RuntimeFS.md)。
 
+## 真实完整宿主与Bot JSON验收（2026-11-04）
+
+新增Linux-only [runtime-host-probe](../dsh-go/tooling/runtime-host-probe/README.md)：固定第三方依赖、验证原生SQLite、使用780个受pin约束的canonical资源，实际启动/关闭/重开完整fork宿主及原Bot JSON服务。没有注入factory/session桩；本地1项通过。完整图/资源4项通过，包括Git ignored额外资源拒绝。命令见probe README，状态见[T-RuntimeHost](handoff/T-RuntimeHost.md)。它不执行模型turn，不证明Android/Key/隔离FD/完整APK；native模型配置和正式launcher仍未装配。
+
 ## 文档链接检查（2026-11-04）
 
 ```bash

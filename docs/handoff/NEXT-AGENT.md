@@ -7,6 +7,20 @@
 
 本轮从远端 **7967b9d** 快进接手，仍在 `feat/t-plugins`。本节覆盖后文第6/7/8/11节中已过时的「下一步」「正在编译」「源码不存在」描述；Windows环境记录只描述上轮主机。
 
+### 最新主线推进：780资源pin + 真实host/Bot API冷启动重开
+
+内置身份阶段已推**d31b37908e7b51dd1ae82b2ceecfdded8b0208df**，host41821502362/native41821502190/docs41821502197/scope41821502161全success。后续新增资源/真实host验收，以本节与[T-RuntimeHost](T-RuntimeHost.md)「后续阶段」为准；旧「完整factory未启动」现在只代表此前阶段。
+
+- `runtime-assets.mjs`复用原copier，helper和780个资源逐Git blob核验；复制前/后完整inventory、每个文件SHA256写manifest。被Git ignore的额外文件也拒绝，失败清理仅本次new output。
+- 完整图/资源**4项全过、0 skipped、94.8秒**，新增真实clone+ignore额外资源负例，且git status仍干净；不是只测helper函数。
+- `dsh-go/tooling/runtime-host-probe`是新增正式宿主工程，40个直接版本逐原pnpm-lock核对，npm transitive另锁；原生SQLite归档固定SHA256，禁npm lifecycle，仅Linux x64/Node137，绝不进入Android。node_modules/.build均忽略；本地node_modules指向/tmp以节省workspace空间。
+- prepare实跑通过，**真实factory/gateway/SessionSystem/SQLite + 原Bot JSON服务**冷启动/关闭/重开2次，Bot鉴权/创建后读回同ID、共享close与旧port拒绝，**1/1通过、0 skipped、约13秒**。不注入factory/session桩；不发模型turn；无账户/Key，私有临时HOME/dataDir。
+- 首轮test diagnostic因彩色日志前缀返回undefined触发Node test runner错误，已仅修提取字符串，保留全部业务断言；最终重跑通过。docs扫描仅追加probe README，别递归node_modules symlink（越界检查器会正确拒绝）。
+
+下一步：空provider配置下`agent.models()`仍INVALID_ARGUMENTS，正式native **非密钥**catalog/model resolver、scoped SDK/JNI/Binder/模型FD尚需装配。`BotProviderStore.catalog()`已有providers/defaultProviderId/defaultModelId和hasApiKey等metadata；`native-model-route.mjs`、`model-fetch-scope.mjs`已有无真实Key/无网络fallback的SDK路由组件。不要把真实Key写入fork BYOK yaml来解决模型目录；不要用宿主JS filesystem成功替代Android Main-held目录/FD改造。每Bot MCP身份和自动任务归属也未因内置服务arena完成而完成。
+
+本阶段未构建完整APK、未跑新Android设备或真实provider。默认入口仍DSH，市场写入继续关闭；新CI待push后记录，不借旧run。
+
 ### 最新续写：真实gateway的内置服务身份
 
 本轮从45c84e8续写，新增[T-RuntimeHost](T-RuntimeHost.md)装配器与测试。在`RuntimeServices→./service/miniapp/index.js`这一个精确构建接缝包装原构造器，AsyncLocalStorage只捕获同dataDir/同次启动的唯一原gateway；真实RuntimeServices仍绑定全部原session ports。宿主返回后注册固定`builtin:minimax-bot`与随机代次，复用原facade/agent-port；close/abort撤销并拒绝旧port，并发close等待同一Promise。构建manifest明列hostAdaptations，不修改源checkout或pin。

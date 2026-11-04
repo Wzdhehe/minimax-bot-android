@@ -8,6 +8,7 @@
 
 - [x] 上游runtime钉点与升钉流程：钉点文件、文档、干净checkout的commit/tree、实际bundle输入四方校验；6个必需契约文件核SHA256，其余输入逐一对比钉住树的blob，23项pin测试及契约smoke通过。
 - [x] 完整fork宿主**构建图检查**：真实createWebuiRuntimeHost/session-ports及官方Bot服务编入partial bundle，2,124上游输入逐blob验证、3项集成测试通过；CI已接入。第三方/动态加载与资源尚未打包，未启动runtime，不证明插件市场或Android可用，见[构建范围](UPSTREAM-RUNTIME.md)。
+- [x] canonical资源与真实Linux宿主验收（组件）：780个原资源逐blob/inventory校验，完整图/资源4项通过；真实fork factory/gateway/session/SQLite及原Bot JSON服务冷启动/重开、鉴权/创建/持久化读回1项通过，无session桩。**没有模型turn或Android证明**，见[T-RuntimeHost](handoff/T-RuntimeHost.md)。
 - [ ] 本机安装、校验、启动、停止与升级 MiniMax Code 运行时（mcode-webui/minimax-code fork）；处理异常中断和进程清理。
 - [x] better-sqlite3 12.11.1 Android x86_64验收：内存数据库、四普通FD VFS的WAL/并行只读/两次新PID读回已API26/35通过。Main固定文件owner已验证；完整数据lease/FS/online backup、ARM64/真机仍缺，见[T-Persistence](handoff/T-Persistence.md)。
 - [x] SDK→模型FD流式适配（组件）：四类真实pi-ai provider（含Google async scope）、工具事件、背压、取消及错误不重试宿主验证通过；动态JNI/Binder路由已API26/35通过。正式model resolver/启动器与完整runtime仍未装配，见T-RuntimeBroker。

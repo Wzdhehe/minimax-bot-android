@@ -53,9 +53,34 @@ ESBUILD_MODULE=/workspace/minimax-bot-android/dsh-go/tooling/model-sdk-probe/nod
 
 已在临时Linux宿主做独立的**真实factory启动探测**：按钉点pnpm-lock取40个直接依赖版本，npm安装禁用lifecycle scripts；额外核验官方release SHA256 `99c43785639d5d3690c396ba245ee680ac8b469a46b19233a3546f0eb7f8e312` 的better-sqlite3 12.11.1 Linux/x64/Node137预编译件，仅供宿主探测，不进入Android产物或仓库。探测使用全新私有临时HOME/dataDir，无用户配置、API Key或真实模型请求。先复现SQLite bindings缺失，装入后越过数据库迁移，随后复现 `Local Runtime V2 built-in Agent assets are missing`。因此单纯ESM bundle不能启动；随后临时复用原`copyLocalRuntimeAssets`复制资源，**旧control bundle的真实factory已实跑`HOST_READY true function`、`HOST_CLOSED`并退出0**，默认无模型Key/无turn。它验证缺口确为资源，不等于新Bot包装入口已完整验收；正在把资源纳入正式pin检查及重跑新入口。此临时安装**不是已交付的依赖lock/Android依赖兼容保证**。
 
+## 后续阶段：资源pin与真实完整factory验收已落地
+
+新增`runtime-assets.mjs`，复用同一钉点的`copyLocalRuntimeAssets`，将canonical资源纳入构建，当前**780个资源文件**。helper源码及每个资源都对比钉住树的Git blob；复制前检查完整source inventory（含被Git忽略的额外文件），复制后检查完整output inventory和每个字节，manifest列每个来源/blob/大小/SHA256。只允许普通文件，不跟随资源软链接。构建失败清理仅本次新输出目录。
+
+`runtime-bundle.test.mjs`当前**4项通过，0 skipped，约94.8秒**：既有真实full graph/摘要/import接缝、输出不覆盖/父软链防护，再加独立clone中被ignore的额外资源必须导致构建失败且无输出残留。该clone在故意加文件后git status仍干净，证明不是碰巧被dirty-check拦下。
+
+`tooling/runtime-host-probe`现为正式可复现的宿主验收工程：package/npm lock固定依赖，40个直接版本逐个对比原pnpm-lock；独立校验原生SQLite12.11.1 Linux/x64/Node137归档SHA256，仅取固定tar成员，未知已安装二进制拒绝覆盖。`prepare.mjs`核对bundle/resource摘要和source pin后再准备；不安装lifecycle scripts，不把Linux模块当Android依赖，不提交/上传node_modules和生成物。命令与准确边界见[probe说明](../../dsh-go/tooling/runtime-host-probe/README.md)。
+
+新包装入口已在该工程实跑：
+
+```text
+PASS: pinned runtime, 40 direct dependency versions, resources and Linux-only SQLite verified; host probe prepared
+✔ real pinned runtime boots with native host SQLite and serves the official Bot across a clean reopen (12939.617109ms)
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+ℹ skipped 0
+```
+
+这个用例没有替换factory/gateway/session/model实现，使用全新私有HOME/dataDir，实际启动/关闭**两次**完整factory：已注册caller查询真实SessionSystem/SQLite不存在的session，得到SESSION_NOT_FOUND；原Bot HTTP拒绝匿名请求，创建Bot后重启读回同ID/名称；重复close等待同一Promise，旧Agent port拒绝。测试断言自然退出，挂起/超时失败。没有`agent.run`或真实模型调用。旧Mini App web client不打包、不验收，产品仍用Flutter UI。
+
+首轮正式测试的child检查全部完成并退出0，但diagnostic按startsWith寻找PASS行时被上游彩色日志前缀干扰，返回undefined，引发Node test runner TypeError。只修diagnostic提取为已assert存在的字符串，保留全部runtime断言；修后完整1/1通过。文档扫描要指定probe README文件，不递归扫被忽略的node_modules：本地node_modules是指向/tmp的symlink，检查器会正确拒绝它越出仓库，不能把这种工具使用错误记成坏链接。
+
+探索性`agent.models()`在空provider配置下返回INVALID_ARGUMENTS，未用假模型列表遮盖；本用例证明真实宿主/Bot数据链，并不证明已同步native模型或生成回答。下一阶段先对接Keystore/native目录的**非密钥metadata**及受控模型binding，再接原SDK/JNI/Binder/模型FD；Android filesystem/launcher仍缺。
+
 ## 剩余主线
 
-1. 将原始assets/资源查找及动态加载变成受pin约束的构建产物，实际启动/关闭完整factory，并使用真实gateway/session实现验证；不能仅把本节桩当产品完成。
+1. canonical assets与真实Linux factory/Bot JSON冷启动重开已验；继续native模型metadata/resolver与FD绑定。其他动态worker/原生依赖资源仍需Android打包审计，不能将Linux宿主成功提升成Android成功。
 2. 正式native model resolver、JNI/Binder/模型FD和文件/SQLite适配。loopback URL/token不证明隔离UID能联网，600主UID文件不证明隔离guest可读。
 3. 内置服务ID不等于每个Bot的可信caller_bot_id/MCP绑定；仍须将真实Agent会话绑定到Bot并验自主同源定时任务/通知。
 4. Android独立UID启动器/正式Flutter transport和rootfs（如果仍需要它）；不得用DSH同UID/PRoot执行完整Agent来省事。

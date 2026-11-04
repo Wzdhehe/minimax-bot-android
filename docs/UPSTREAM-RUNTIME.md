@@ -159,6 +159,8 @@ ESBUILD_MODULE=/path/to/esbuild/lib/main.js \
 
 输出`runtime-host.partial.mjs`、`metafile.json`、`manifest.json`；manifest包含bundle摘要、进入bundle的上游文件、Node内建依赖和external包specifiers。`status=build-graph-only`、`androidReady=false`。**这不是完整第三方依赖lock**：例如SQLite的`createRequire(variable)`加载better-sqlite3，未必出现在esbuild的external清单；computed import、资源路径和原生依赖仍需单独审计/打包。源码里的文件/child_process/网络调用仍存在，禁止通过DSH同UID/PRoot运行此产物来绕过隔离适配。正式Android启动器、可信caller、native模型与文件映射尚未装配。
 
+构建现在还复用钉点`copyLocalRuntimeAssets`打包canonical Agent/model等资源（当前780文件）：copy helper与每个文件校验Git blob；源/目标完整inventory检查，忽略文件中的额外资源也拒绝；manifest增加`assetBuilder`和`assets`（源路径、blob、bytes、SHA256）。图/资源检查4项通过。它仍不import/启动runtime；真实Linux宿主启动另由[runtime-host-probe](../dsh-go/tooling/runtime-host-probe/README.md)固定依赖并验收（本地已通过），不是Android证明。其他worker入口、原生依赖和动态加载仍需单独适配。
+
 新增内置Bot宿主装配通过一个精确的esbuild import解析接缝接原gateway构造器，仍让原RuntimeServices绑定真实session ports。manifest的`hostAdaptations`明列原importer/specifier和本地adapter；不是改上游文件字节，也不以文件pin声称运行行为毫无适配。真实gateway的8项生命周期用例见[T-RuntimeHost](handoff/T-RuntimeHost.md)。完整factory资源/依赖启动验收与Android隔离装配仍需分别完成。
 
 ## 边界与未验证项

@@ -6,6 +6,7 @@ on:
       - 'dsh-go/packages/dsh_client/**'
       - 'dsh-go/runtime/minimax-bot-host/**'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
+      - 'dsh-go/tooling/runtime-host-probe/**'
       - 'packages/mbot-workspace-guard/**'
       - 'docs/UPSTREAM-RUNTIME.md'
       - '.github/workflows/bot-host.yml'
@@ -14,6 +15,7 @@ on:
       - 'dsh-go/packages/dsh_client/**'
       - 'dsh-go/runtime/minimax-bot-host/**'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
+      - 'dsh-go/tooling/runtime-host-probe/**'
       - 'packages/mbot-workspace-guard/**'
       - 'docs/UPSTREAM-RUNTIME.md'
       - '.github/workflows/bot-host.yml'
@@ -103,3 +105,24 @@ jobs:
         env:
           WEBUI_SOURCE: ${{ github.workspace }}/upstream-runtime
         run: node --test runtime/minimax-bot-host/runtime-host-session.test.mjs
+      - name: Install locked real-host probe dependencies without lifecycle scripts
+        working-directory: dsh-go/tooling/runtime-host-probe
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build the real-host probe bundle and verify canonical resources
+        env:
+          WEBUI_SOURCE: ${{ github.workspace }}/upstream-runtime
+        run: |
+          node dsh-go/runtime/minimax-bot-host/build-runtime-bundle.mjs \
+            --source "$WEBUI_SOURCE" --esbuild-module "$ESBUILD_MODULE" \
+            --out-dir "$RUNNER_TEMP/mbot-real-host"
+      - name: Download and prepare the verified Linux-only SQLite host addon
+        run: |
+          curl -fL --retry 2 --max-time 120 \
+            https://github.com/WiseLibs/better-sqlite3/releases/download/v12.11.1/better-sqlite3-v12.11.1-node-v137-linux-x64.tar.gz \
+            -o "$RUNNER_TEMP/mbot-sqlite-host-node137.tar.gz"
+          node dsh-go/tooling/runtime-host-probe/prepare.mjs \
+            "$GITHUB_WORKSPACE/upstream-runtime" "$RUNNER_TEMP/mbot-real-host" \
+            "$RUNNER_TEMP/mbot-sqlite-host-node137.tar.gz"
+      - name: Boot and reopen the actual runtime and Bot JSON service (no model turn)
+        working-directory: dsh-go/tooling/runtime-host-probe
+        run: npm test

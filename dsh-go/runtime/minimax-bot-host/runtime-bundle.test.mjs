@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,9 +14,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const source = process.env.WEBUI_SOURCE && resolve(process.env.WEBUI_SOURCE);
 const esbuildModule = process.env.ESBUILD_MODULE && resolve(process.env.ESBUILD_MODULE);
 const skip = !source || !esbuildModule ? 'Set WEBUI_SOURCE and ESBUILD_MODULE to run the real pinned build' : false;
-function runBuild(outDir) {
+function runBuild(outDir, sourceDir = source) {
   return spawnSync(process.execPath, [join(here, 'build-runtime-bundle.mjs'),
-    '--source', source, '--esbuild-module', esbuildModule, '--out-dir', outDir],
+    '--source', sourceDir, '--esbuild-module', esbuildModule, '--out-dir', outDir],
   { encoding: 'utf8', timeout: 120_000, maxBuffer: 1024 * 1024 });
 }
 
@@ -30,6 +30,14 @@ test('the pinned full host and actual Bot graph compile without installing or la
   assert.equal(manifest.upstream.commit, UPSTREAM_RUNTIME_COMMIT);
   assert.equal(manifest.status, 'build-graph-only');
   assert.equal(manifest.androidReady, false);
+  assert.equal(manifest.assetBuilder.source, 'scripts/lib/local-runtime-assets.mjs');
+  assert.ok(manifest.assets.some((asset) => asset.path === 'assets/models-dev-catalog.json.gz'));
+  assert.ok(manifest.assets.some((asset) => asset.path.startsWith('assets/agents/')));
+  for (const asset of manifest.assets) {
+    const content = readFileSync(join(outDir, asset.path));
+    assert.equal(content.length, asset.bytes);
+    assert.equal(createHash('sha256').update(content).digest('hex'), asset.sha256);
+  }
   const bytes = readFileSync(join(outDir, manifest.artifact.path));
   assert.equal(bytes.length, manifest.artifact.bytes);
   assert.equal(createHash('sha256').update(bytes).digest('hex'), manifest.artifact.sha256);
@@ -83,4 +91,21 @@ test('an output parent symlink cannot write generated files into the pinned chec
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Output directory must be outside the upstream checkout/);
   assert.equal(existsSync(join(source, target)), false);
+});
+
+
+test('an ignored unpinned runtime resource fails the build and leaves no published output', { skip }, (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'bot-runtime-resource-test-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const checkout = join(root, 'source');
+  execFileSync('git', ['clone', '--shared', '--quiet', source, checkout], { stdio: 'pipe' });
+  const extra = 'packages/local-runtime/assets/ignored-extra.json';
+  writeFileSync(join(checkout, '.git/info/exclude'), `/${extra}\n`, { flag: 'a' });
+  writeFileSync(join(checkout, extra), 'must never be packaged');
+  assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: checkout, encoding: 'utf8' }), '');
+  const outDir = join(root, 'output');
+  const result = runBuild(outDir, checkout);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Runtime resource source inventory differs from the pinned tree/);
+  assert.equal(existsSync(outDir), false, 'a failed resource check must clean only its own new output');
 });
