@@ -4,6 +4,7 @@ package io.github.ccch1mneyyy.dsh_app.nodeprobe
 import android.content.ContextWrapper
 import android.system.Os
 import android.system.OsConstants
+import android.system.ErrnoException
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDatabaseFiles
@@ -94,13 +95,23 @@ class RuntimeDatabaseFilesTest {
         } finally { link.delete() }
     }
 
-    @Test fun hardLinkedDataFileIsRefusedWithoutChangingItsContents() = fixture { context, root ->
+    @Test fun hardLinkCannotBypassThePlatformOrDataOwnerBoundary() = fixture { context, root ->
         val outside = File(root, "outside-hardlink").apply { writeText("private-native-marker") }
         RuntimeDatabaseFiles.open(context).close()
         val directory = File(root, "minimax-bot-runtime/v2/sqlite")
         assertTrue(File(directory, "runtime-state.sqlite").delete())
         Os.chmod(outside.path, 384)
-        Os.link(outside.path, File(directory, "runtime-state.sqlite").path)
+        val target = File(directory, "runtime-state.sqlite")
+        try { Os.link(outside.path, target.path) }
+        catch (error: ErrnoException) {
+            // On platforms that disallow app hardlinks the setup itself is
+            // refused. Verify that boundary; do not pretend the owner branch ran.
+            assertTrue("hardlink_setup_errno_${error.errno}", error.errno == OsConstants.EPERM || error.errno == OsConstants.EACCES)
+            assertFalse(target.exists())
+            assertEquals("private-native-marker", outside.readText())
+            return@fixture
+        }
+        assertEquals(2L, Os.stat(outside.path).st_nlink)
         denied { RuntimeDatabaseFiles.open(context).close() }
         assertEquals("private-native-marker", outside.readText())
     }

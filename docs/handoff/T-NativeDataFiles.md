@@ -3,6 +3,14 @@
 
 当前为生产源码中的低层文件组件及独立验收接入，**不是完整runtime-data lease/撤销机制，不是正式App启动器已切换**。API26/35新设备结果待本阶段CI；上一版46c1c07只证明临时四FD方案已过。
 
+## 首次设备结果与hardlink测试边界
+
+a62530d/run41758485389 的API26/35均真实返回`t7-f1-e0-s0-unclassified-ld97`，失败堆栈行103是**测试的Os.link构造fixture**，还没进入owner拒绝断言；其余六项无失败。同期native broker host CI41758485315成功、Android broker41758485383的API26/35成功。不能把这轮写成七项全过，也不能据此说owner接受了hardlink。
+
+修正用例为“平台或owner不能被hardlink绕过”：如果Os.link以EPERM/EACCES拒绝，必须确认目标未创建、原始私有哨兵不变；其他错误仍失败。如果平台允许创建，则先确认nlink=2，再必须由生产owner拒绝且原内容不变。**不启用宽权限、root或shell去绕过平台限制，不使用Assume/skip冒充验证。两个模拟器上owner自身的nlink拒绝分支尚未证实实际触发**，后续不能据七项passed擅自扩大这一点。
+
+仅调整设备测试，生产校验保持不变。两个APK实际输出：`BUILD SUCCESSFUL in 36s`，`69 actionable tasks: 6 executed, 63 up-to-date`；新设备结果待CI。
+
 ## 实现
 
 `isolation/RuntimeDatabaseFiles.kt` 只接受可信Context，不接受Agent/UI传入的路径、目录或文件名。必须是Main UID并在worker线程调用open，避免同步创建/fsync阻塞UI。固定位置为：
