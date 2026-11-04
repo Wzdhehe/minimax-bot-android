@@ -1,7 +1,33 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# T-RuntimeFS：完整文件适配前的契约与原子发布探测（2026-11-04）
+# T-RuntimeFS：完整文件适配前的契约与原子发布组件（2026-11-04）
 
 **尚未实现完整runtime FS。** 当前WAL/两进程读取、Main四文件owner已有各自设备证据，不能代替本卡。Mini App可视化程序仍不适配；下述官方Bot的miniapp/node目录是复用其业务后端，不新增Mini App浏览器。
+
+## Main原子发布组件（新增，设备执行待CI）
+
+生产`RuntimeAtomicPublisher`只在Main worker使用，根固定在noBackupFilesDir/minimax-bot-runtime，子目录由可信Main策略选择。严格basename、最多8级、默认1MiB/最大8MiB；创建0600且O_EXCL/NOFOLLOW的随机stage，完整写入并fsync，然后调用可信注入的独占发布内核，最后同步目录。所有异常只暴露稳定code，诊断无路径/内容/cause。没有新增Binder/MethodChannel/Agent文件入口。
+
+结果明确区分`PUBLISHED`（rename与目录sync均返回成功）、`ALREADY_EXISTS`（不覆盖已有目标，不承诺其内容或持久性）、`OUTCOME_UNKNOWN`（native调用进入后结果丢失，或rename后目录sync失败）。未知不能改报拒绝或确定提交；重试不能覆盖已存在目标。已知内核errno拒绝为稳定UNAVAILABLE，清理本次拥有的stage，不删除目标。进程崩溃遗留stage的恢复/清理仍未实现。
+
+`RuntimePrivateDirectory`抽出原数据库owner的目录检查/祖先目录同步：目录能力始终留在Main。原数据库固定四文件、权限/链接/inode检查不变；需要原七项设备回归，不能仅凭重构编译成功认定没有回归。目录原始FD关闭失败时，不把dup交出并泄漏。
+
+新增六个设备用例，注入原真实JNI探测：发布/重复不覆盖、native实际发布后抛异常、rename后sync异常、输入/预算/UI拒绝、已知ENOSYS拒绝清理与空文件、两个独立owner并发一winner。原十一项保留；预期总17项，**实际计数与结果须以新CI为准**。Python报告器新增固定`RuntimeAtomicPublisherTest`/`laN`与invalid_data，不打印注入故障正文或私有路径。
+
+本轮实际运行Python24项、精确APK JS host1项、scope4项，均通过；actionlint1.7.12检查Node候选/source两workflow通过（禁用外部shellcheck/pyflakes），git diff --check通过。组件最终构建命令与原始结尾：
+
+```bash
+JAVA_HOME=/tmp/mbot-jdk21 ANDROID_HOME=/tmp/mbot-android-sdk \
+/tmp/mbot-gradle/gradle-9.3.1/bin/gradle --offline --no-daemon \
+  -g /tmp/mbot-gradle-cache -p dsh-go/tooling/android-node-probe \
+  -Dorg.gradle.jvmargs=-Xmx1g assembleDebug assembleDebugAndroidTest
+```
+
+```text
+BUILD SUCCESSFUL in 1m 21s
+69 actionable tasks: 12 executed, 57 up-to-date
+```
+
+**边界**：组件逻辑位于生产源码，但native内核仍由验收APK注入；尚未绑定生产JNI打包/启动器、runtime FS协议、原JSONL/MemoryStore或Agent身份。close仅关Main本地目录FD，不是Agent撤销或SQLite lease。物理真机/ARM64/断电均未验证。
 
 ## 原子发布设备结果（最新）
 
@@ -55,7 +81,7 @@ report-results允许固定FilePublicationProbeTest位置（artifact后缀lpN）�
 
 ## 接着做
 
-1. Main受限原子发布已取得API26/35证据；接着做有提交结果语义的Main文件发布组件，再绑定受控FS能力。保留现有输入/冲突/并发测试，不开放泛化syscall。
+1. Main受限原子发布内核已取得API26/35证据；结果语义组件现已实现并编译，新增六项设备测试待CI。通过后将同一内核纳入生产native构建，再绑定受控FS能力；保留输入/冲突/并发/结果未知测试，不开放泛化syscall。
 2. 然后设计Main持有的专用runtime-data FS能力与提交/恢复语义，再适配固定JSONL/MemoryStore调用并跑原实现测试。还需明确读写预算、流、原子替换、exclusive publication、所有写者同步和退出生命周期；目前没有这些生产接口。
 3. 完整online backup、JSON/history、uploads/assets与模型配置安全投影都仍缺；不能因数据库owner或本探测通过就切正式入口。
 4. 官方server.mjs确实创建HTTP server并listen；isolated UID的UI传输也需独立native桥接（未实现）。只在宿主临时验证过HTTP server可通过connection事件处理已连接Unix FD而不listen，不是Android或完整官方后端已接通。

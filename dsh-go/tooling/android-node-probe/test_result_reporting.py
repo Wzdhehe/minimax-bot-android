@@ -103,3 +103,16 @@ class ResultReportingTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.module.report(self.root, status)
         self.assertEqual(status.read_text(), 't1-f1-e0-s0-publication_errno38-lp52\n')
+
+    def test_atomic_publisher_failure_never_exports_the_private_fault_or_path(self):
+        code, output = self.run_report('private-fault-sentinel /private/test/document.json '
+            'runtime_data_invalid at x(RuntimeAtomicPublisherTest.kt:72)')
+        self.assertEqual(code, 1)
+        self.assertIn('failure kind=invalid_data', output)
+        self.assertIn('RuntimeAtomicPublisherTest.kt:72', output)
+        self.assertNotIn('private', output)
+        status, outputs = self.root / 'status.txt', self.root / 'outputs.txt'
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.module.report(self.root, status, outputs)
+        self.assertEqual(status.read_text(), 't1-f1-e0-s0-invalid_data-la72\n')
+        self.assertEqual(outputs.read_text(), 'result_id=' + status.read_text())
