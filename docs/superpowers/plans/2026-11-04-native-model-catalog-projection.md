@@ -11,6 +11,22 @@
 
 **设计文档:** `docs/superpowers/specs/2026-11-04-native-model-catalog-projection-design.md`
 
+## 执行结果（2026-11-04 已完成 Task 1–7）
+
+提交链（本分支连续）：`49de131` 投影层 → `445576e` 每轮绑定层 → `b0974c3` descriptor 携带目录 → `77dce60` agent port 按轮绑定 → `55be6f3` 官方门面装配 → `044600c` 真实 factory 验收 → 文档收尾。远程验收 run `41840651106` 整体 success。
+
+与计划相比的偏差（按实测修正，不猜测）：
+
+1. **新增 `runtime-catalog-policy.mjs`**：目录字段策略（凭据类/端点类字段拒绝，非密钥 `hasApiKey` 布尔量放行）由 descriptor 与投影层**共用一份**，避免两处规则漂移。计划只在 Task 3 写了 descriptor 侧校验。
+2. **投影层同时拒绝端点类字段**：设计文档 §5.1 要求「必须已剔除 baseUrl，本层再校验一次」，计划 Task 1 的实现漏了这一步，已补（`native_catalog_forbidden_field`）。
+3. **官方调用序列放在 `model-catalog-projection.mjs` 的 `applyNativeCatalog`，并另抽 `native-model-runtime.mjs`（不依赖钉点 gateway）**：计划把调用序列写在 `runtime-host-session.mjs`，那样只能由 CI 验证；抽出后可在本机用假门面真跑，CI 再验真实 fork 集成。
+4. **官方 `models` 入参是 `[{modelId}]` 对象数组，不是字符串数组**：计划 Task 4 写错，已按 `UserModelInputView` 修正。
+5. **官方 `models.select()` 不要求连通性测试通过**（实测）：其两个前置只要 provider 已配置、模型在列表内、`apiKey`/`baseUrl` 非空。设计文档 §5.3「先测通再选」的前提只对 `saveAndUse` 成立（409 TEST_REQUIRED）。已据此调整行为并记入[映射笔记](../../research/native-model-metadata-mapping.md)第 4c 节。
+6. **每轮模型键来自 `application.models.list({sessionId})` 里 `selected` 的那项**（fork 自己的会话视图），而不是 plan 假设的其它来源。
+7. **额外提供 `setSessionModel`**：用官方带 `sessionId` 的 `select` 写会话模型选择，实现「切模型在下一轮生效、在飞轮继续用旧模型」，并对不在 native 目录内的目标明确拒绝。
+8. **CI 清单新增三份测试文件**（`bot-host.yml` 的 `host-contracts` 步骤）：`model-catalog-projection` / `native-model-binding` / `native-model-runtime`。
+9. **本机未能执行的验收**：真实 fork factory 与真实 host probe 只能在 CI（Linux + esbuild + better-sqlite3 原生件）跑，本机不得声称通过；`runtime-descriptor` 原有 7 项在本机因 Windows 权限位/符号链接限制失败，已在改动前 baseline 复跑确认失败项完全相同。
+
 ## Global Constraints
 
 - 只续写 `feat/t-plugins`；不动 `main`/`dev/integration`；不 force push；不建 PR；不发布 APK。

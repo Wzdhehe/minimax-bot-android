@@ -106,6 +106,8 @@ fork runtime 看见用户在 native 侧配置的供应商与模型，且**每次
 
 第 4 步是必须的：官方 `createUserProvider` 拒绝 `saveAndUse`，且选择模型需要供应商已测通；我们不绕过这条规则，而是让官方测试经我们的 fetch 走 native，测试状态由官方自己记账。
 
+> **2026-11-04 实测更正**：读钉点源码并实测后确认，官方 `models.select()` 的两个前置（`assertModelAvailable` + `assertModelSelectable`）**只**要求 provider 已配置、`enabled !== false`、模型在其列表内、`apiKey` 与 `baseUrl` 非空，**不要求连通性测试通过**。「先测通再选」只对 `saveAndUse` 那条路径成立（409 TEST_REQUIRED）。因此第 4 步在 native broker binding 接通前**无法真正跑通**（虚拟 origin 不可达），实现上把它做成可选探针：探针缺席时记 `connectivity = not_run` 并照常设置默认模型，探针失败时该 provider 不被选中。详见[映射笔记](../../research/native-model-metadata-mapping.md)第 4c 节与[实施计划执行结果](../../superpowers/plans/2026-11-04-native-model-catalog-projection.md)。
+
 ### 5.4 切模型语义（轮边界，用户已明确）
 
 - 切换请求写进 fork 的 session 模型选择（官方 `select` 带 sessionId）；

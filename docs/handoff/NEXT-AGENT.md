@@ -129,7 +129,9 @@ env -u GH_TOKEN -u GITHUB_TOKEN gh run view 41826964500 --json status,conclusion
 5. candidate默认release的49项通过，也**不能证明Intl**。零skipped/相同计数不是相同功能路径证明。
 6. 记录commit/run/实际结果和未验证项，更新HANDOFF/T-AndroidNode；阶段push，不动main/dev。
 
-**上项已完成**（a2c17d5 / 41831847047，见本节文首更新）。**下一项**：按第5节做native非密钥metadata投影与默认选择，字段映射实查见[映射笔记](../research/native-model-metadata-mapping.md)。本项只做非密钥投影与默认选择的最小可验阶段：真实Key留在native，投影里只出现供应商名/Base URL/模型清单/默认模型；仍要确定providerKey命名规则、metadata刷新时序、一个runtime下多binding路由、每Bot会话到MCP caller的可信绑定（映射笔记第4节）。不发明跨端协议，不把真实Key写进BYOK yaml/env/descriptor/log，未接broker时明确拒绝模型执行，不加假回答。
+**上项已完成**（a2c17d5 / 41831847047，见本节文首更新）。
+
+**本项已完成（2026-11-04，run 41840651106 / commit 044600c）**：native 非密钥目录投影与每轮受控绑定已落地，详见第5节与[T-RuntimeHost](T-RuntimeHost.md)。**下一项**：按[T-RuntimeBroker](T-RuntimeBroker.md)文首的契约把 native 侧接线补齐——descriptor 写入**剥离后**的非密钥目录，并把 native broker binding 交给 guest runtime 进程；之后官方连通性测试才会真跑（此前 `connectivity` 为 `not_run`），再往后是每 Bot 可信 MCP caller 绑定与真实 provider 验收。仍不发明跨端协议，不把真实Key写进BYOK yaml/env/descriptor/log，未接broker时明确拒绝模型执行，不加假回答。
 
 收尾只读取得source/candidate日志和API状态；source XML下载遇HTTP403，未本地解析其JUnit明细，故不编造source的f/e/s计数（49是日志启动数）。candidate的t49/f0/e0/s0来自现有结果artifact名称；后续组合验收还须核实际JS分支，而不只计数。
 
@@ -139,7 +141,17 @@ env -u GH_TOKEN -u GITHUB_TOKEN gh run view 41826964500 --json status,conclusion
 
 用户新增 **@minimax-web/minimax-code** 已发包信息。先按[发行包查证任务](../research/webui-published-package.md)核准确版本/registry/exports及现成接口；优先复用，不擅自升级。收尾查询官方npm metadata暂404、fork旧清单另有旧包名，均不能证明新包不存在，也不能猜包名替换；已请求用户提供直接链接/安装命令。本轮没有安装/切换。
 
-后续目标：真实runtime识别native保存的供应商/模型和默认选择，模型请求走既有native SDK/FD能力；Key仍只在native。**这项还没有实施，不要打已完成勾。**
+**本项已实施（2026-11-04）**：runtime 侧已完成「native 非密钥目录 → 钉点官方 provider API」的投影与每轮受控绑定，**不再自写投影层**：复用钉点 `application.modelProviders.create/update/listUser/testProvider` 与 `application.models.list/select`（钉点 commit `97818b2890b4acae1c6bd1200a226ff506680628` 与 pin 未动）。新增 `runtime-catalog-policy.mjs`（目录字段策略）、`model-catalog-projection.mjs`（纯投影 + 官方调用序列）、`native-model-binding.mjs`（每轮模型键 → native route，复用既有 `createNativeModelRoute`/`createModelFetchScope`）、`native-model-runtime.mjs`（不依赖钉点 gateway 的装配层）；`runtime-descriptor.mjs` 携带非密钥 `catalog`，`runtime-host-session.mjs` boot 后装配并返回 `providerBinding`/`setSessionModel`，`agent-port.mjs` 每轮经绑定执行。
+
+已确定的细节（不再是待定项）：
+
+- **providerKey 命名**：显示名用「净化后的 native providerId」（只保留 `[A-Za-z0-9 _-]`，其余换 `-`），官方 `generateProviderKey` 因此产出**确定性**键名；不用用户友好名（官方对非 ASCII 名生成随机 `provider-<hex>`，跨重启模型键会变）。
+- **模型键格式**：`custom_provider:<key>/<modelId>`，按**第一个** `/` 切分（`packages/local-runtime/src/config/model-key.ts`）。
+- **每轮解析**：轮开始时取 `application.models.list({sessionId})` 里 `selected` 的那项，一轮内不重解析 → 切模型在下一轮生效、在飞轮用旧模型；目录外模型该轮明确拒绝（`model_not_available`）。
+- **实测校正**：官方 `models.select()` 只要求 provider 已配置、`enabled !== false`、模型在列表内、`apiKey`/`baseUrl` 非空，**不要求连通性测试通过**；「先测通再选」只对 `saveAndUse` 成立（409 TEST_REQUIRED）。详见[映射笔记](../research/native-model-metadata-mapping.md)第 4c 节。
+- **官方 update 的模型只能合并不能删除**：native 已删的模型会残留在 fork 目录可见但被每轮绑定拒绝，这是已知限制。
+
+**仍未做**：native 侧接线（descriptor 写目录、broker binding 进 guest 进程）、真实 provider 调用、每 Bot 可信 MCP caller 绑定、ARM64/真机、产品 APK、设置热更新（本阶段 boot-only）。
 
 先实查真实字段/调用点并写映射表：
 

@@ -70,6 +70,34 @@ fork 源码为钉点 `97818b2890b4acae1c6bd1200a226ff506680628`（本地只读 c
 
 据此，本笔记第 3 节的自写投影层被取消，改为「薄适配 + 复用官方 API」，详见[设计文档](../superpowers/specs/2026-11-04-native-model-catalog-projection-design.md)。
 
+## 4c. 钉点源码实查结论（2026-11-04，本阶段读源码确认）
+
+模型键格式：`parseSourceQualifiedModelKey` 以**第一个** `/` 切分，providerId 形如 `custom_provider:<key>`，modelId 是其余全部（`packages/local-runtime/src/config/model-key.ts:39-52`）。
+
+官方 provider/model 门面（`packages/local-runtime-v2/src/application/session/process-local-application-contract.ts:440-512`）：
+
+| 调用 | 形状 | 关键约束 |
+|---|---|---|
+| `modelProviders.listUser()` | `Promise<readonly Record<string,unknown>[]>` | 每项是 `ModelProviderView`：`{providerId,name,source,kind,enabled,baseUrl?,apiFormat?,hasApiKey,maskedApiKey?,models:[...]}`；`providerId` 形如 `custom_provider:<key>` |
+| `modelProviders.create({name?,baseUrl,apiKey,apiFormat?,models?})` | `Promise<ModelProviderView>` | `baseUrl`/`apiKey` 必填；`models` 是 `UserModelInputView[]`，**元素是 `{modelId}` 对象不是字符串**；拒绝 `saveAndUse`（409 TEST_REQUIRED） |
+| `modelProviders.update({providerId,name?,baseUrl?,apiFormat?,models?})` | `Promise<ModelProviderView>` | 不传 `apiKey` = 保留原值；`models` 走 `mergeModelsFromInputs`，**只能合并、不能删除**已存在的模型 |
+| `modelProviders.testProvider({providerId,apiKey?})` | `Promise<{success,status}>` | 真正发请求；虚拟 origin 不可达时返回 `success:false`，不抛异常 |
+| `models.list({sessionId?})` | `Promise<ModelProviderModelEntry[]>` | 每项含 `providerId`/`modelId`/`modelConfigId`（= `providerId/modelId`）/`selected`；带 sessionId 时 `selected` 标记**该会话**生效模型，不带时标记全局默认 |
+| `models.select({providerId,modelId,variant?,sessionId?})` | `Promise<boolean>` | 不带 sessionId → 写全局默认 `config.defaultModel`；带 sessionId → 只写该会话 |
+
+`select()` 的两个前置（`application/session/model-provider-application.ts:96-110` + `packages/config/src/model-availability.ts:135`）：
+
+1. `assertModelAvailable` → `resolveModelAvailability`：要求 provider 在 `config.custom_provider` 里、`enabled !== false`、该 modelId 在其 models 中且 `enabled !== false`。**不要求连通性测试通过**。
+2. `assertModelSelectable` → `resolveTestTarget`：要求 provider 有非空 `apiKey` 与 `baseUrl`、且 modelId 在其 models 中。占位串即可通过。
+
+→ 因此「占位 key + 虚拟 origin」的 provider **可以**被官方 `select()` 选中，不必先跑通连通性。设计文档里「先测通再选」的前提只在 `saveAndUse` 那条路径上成立（409 TEST_REQUIRED），**不构成 `select()` 的前置**。这一点已在本阶段实现中按实测校正。
+
+provider 键名规则（`management/provider-key.ts:22-47`）：`SIMPLE_ASCII_NAME = /^[A-Za-z0-9 _-]+$/`，通过则小写 kebab，否则随机 `provider-<hex>`。→ 喂「净化后的 native providerId」（只保留 `[A-Za-z0-9 _-]`，其余换 `-`）即得确定性键名。
+
+配置落点：`updateLocalModelSelection` 写 `raw.defaultModel`（`packages/config/src/local-model-provider-write.ts:133-160`），byok 树写 `raw.custom_provider`；两者都在 `<dataDir>/config.yaml`。
+
+`minimax_api` 树：`listUserProviders()` 只返回 `custom_provider` 树（`management/service.ts:84-90`），故 native 供应商必须投影到 `custom_provider`；`minimax_api` 的模型不单独列出——与本笔记第 2 节结论一致。
+
 ## 5. 边界（与合同一致）
 
 - 真实 Key 不写 fork BYOK yaml、不进 env/descriptor/log/Agent 可读文件；fork 侧只知道"有没有 key"。

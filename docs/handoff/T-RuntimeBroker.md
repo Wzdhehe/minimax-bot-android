@@ -1,5 +1,26 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-04）
 
+## 最新：native 侧待接线的目录契约（2026-11-04）
+
+runtime 侧已完成「native 非密钥目录 → 钉点官方 provider API」的投影与每轮绑定（见 [T-RuntimeHost](T-RuntimeHost.md)）。**native 侧尚未接线**，下一阶段按下述契约补齐，不要另发明协议：
+
+**1. descriptor 要带 `catalog`。** 现有 Kotlin `RuntimeDescriptorSession` / `RuntimeDescriptor.encode()` 只写 `entryPath/pinCommit/port/token/broker`。需新增一个**非密钥目录**字段并原样写进 `<dataDir>/runtime-descriptor.json`；Node 侧 `createRuntimeDescriptor` 已接受 `catalog` 并在写盘前校验（凭据类字段 → `descriptor_catalog_contains_credential`，端点类字段 → `descriptor_catalog_forbidden_field`）。
+
+**2. 目录必须先剥掉端点与 Key。** `BotProviderStore.catalog()` 当前返回的每项含 `baseUrl` 与 `maskedApiKey`，**这两个字段都不允许进 descriptor**：`baseUrl` 会把真实供应商端点带进 guest，`maskedApiKey` 属于 Key 类字段。native 侧需要单独产出一份「guest 目录」，字段只允许：
+
+```text
+providers[]: { providerId, name, apiFormat, enabled, models[] }
+defaultProviderId, defaultModelId
+```
+
+`apiFormat` 只允许四取值 `openai-completions / openai-responses / anthropic-messages / google-generative-ai`（与钉点 `isModelProviderApi` 白名单同名）；`hasApiKey` 若要带，只允许布尔值。
+
+**3. 真实端点与 Key 仍只在 native。** native broker 按 `providerId` + `modelId` 解析真实端点与 Key；guest 侧只有虚拟 origin `https://models.mbot.invalid` 与占位串 `native-broker-placeholder`。
+
+**4. native broker binding 要交给 guest runtime 进程。** 每轮绑定需要 guest 侧的 `{open(id,payload), cancel(id)}` binding（既有 `createNativeModelRoute` 的入参）。在这条链路接上之前，`createBuiltinBotRuntime` 的 `nativeBinding` 为 `null`，此时目录照常投影、默认选择照常生效，但**官方连通性测试不会跑**（`connectivity` 记为 `not_run`），模型请求也没有路由可用。
+
+**5. 切模型走 session 选择。** 切模型写 fork 的 session 模型选择（官方 `models.select` 带 `sessionId`），在飞轮继续用旧模型、下一轮生效；本阶段已实现 `setSessionModel`，并对不在 native 目录内的目标明确拒绝（`model_not_available`）。
+
 ## 最新安全复核：Node descriptor与环境交接（2026-11-04）
 
 既有实现有四个可复现缺口：写穿叶软链接、经父目录软链读/写workspace/private根外、writer把额外字段（如apiKey）原样JSON序列化、extra环境绕过allowlist。分别取得修复前失败；现改为私有stage/O_EXCL/O_NOFOLLOW/fsync+rename、真实父路径政策校验、同一FD fstat/owner/权限与读取、固定字段投影，extra与baseEnv用同一白名单。回归不依赖真实Key，不修改vendor快照或正式Android launcher。
