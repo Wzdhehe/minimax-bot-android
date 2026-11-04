@@ -1,5 +1,11 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-04）
 
+## 继续开发：多个模型binding共享fetch生命周期（2026-11-04）
+
+原实现每个binding独占global fetch：先后装两个binding时，前一个turn读取的是后一个scope；先关闭前一个还会把原始fetch提前恢复。已先用并发与反序close负例复现，再改为默认共享AsyncLocalStorage、按目标引用计数，最后一个绑定且其在飞operation结束后才恢复原属性；关闭的binding在返回的operation仍运行时拒绝其延迟fetch。不同scope竞争同一target拒绝，不覆盖外部改动。
+
+Linux宿主本机：端口/绑定/目录装配46项、真实钉点gateway生命周期10项、现有3种SDK真实FD流9项通过；无新Android/真实provider执行。route只是调度，并非安全边界；已返回Promise后脱离的异步任务无法由计数完整追踪，正式launcher必须靠独立UID进程生命周期与native撤销，不能将此修复当成沙箱。
+
 ## 继续开发：未绑定时拒绝模型执行（2026-11-04）
 
 复核20c4516发现`createBotAgentPort`在`binding=null`时仍直接调用`agent.run/answer`，旧文档所写「明确拒绝」当时不成立；上游已有配置时可能绕过约定的native模型路由。现端口在进入gateway前返回稳定错误`native_binding_unavailable`，不会发起session/turn；models/reply仍可调用。新增端口负例和钉点真实gateway负例，已有身份/取消夹具显式使用假绑定，不声称真实模型或Android执行。

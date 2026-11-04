@@ -9,6 +9,11 @@
 import { createNativeModelRoute } from './native-model-route.mjs';
 import { createModelFetchScope } from './model-fetch-scope.mjs';
 
+// Every binding installed on the same process-wide fetch must use the same
+// AsyncLocalStorage. Otherwise the last installer sees only its own turns.
+const sharedScope = createModelFetchScope();
+const installations = new WeakMap();
+
 export class NativeBindingError extends Error {
   constructor(code) {
     super(code);
@@ -21,7 +26,7 @@ export class NativeBindingError extends Error {
  * key, e.g. `custom_provider:minimax`) to the native provider it was
  * projected from.
  */
-export function createNativeModelBinding({ byForkProviderId, routeFactory, scope = createModelFetchScope(), binding = null }) {
+export function createNativeModelBinding({ byForkProviderId, routeFactory, scope = sharedScope, binding = null }) {
   if (!byForkProviderId || typeof byForkProviderId !== 'object') {
     throw new TypeError('A fork provider map is required');
   }
@@ -35,7 +40,23 @@ export function createNativeModelBinding({ byForkProviderId, routeFactory, scope
   }
   let installed = false;
   let installedTarget = null;
-  let previousFetch;
+  let activeTurns = 0;
+
+  // Keep the dispatcher installed until this binding's active operations have
+  // settled. A late fetch from a closed turn must fail instead of reaching
+  // the original network fetch while its operation is still running.
+  function releaseInstallation() {
+    if (installed || activeTurns || !installedTarget) return;
+    const target = installedTarget;
+    installedTarget = null;
+    const record = installations.get(target);
+    if (!record || --record.users > 0) return;
+    installations.delete(target);
+    // Never overwrite a later owner's change to the property.
+    if (target.fetch !== scope.fetch) return;
+    if (record.originalDescriptor) Object.defineProperty(target, 'fetch', record.originalDescriptor);
+    else delete target.fetch;
+  }
 
   function parseModelKey(modelKey) {
     if (typeof modelKey !== 'string') throw new NativeBindingError('invalid_model_key');
@@ -60,29 +81,52 @@ export function createNativeModelBinding({ byForkProviderId, routeFactory, scope
     /** Install the scoped fetch once. The target is the object the SDK reads it from. */
     install(target) {
       if (!target || typeof target !== 'object') throw new TypeError('An install target is required');
-      if (installed) return;
-      previousFetch = Object.prototype.hasOwnProperty.call(target, 'fetch') ? target.fetch : undefined;
-      target.fetch = scope.fetch;
+      if (installed) {
+        if (target !== installedTarget || target.fetch !== scope.fetch) throw new NativeBindingError('binding_install_conflict');
+        return;
+      }
+      if (installedTarget) throw new NativeBindingError('binding_draining');
+      let record = installations.get(target);
+      if (record) {
+        if (record.scope !== scope || target.fetch !== scope.fetch) throw new NativeBindingError('binding_install_conflict');
+      } else {
+        const originalDescriptor = Object.getOwnPropertyDescriptor(target, 'fetch');
+        target.fetch = scope.fetch;
+        if (target.fetch !== scope.fetch) throw new NativeBindingError('binding_install_conflict');
+        record = { scope, originalDescriptor, users: 0 };
+        installations.set(target, record);
+      }
+      record.users++;
       installed = true;
       installedTarget = target;
     },
     routeFor,
     /** Run one turn inside the route of its own model. The key is resolved once, before the turn. */
     runForModelKey(modelKey, operation) {
-      if (!installed) throw new NativeBindingError('binding_not_installed');
+      if (!installed || installedTarget.fetch !== scope.fetch) throw new NativeBindingError('binding_not_installed');
       if (typeof operation !== 'function') throw new TypeError('An operation is required');
       const route = routeFor(modelKey);
-      return scope.run(route.fetch, operation);
+      activeTurns++;
+      const finish = () => { activeTurns--; releaseInstallation(); };
+      let result;
+      try {
+        result = scope.run((input, init) => {
+          if (!installed || installedTarget?.fetch !== scope.fetch) {
+            return Promise.reject(new NativeBindingError('native_binding_unavailable'));
+          }
+          return route.fetch(input, init);
+        }, operation);
+      } catch (error) { finish(); throw error; }
+      try {
+        if (result && typeof result.then === 'function') return Promise.resolve(result).finally(finish);
+      } catch (error) { finish(); throw error; }
+      finish();
+      return result;
     },
     close() {
       if (!installed) return;
       installed = false;
-      if (installedTarget) {
-        if (previousFetch === undefined) delete installedTarget.fetch;
-        else installedTarget.fetch = previousFetch;
-      }
-      installedTarget = null;
-      previousFetch = undefined;
+      releaseInstallation();
     },
   });
 }

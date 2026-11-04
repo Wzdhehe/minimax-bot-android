@@ -6,6 +6,7 @@
 
 ## 当前已完成与未完成
 
+- 本轮修复多个runtime共享fetch时的路由冲突：共享AsyncLocalStorage、按target引用计数与在飞operation收尾，任一runtime关闭不能让另一runtime退回原始fetch；未绑定请求拒绝。此路由仍不是进程/UID隔离，孤儿异步任务及真实launcher的进程终止须另行处理。
 - 本轮修复缺失native binding时的绕过：Bot的run/answer现在返回`native_binding_unavailable`，不会调用上游gateway；带绑定的turn仍走scope。真实gateway生命周期新增负例。目录仍可展示；native broker接线与正式启动器尚未完成。
 
 - d31b379：通过原RuntimeServices精确构建接缝注册内置服务身份，不造第二gateway、不写17ports；8真实gateway/facade生命周期cases过，session执行为桩。

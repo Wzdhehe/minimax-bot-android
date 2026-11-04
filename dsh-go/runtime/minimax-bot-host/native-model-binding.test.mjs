@@ -86,6 +86,107 @@ test('restores the previous fetch when the binding closes', () => {
   assert.equal(target.fetch, original);
 });
 
+test('concurrent bindings route independently and one close cannot restore network fetch for the other', async () => {
+  const original = async () => new Response('network fallback');
+  const target = { fetch: original };
+  const make = (label) => createNativeModelBinding({
+    byForkProviderId: { 'custom_provider:p': { nativeProviderId: label, apiFormat: 'openai-completions', models: ['m'] } },
+    routeFactory: () => ({ fetch: async () => new Response(label) }),
+  });
+  const first = make('first'), second = make('second');
+  try {
+    first.install(target);
+    second.install(target);
+    assert.equal((await target.fetch('https://example.invalid')).status, 400);
+    const request = (binding) => binding.runForModelKey('custom_provider:p/m', async () => {
+      await new Promise(setImmediate);
+      return (await target.fetch('https://models.mbot.invalid/v1/chat/completions')).text();
+    });
+    assert.deepEqual(await Promise.all([request(first), request(second)]), ['first', 'second']);
+    first.close();
+    assert.equal(await request(second), 'second');
+    assert.notEqual(target.fetch, original);
+    second.close();
+    assert.equal(target.fetch, original);
+  } finally { first.close(); second.close(); }
+});
+
+test('closing the second binding first preserves the first binding', async () => {
+  const original = async () => new Response('network fallback');
+  const target = { fetch: original };
+  const make = (label) => createNativeModelBinding({
+    byForkProviderId: { 'custom_provider:p': { nativeProviderId: label, apiFormat: 'openai-completions', models: ['m'] } },
+    routeFactory: () => ({ fetch: async () => new Response(label) }),
+  });
+  const first = make('first'), second = make('second');
+  try {
+    first.install(target);
+    second.install(target);
+    second.close();
+    assert.notEqual(target.fetch, original);
+    assert.equal(await first.runForModelKey('custom_provider:p/m', async () => (await target.fetch('https://example.invalid')).text()), 'first');
+    first.close();
+    assert.equal(target.fetch, original);
+  } finally { first.close(); second.close(); }
+});
+
+test('closing the first binding does not expose the original fetch while a second is live', async () => {
+  const original = async () => new Response('network fallback');
+  const target = { fetch: original };
+  const make = () => createNativeModelBinding({
+    byForkProviderId: { 'custom_provider:p': { nativeProviderId: 'p', apiFormat: 'openai-completions', models: ['m'] } },
+    routeFactory: () => ({ fetch: async () => new Response('broker') }),
+  });
+  const first = make(), second = make();
+  try {
+    first.install(target);
+    second.install(target);
+    first.close();
+    assert.notEqual(target.fetch, original);
+    assert.equal(await second.runForModelKey('custom_provider:p/m', async () => (await target.fetch('https://example.invalid')).text()), 'broker');
+  } finally { first.close(); second.close(); }
+});
+
+test('closing a binding denies late fetches until its outstanding operation settles', async () => {
+  const original = async () => new Response('network fallback');
+  const target = { fetch: original };
+  const binding = createNativeModelBinding({
+    byForkProviderId: { 'custom_provider:p': { nativeProviderId: 'p', apiFormat: 'openai-completions', models: ['m'] } },
+    routeFactory: () => ({ fetch: async () => new Response('broker') }),
+  });
+  let resume;
+  const gate = new Promise((resolve) => { resume = resolve; });
+  binding.install(target);
+  const operation = binding.runForModelKey('custom_provider:p/m', async () => {
+    await gate;
+    return target.fetch('https://example.invalid');
+  });
+  binding.close();
+  assert.notEqual(target.fetch, original);
+  assert.throws(() => binding.install(target), (error) => error.code === 'binding_draining');
+  resume();
+  await assert.rejects(operation, (error) => error.code === 'native_binding_unavailable');
+  assert.equal(target.fetch, original);
+});
+
+test('preserves an own undefined fetch property after the final close', () => {
+  const target = { fetch: undefined };
+  const { binding } = fixture();
+  binding.install(target);
+  binding.close();
+  assert.equal(Object.hasOwn(target, 'fetch'), true);
+  assert.equal(target.fetch, undefined);
+});
+
+test('rejects an incompatible dispatcher on a target with a live binding', () => {
+  const target = {};
+  const first = fixture().binding, second = fixture().binding;
+  try {
+    first.install(target);
+    assert.throws(() => second.install(target), (error) => error.code === 'binding_install_conflict');
+  } finally { first.close(); second.close(); }
+});
+
 test('addresses the native virtual origin through the default route factory', () => {
   const binding = createNativeModelBinding({
     byForkProviderId: {
