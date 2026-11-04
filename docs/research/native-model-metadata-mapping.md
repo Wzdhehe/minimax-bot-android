@@ -22,7 +22,7 @@ fork 源码为钉点 `97818b2890b4acae1c6bd1200a226ff506680628`（本地只读 c
   - `minimax_api: {apiKey, baseURL, modelContextLimits}`（用户自带 MiniMax key）；
   - `custom_provider: Record<key, LocalCustomProviderConfig>`（用户自建外部供应商）。
 - 模型键形状是 `providerId/modelId`（model-key.ts:1-13）。providerId 决定读哪棵树：`minimax_api`（保留 id）、`custom_provider:<key>`、其余落到 `provider` 树。
-- **`minimax_api` 是保留 provider id**，且 config 读取时会把手写的 `provider.minimax_api` 条目**直接丢弃**（byok-config.ts:307-320）。因此 native 的 MiniMax BYOK 供应商必须投影到 `minimax_api`，不能写进 `provider.minimax_api`。
+- **`minimax_api` 是保留 provider id**，且 config 读取时会把手写的 `provider.minimax_api` 条目**直接丢弃**（byok-config.ts:307-320）。不能写进 `provider.minimax_api`。**并且 `minimax_api` 树的模型不再单独列出**（builtin minimax 目录覆盖同批模型，来源路由在推理时解析：`management/service.ts:73-74`、`catalog/list-models.ts:383`），因此要让 native 侧配置的供应商出现在目录里，**必须投影到 `custom_provider` 树**（providerId 形如 `custom_provider:<key>`），而不是 `minimax_api`。
 - pi-ai 注册的 api id（register-builtins.ts:349-397）：`anthropic-messages`、`openai-completions`、`mistral-conversations`、`openai-responses`、`azure-openai-responses`、`openai-codex-responses`、`google-generative-ai`、`google-vertex`、`bedrock-converse-stream`。
 - 配置落在 `<dataDir>/config.yaml`（用户可写目录）；`createWebuiRuntimeHost(options)` **没有** config 覆盖钩子，options 只有 dataDir/appVersion/browserProvider/mcodeTools/factory 等（packages/webui/src/runtime/assembly.ts:189-235），默认 factory 动态 import `@mavis/local-runtime-v2` 的 `createLocalRuntimeHostV2`。
 
@@ -32,7 +32,7 @@ fork 源码为钉点 `97818b2890b4acae1c6bd1200a226ff506680628`（本地只读 c
 |---|---|---|
 | `apiFormat` 四取值 | 同名 api id，四者**一一对应**，无需转换 | NativeProvider.kt:44-86 vs register-builtins.ts:349-385 |
 | `providerId`（外部供应商） | `custom_provider:<providerId>` 树键，模型键 `custom_provider:<providerId>/<modelId>` | model-key.ts:15-45 |
-| MiniMax 官方 BYOK 供应商 | `minimax_api` 树（不是 `provider.minimax_api`） | byok-config.ts:307-320 |
+| MiniMax 官方 BYOK 供应商 | `custom_provider:<providerId>`（`minimax_api` 树的模型不单独列出，投影过去不会被目录列出） | byok-config.ts:307-320、catalog/list-models.ts:383 |
 | `name` | `LocalCustomProviderConfig.name` / `LocalProviderConfig.name` | types.ts |
 | `baseUrl` | `options.baseURL`（**非密钥**） | types.ts:LocalProviderOptions |
 | `models[]` | `models`（用户选定）/ `catalogModels`（目录）两个映射 | types.ts:LocalProviderConfig |
@@ -46,6 +46,29 @@ fork 源码为钉点 `97818b2890b4acae1c6bd1200a226ff506680628`（本地只读 c
 3. 一个 runtime 下**多个模型 binding 的路由**未定；现有 `NativeModelRequestHost`/`ModelRequestClient` 已绑定 UID/代次/provider/model/peer 生命周期，但不是任意 URL/Key 路由器。
 4. 每 Bot 会话到 MCP caller 的**可信绑定**未定；内置服务 `pluginId` 不等于每 Bot `caller_bot_id`。
 5. 请求实际走 fork 自带 HTTP 还是经 native broker，尚需在隔离 UID 下验证；PRoot/同 UID 都不是答案。
+
+## 4b. 官方可复用 API（2026-11-04 复查开源仓后）
+
+用户指出 `@minimax-web/minimax-code` 相关项目已开源、应复用现成能力。取证结果：开源仓 **`MiniMax-AI/minimax-code`**（public，TUI 0.7.2 线）与我们钉的 fork **同源同包名**（`packages/config`、`packages/local-runtime`、`packages/local-runtime-v2`），fork 只多了 `packages/webui`；npm 上 `@minimax-web/minimax-code` **仍 404**，开源仓发布的 CLI 包是 `@minimax-ai/code`，WebUI 包的确切来源仍待用户提供。本机 git 协议访问 github.com 不通，取证走 `gh api`。
+
+官方**已经实现**、我们不该再造的部分：
+
+| 能力 | 官方 API | 位置（开源仓 main） |
+|---|---|---|
+| 供应商条目写入（配置锁、原子写、apiKey/apiFormat 校验、保留键、模型合并） | `LocalModelProviderService.createUserProvider / updateUserProvider` | `packages/local-runtime-v2/src/service/model-system/management/service.ts:158-183` |
+| provider 键名规则 | `generateProviderKey` + `RESERVED_PROVIDER_KEYS` | `management/provider-key.ts:14-47` |
+| 目录与 provider 视图 | `ModelProviderApplication.list()`、`listEffectiveProviders()` | `application/session/model-provider-application.ts:36`、`management/service.ts:70-90` |
+| 默认 / 会话模型选择 | `ModelProviderApplication.select()` | 同上 |
+| 连通性测试与模型发现 | `testProvider / testModel / discoverModels` | `management/service.ts:229-240` |
+| 运行时可达性 | `RuntimeServices.modelProvider = { application, providers }` | `packages/local-runtime-v2/src/services.ts:540-542` |
+
+上游流程约束（必须遵守，不绕过）：
+
+- `createUserProvider` **拒绝 `saveAndUse`**（409 TEST_REQUIRED：先测通再启用）→ 顺序必须是 create → 官方测试 → `select()`。
+- `updateUserProvider` 的 apiKey 三态：不给=保留、空=清除、masked=拒绝 → 只在首次 create 写占位串。
+- `generateProviderKey` 对非 ASCII 名生成**随机** `provider-<hex>` 键 → 为跨重启稳定，喂「净化后的 native providerId」。
+
+据此，本笔记第 3 节的自写投影层被取消，改为「薄适配 + 复用官方 API」，详见[设计文档](../superpowers/specs/2026-11-04-native-model-catalog-projection-design.md)。
 
 ## 5. 边界（与合同一致）
 
