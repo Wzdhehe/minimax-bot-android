@@ -15,6 +15,7 @@
 
 import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { findCatalogViolation } from './runtime-catalog-policy.mjs';
 
 export const RUNTIME_DESCRIPTOR_FILENAME = 'runtime-descriptor.json';
 
@@ -44,6 +45,29 @@ function isInside(root, candidate) {
 }
 
 /**
+ * The optional non-secret provider catalog the guest runtime projects into
+ * the upstream provider API. A credential or a real upstream endpoint in it
+ * would reach the guest, so it is refused before anything is written.
+ */
+function assertCatalogSafe(catalog) {
+  if (!catalog || typeof catalog !== 'object' || Array.isArray(catalog)) {
+    throw new TypeError('descriptor_catalog_invalid');
+  }
+  const violation = findCatalogViolation(catalog);
+  if (violation === 'credential') throw new TypeError('descriptor_catalog_contains_credential');
+  if (violation === 'endpoint') throw new TypeError('descriptor_catalog_forbidden_field');
+  return catalog;
+}
+
+/** Freeze the catalog so no later holder can mutate the projected view. */
+function freezeCatalog(value, seen = new WeakSet()) {
+  if (!value || typeof value !== 'object' || seen.has(value)) return value;
+  seen.add(value);
+  for (const entry of Object.values(value)) freezeCatalog(entry, seen);
+  return Object.freeze(value);
+}
+
+/**
  * Build a validated descriptor. Throws before anything is written when a
  * field is missing or malformed.
  *
@@ -52,7 +76,7 @@ function isInside(root, candidate) {
  * and it never carries a provider key: the provider key stays in the native
  * side and only the resolved model answer crosses this session.
  */
-export function createRuntimeDescriptor({ entryPath, pinCommit, port, token, broker = null }) {
+export function createRuntimeDescriptor({ entryPath, pinCommit, port, token, broker = null, catalog = null }) {
   if (typeof entryPath !== 'string' || !entryPath || entryPath.includes('\0') || !isAbsolute(entryPath)) {
     throw new TypeError('An absolute runtime entry path is required');
   }
@@ -65,8 +89,11 @@ export function createRuntimeDescriptor({ entryPath, pinCommit, port, token, bro
   if (typeof token !== 'string' || !/^[0-9a-f]{32,64}$/.test(token)) {
     throw new TypeError('A session token is required');
   }
+  const projectedCatalog = catalog === null || catalog === undefined
+    ? null
+    : freezeCatalog(assertCatalogSafe(catalog));
   if (broker === null || broker === undefined) {
-    return Object.freeze({ entryPath, pinCommit, port, token, broker: null });
+    return Object.freeze({ entryPath, pinCommit, port, token, broker: null, catalog: projectedCatalog });
   }
   const { baseUrl, token: brokerToken } = broker ?? {};
   const brokerPort = typeof baseUrl === 'string' ? /^http:\/\/127\.0\.0\.1:([0-9]{1,5})$/.exec(baseUrl)?.[1] : undefined;
@@ -76,7 +103,11 @@ export function createRuntimeDescriptor({ entryPath, pinCommit, port, token, bro
   if (typeof brokerToken !== 'string' || !/^[0-9a-f]{32,64}$/.test(brokerToken)) {
     throw new TypeError('A broker session token is required');
   }
-  return Object.freeze({ entryPath, pinCommit, port, token, broker: Object.freeze({ baseUrl, token: brokerToken }) });
+  return Object.freeze({
+    entryPath, pinCommit, port, token,
+    broker: Object.freeze({ baseUrl, token: brokerToken }),
+    catalog: projectedCatalog,
+  });
 }
 
 /**

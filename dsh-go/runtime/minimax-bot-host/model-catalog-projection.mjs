@@ -8,6 +8,7 @@
 // default. It never assembles config YAML, never invents a provider key and
 // never sees a credential.
 import { nativeVirtualBaseUrl } from './native-model-route.mjs';
+import { findCatalogViolation } from './runtime-catalog-policy.mjs';
 
 /** The four BYOK wire protocols the pinned upstream provider API accepts. */
 export const PROJECTED_API_FORMATS = Object.freeze([
@@ -16,15 +17,6 @@ export const PROJECTED_API_FORMATS = Object.freeze([
   'anthropic-messages',
   'google-generative-ai',
 ]);
-
-/** Field names that may never reach the guest runtime. */
-const CREDENTIAL_FIELD = /(api[-_.]?key|secret|token|credential|password|passwd|authorization|cookie)/i;
-
-/** Field names that would leak the real upstream endpoint into the guest. */
-const ENDPOINT_FIELD = /^(baseurl|base_url|url|endpoint|host|hostname)$/i;
-
-/** Non-secret flags whose name shares a credential-like word. */
-const SAFE_FLAG_FIELDS = new Set(['hasApiKey']);
 
 const PROVIDER_ID = /^[A-Za-z0-9._-]{1,128}$/;
 const MODEL_ID = /^[A-Za-z0-9._:/-]{1,256}$/;
@@ -46,19 +38,9 @@ function projectionFailure(code, upstreamCode) {
  * a provider the user configured.
  */
 function assertCatalogSafe(catalog) {
-  const walk = (value) => {
-    if (!value || typeof value !== 'object') return;
-    for (const [name, entry] of Object.entries(value)) {
-      if (SAFE_FLAG_FIELDS.has(name)) {
-        if (typeof entry !== 'boolean') throw new TypeError('native_catalog_contains_credential');
-        continue;
-      }
-      if (CREDENTIAL_FIELD.test(name)) throw new TypeError('native_catalog_contains_credential');
-      if (ENDPOINT_FIELD.test(name)) throw new TypeError('native_catalog_forbidden_field');
-      walk(entry);
-    }
-  };
-  walk(catalog);
+  const violation = findCatalogViolation(catalog);
+  if (violation === 'credential') throw new TypeError('native_catalog_contains_credential');
+  if (violation === 'endpoint') throw new TypeError('native_catalog_forbidden_field');
 }
 
 /**

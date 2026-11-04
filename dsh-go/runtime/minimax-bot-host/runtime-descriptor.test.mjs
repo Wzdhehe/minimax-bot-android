@@ -52,12 +52,48 @@ test('the descriptor carries an optional loopback broker session for model reque
   assert.throws(() => createRuntimeDescriptor({ entryPath: '/x', pinCommit: PIN, port: 8080, token: 'b'.repeat(64), broker: { baseUrl: 'http://127.0.0.1:80', token: 'short' } }), /broker session token/);
 });
 
+test('the descriptor carries a non-secret provider catalog', () => {
+  const descriptor = createRuntimeDescriptor({
+    entryPath: '/data/app/private/runtime/entry.mjs', pinCommit: PIN, port: 8080, token: 'b'.repeat(64),
+    catalog: {
+      providers: [{ providerId: 'minimax', name: 'MiniMax', apiFormat: 'openai-completions', enabled: true, models: ['m1'] }],
+      defaultProviderId: 'minimax', defaultModelId: 'm1',
+    },
+  });
+  assert.equal(descriptor.catalog.providers[0].providerId, 'minimax');
+  assert.equal(descriptor.catalog.defaultModelId, 'm1');
+  assert.equal(Object.isFrozen(descriptor.catalog), true);
+  assert.equal(Object.isFrozen(descriptor.catalog.providers), true);
+  assert.equal(Object.isFrozen(descriptor.catalog.providers[0]), true);
+  // A descriptor without a catalog stays valid: the guest may run without one.
+  assert.equal(createRuntimeDescriptor({ entryPath: '/x/entry.mjs', pinCommit: PIN, port: 8080, token: 'b'.repeat(64) }).catalog, null);
+});
+
+test('the descriptor refuses a catalog that carries a credential or a real endpoint', () => {
+  const base = { entryPath: '/x/entry.mjs', pinCommit: PIN, port: 8080, token: 'b'.repeat(64) };
+  assert.throws(() => createRuntimeDescriptor({ ...base, catalog: { providers: [{ providerId: 'p', apiKey: 'sk-live' }] } }), /descriptor_catalog_contains_credential/);
+  assert.throws(() => createRuntimeDescriptor({ ...base, catalog: { providers: [{ providerId: 'p', options: { api_key: 'sk-live' } }] } }), /descriptor_catalog_contains_credential/);
+  assert.throws(() => createRuntimeDescriptor({ ...base, catalog: { providers: [{ providerId: 'p', baseUrl: 'https://api.minimax.io/v1' }] } }), /descriptor_catalog_forbidden_field/);
+  assert.throws(() => createRuntimeDescriptor({ ...base, catalog: { providers: [{ providerId: 'p', hasApiKey: 'yes' }] } }), /descriptor_catalog_contains_credential/);
+  assert.throws(() => createRuntimeDescriptor({ ...base, catalog: 'not-a-catalog' }), /descriptor_catalog_invalid/);
+  // The non-secret presence flag is allowed.
+  const ok = createRuntimeDescriptor({ ...base, catalog: { providers: [{ providerId: 'p', hasApiKey: true }] } });
+  assert.equal(ok.catalog.providers[0].hasApiKey, true);
+});
+
 test('the descriptor round-trips through the private directory with owner-only permissions', () => {
   const { priv } = makeDirs();
-  const descriptor = createRuntimeDescriptor({ entryPath: join(priv, 'runtime', 'entry.mjs'), pinCommit: PIN, port: 9123, token: 'c'.repeat(64) });
+  const descriptor = createRuntimeDescriptor({
+    entryPath: join(priv, 'runtime', 'entry.mjs'), pinCommit: PIN, port: 9123, token: 'c'.repeat(64),
+    catalog: {
+      providers: [{ providerId: 'minimax', apiFormat: 'openai-completions', enabled: true, models: ['m1'] }],
+      defaultProviderId: 'minimax', defaultModelId: 'm1',
+    },
+  });
   const path = writeRuntimeDescriptor({ dir: priv, descriptor, allowedRoots: [priv] });
   assert.equal(path, join(priv, RUNTIME_DESCRIPTOR_FILENAME));
   assert.deepEqual(readRuntimeDescriptor({ path, allowedRoots: [priv] }), descriptor);
+  assert.equal(readRuntimeDescriptor({ path, allowedRoots: [priv] }).catalog.defaultModelId, 'm1');
   const mode = statSync(path).mode & 0o777;
   assert.equal(mode, 0o600);
 });
