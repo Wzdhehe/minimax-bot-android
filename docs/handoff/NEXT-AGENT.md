@@ -226,7 +226,21 @@ fork 钉在 `mcode-webui/minimax-code@97818b2`（MIT）。上游契约别名见 
 
 `gateway.bind()` 要实现的端口比冒烟脚本多：`createSession / defaultSessionModel / resolveModel / listModels / listAgents / listUserSessions / readUserSession / readMiniAppSession / readSessionModel / setSessionModel / getOwner / resolveMiniAppRoot / resolveHostSession / runTurn / answerQuestion / replyPermission / subscribePermissionAsks`（签名见 `packages/local-runtime-v2/src/service/miniapp/agent/contracts.ts` 的 `MiniAppAgentSessionPorts`）。其中**模型族要接 native broker**（Main 的 `NativeModelBroker` 在 `127.0.0.1` 起 `POST /v1/model/stream` + 64hex token，guest 侧客户端是 `createModelBrokerClient`），**会话族要绑定可信 Bot 身份**，**权限族要桥到 UI 审批** —— 这三项正是交接里"正式 model resolver / 可信 Bot 身份 / 审批桥"缺口的落点。
 
-另注：fork 的 `packages/webui/src/server` 自带 `http-server / frame-handler / access-policy / credentials`，即**本机 WebSocket + 有界消息协议**宿主，`packages/local-runtime-v2` 就跑在同一 Node 进程里。mbot 走"同进程 `createBotAgentPort`"还是"走 webui 的 WebSocket 协议当 Mini App"，是下一步要定的架构选择；前者改动小、可测性好，后者更贴上游。
+另注：fork 的 `packages/webui/src/server` 自带 `http-server / frame-handler / access-policy / credentials`，即**本机 WebSocket + 有界消息协议**宿主，`packages/local-runtime-v2` 就跑在同一 Node 进程里。
+
+### 架构决定（读上游源码后定，别再翻案）
+
+**mbot 走"同进程 `createBotAgentPort`"，但宿主是 fork 自己的 runtime 宿主，不是我们自己实现那 17 个端口。** 依据：
+
+- `packages/webui/src/runtime/assembly.ts` 的 `createWebuiRuntimeHost({ dataDir, appVersion?, miniAppSurface?, ... })` 就是 fork 的宿主工厂，它内部起 `local-runtime-v2`（`createLocalRuntimeHostV2`），并**已经实现了**会话、模型目录、Agent 列表、审批路由这些端口。fork 的数据目录默认 `~/.minimax`（`MINIMAX_DATA_DIR`），在 Android 上映射到 app 私有目录。
+- fork 的插件/市场目录也在这个宿主里：`packages/shared/src/miniapp-surface.ts` 的 `MiniAppSurfaceSummary.source` 明确区分 `'official'`（市场账号装的官方包）与 `'local'`（磁盘上的包），`runtime.kind: 'process'` 是 Mini App 进程。**插件市场能用的前提就是这个宿主在跑**。
+- `agent-port.mjs` 的注释定死了身份来源："The host must supply a caller resolved from its own live process registration, never from Bot requests." —— 内置 Bot 的 `pluginId`/`runId` 由宿主注册（对应 `gateway.registerArena({ pluginId, processGeneration, policy: { kind: 'allowlist', capabilities: ['session.run'], maxConcurrent } })`），Bot 请求改不了。这就是"可信 Bot 身份"的落点。
+- 自己 `gateway.bind()` 那 17 个端口，等于把 fork 已有的会话/模型/审批实现重写一遍，且 Mini App 进程与市场目录落空，插件市场直接不成立。
+
+所以设备端 guest 入口的形状是：**读 descriptor → `createWebuiRuntimeHost` 起 runtime 宿主 → 在同一进程用宿主的 agent 应用注册内置 Bot caller → `createBotAgentPort` 交给 `startBotService({ port, dataDir, filesDir, agent, modelBroker })` → Bot HTTP 服务对 Flutter 暴露（Bearer token 来自 descriptor）**。模型请求走 descriptor 里的 native broker 会话，Key 不进 guest。
+
+尚未定的一处：宿主需要的 Mini App presenter（`miniAppSurface` 选项在 upstream 是 host-owned port，浏览器实现是 `server/miniapp/presenter.ts`）。手机端没有浏览器视图，要决定是给个 no-op presenter（`open` 动作报 `OPEN_UNAVAILABLE`）还是接 Flutter 侧视图。
+
 
 ## 12. 本轮环境（D 盘，Windows）与两处平台限制
 
