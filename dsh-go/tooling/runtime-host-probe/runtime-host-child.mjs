@@ -2,14 +2,16 @@
 // Keyless real-factory probe: no replacement gateway/session/model factory.
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import YAML from 'yaml';
+import { UPSTREAM_RUNTIME_COMMIT } from '../../runtime/minimax-bot-host/upstream-runtime-pin.mjs';
+import { writeRuntimeDescriptor } from '../../runtime/minimax-bot-host/runtime-descriptor.mjs';
 
 const [bundle, root] = process.argv.slice(2);
-const { createBuiltinBotRuntime, startBotService } = await import(pathToFileURL(join(bundle, 'runtime-host.partial.mjs')).href);
+const { createBuiltinBotRuntime, readRuntimeDescriptor, startBotService } = await import(pathToFileURL(join(bundle, 'runtime-host.partial.mjs')).href);
 const token = randomBytes(32).toString('hex');
 // A non-secret catalog: the guest may learn the provider, its api format and
 // its models. The real endpoint and the real credential stay on the native
@@ -19,9 +21,43 @@ const CATALOG = {
   defaultProviderId: 'probe',
   defaultModelId: 'probe-model',
 };
+// The descriptor directory stands in for the guest's own private HOME: the
+// native side writes the descriptor, the guest reads it back.
+const descriptorDir = join(dirname(root), 'descriptor');
 let savedBotId;
 for (let pass = 0; pass < 2; pass++) {
-  const runtime = await createBuiltinBotRuntime({ dataDir: root, appVersion: '0.1.0-host-probe', catalog: CATALOG });
+  const listener = createServer();
+  await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(0, '127.0.0.1', resolve); });
+  const port = listener.address().port;
+  await new Promise((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()));
+  // The native side writes the descriptor with the catalog already stripped
+  // of the real endpoint and the real key.
+  const descriptorPath = writeRuntimeDescriptor({
+    dir: descriptorDir,
+    descriptor: {
+      entryPath: join(bundle, 'runtime-host.partial.mjs'),
+      pinCommit: UPSTREAM_RUNTIME_COMMIT,
+      port,
+      token,
+      catalog: CATALOG,
+    },
+    allowedRoots: [descriptorDir],
+  });
+  // The guest reads the descriptor back and learns the catalog from it.
+  const descriptor = readRuntimeDescriptor({ path: descriptorPath, allowedRoots: [descriptorDir] });
+  assert.deepEqual(descriptor.catalog, CATALOG);
+  if (!pass) {
+    // A descriptor that carries a real endpoint or a credential is refused by
+    // the guest reader, even as an owner-only regular file.
+    const hostilePath = join(descriptorDir, 'hostile-descriptor.json');
+    await writeFile(hostilePath, JSON.stringify({
+      entryPath: join(bundle, 'runtime-host.partial.mjs'), pinCommit: UPSTREAM_RUNTIME_COMMIT, port, token,
+      catalog: { providers: [{ providerId: 'probe', baseUrl: 'https://api.minimax.io/v1' }] },
+    }), { mode: 0o600 });
+    assert.throws(() => readRuntimeDescriptor({ path: hostilePath, allowedRoots: [descriptorDir] }),
+      (error) => error.code === 'descriptor_invalid');
+  }
+  const runtime = await createBuiltinBotRuntime({ dataDir: root, appVersion: '0.1.0-host-probe', descriptor });
   let service;
   try {
     // The projected provider reached the fork model system through the
@@ -45,10 +81,6 @@ for (let pass = 0; pass < 2; pass++) {
     await assert.rejects(runtime.agent.reply({ sessionId: 'missing-session', requestId: 'missing-ask', decision: 'deny' }),
       (error) => error.code === 'SESSION_NOT_FOUND');
     await mkdir(join(root, 'files'), { recursive: true });
-    const listener = createServer();
-    await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(0, '127.0.0.1', resolve); });
-    const port = listener.address().port;
-    await new Promise((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()));
     service = await startBotService({ port, dataDir: join(root, 'bot'), filesDir: join(root, 'files'), agent: runtime.agent,
       authToken: token, signal: new AbortController().signal, logger: { info() {}, warn() {}, error() {} } });
     const stateUrl = `${service.descriptor.baseUrl}/api/state`;
@@ -77,4 +109,4 @@ for (let pass = 0; pass < 2; pass++) {
     await assert.rejects(runtime.agent.models(), (error) => error.code === 'AGENT_UNAVAILABLE');
   }
 }
-console.log('PASS: real fork factory cold-start/reopen, projected non-secret provider catalog with placeholder credential and virtual origin, registered gateway with SQLite lookup, authenticated official Bot create/persist/read, shared close and stale-port rejection; no model turn or Android execution');
+console.log('PASS: real fork factory cold-start/reopen, descriptor read-back with projected non-secret provider catalog with placeholder credential and virtual origin, registered gateway with SQLite lookup, authenticated official Bot create/persist/read, shared close and stale-port rejection; no model turn or Android execution');

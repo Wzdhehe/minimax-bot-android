@@ -25,7 +25,7 @@ abstract class SharedNativeSources : DefaultTask() {
 }
 val nativeSources by tasks.registering(SharedNativeSources::class) {
     inputDir.set(file("../../app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app"))
-    includes.set(listOf("model/**", "isolation/**", "runtime/RuntimeDescriptor.kt", "bot/BotProviderStore.kt", "bot/BotSettingsStore.kt", "bot/NativeProviderBroker.kt", "bot/NativeModelChannel.kt", "bot/NativeModelRequestHost.kt"))
+    includes.set(listOf("model/**", "isolation/**", "runtime/RuntimeDescriptor.kt", "runtime/RuntimeDescriptorPayload.kt", "bot/BotProviderStore.kt", "bot/BotSettingsStore.kt", "bot/GuestProviderCatalog.kt", "bot/NativeProviderBroker.kt", "bot/NativeModelChannel.kt", "bot/NativeModelRequestHost.kt"))
     outputDir.set(layout.buildDirectory.dir("shared-native"))
 }
 val deviceTests by tasks.registering(SharedNativeSources::class) {
@@ -35,7 +35,7 @@ val deviceTests by tasks.registering(SharedNativeSources::class) {
 }
 val unitTests by tasks.registering(SharedNativeSources::class) {
     inputDir.set(file("../../app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app"))
-    includes.set(listOf("model/**", "isolation/**"))
+    includes.set(listOf("model/**", "isolation/**", "bot/GuestProviderCatalogTest.kt", "runtime/RuntimeDescriptorPayloadTest.kt"))
     outputDir.set(layout.buildDirectory.dir("shared-unit-tests"))
 }
 val sharedResources by tasks.registering(SharedNativeSources::class) {

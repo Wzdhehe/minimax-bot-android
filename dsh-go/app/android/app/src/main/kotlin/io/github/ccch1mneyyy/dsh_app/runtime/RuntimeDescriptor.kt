@@ -7,24 +7,6 @@ import android.system.Os
 import android.system.OsConstants
 import java.io.File
 import java.io.FileDescriptor
-import java.security.SecureRandom
-
-/** The local Bot service session the guest will publish, plus the native model
- * broker session it uses for model requests. Both are loopback credentials:
- * the provider key never appears here and never leaves the native side. */
-internal class RuntimeDescriptorSession(
-    val entryPath: String,
-    val pinCommit: String,
-    val port: Int,
-    val token: String,
-    val brokerBaseUrl: String,
-    val brokerToken: String,
-) {
-    companion object {
-        fun randomToken(): String = ByteArray(32).also { SecureRandom().nextBytes(it) }
-            .joinToString("") { "%02x".format(it) }
-    }
-}
 
 /** Trusted hand-off between the Android host and the guest runtime.
  *
@@ -64,7 +46,7 @@ internal object RuntimeDescriptor {
             // written through, and the mode is applied at creation.
             handle = Os.open(staging.path, OsConstants.O_WRONLY or OsConstants.O_CREAT or OsConstants.O_EXCL or
                 OsConstants.O_NOFOLLOW or OsConstants.O_CLOEXEC, FILE_MODE)
-            val bytes = encode(session).toByteArray(Charsets.UTF_8)
+            val bytes = RuntimeDescriptorPayload.encode(session).toByteArray(Charsets.UTF_8)
             var offset = 0
             while (offset < bytes.size) {
                 val count = Os.write(handle, bytes, offset, bytes.size - offset)
@@ -110,22 +92,4 @@ internal object RuntimeDescriptor {
         }
     }
 
-    private fun encode(session: RuntimeDescriptorSession): String {
-        val broker = """{"baseUrl":${quote(session.brokerBaseUrl)},"token":${quote(session.brokerToken)}}"""
-        return """{"entryPath":${quote(session.entryPath)},"pinCommit":${quote(session.pinCommit)},""" +
-            """"port":${session.port},"token":${quote(session.token)},"broker":$broker}"""
-    }
-
-    private fun quote(value: String): String {
-        val out = StringBuilder()
-        for (character in value) {
-            when {
-                character == '"' -> out.append("\\\"")
-                character == '\\' -> out.append("\\\\")
-                character < ' ' -> out.append("\\u%04x".format(character.code))
-                else -> out.append(character)
-            }
-        }
-        return "\"$out\""
-    }
 }

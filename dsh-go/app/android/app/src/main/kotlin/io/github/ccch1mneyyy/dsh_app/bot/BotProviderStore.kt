@@ -83,6 +83,29 @@ internal class BotProviderStore(private val context: Context) {
         return mapOf("providers" to providers, "defaultProviderId" to prefs.getString("default_provider_v2", null), "defaultModelId" to prefs.getString("default_model_v2", null))
     }
 
+    /** The non-secret catalog the guest runtime may read: provider, api format
+     * and models only. The real endpoint and the real key stay native and are
+     * resolved per request by the native broker. */
+    @Synchronized
+    fun guestCatalogJson(): String {
+        migrate()
+        val providers = rowList(rows()).map { row ->
+            val models = row.getJSONArray("models")
+            GuestProviderRow(
+                providerId = row.getString("providerId"),
+                name = row.getString("name"),
+                apiFormat = row.getString("apiFormat"),
+                enabled = row.optBoolean("enabled", true),
+                models = (0 until models.length()).map { models.getString(it) },
+            )
+        }
+        return GuestProviderCatalog.encode(
+            providers,
+            prefs.getString("default_provider_v2", null),
+            prefs.getString("default_model_v2", null),
+        )
+    }
+
     @Synchronized
     fun save(input: Map<*, *>) {
         migrate()

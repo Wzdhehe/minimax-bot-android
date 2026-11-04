@@ -3,12 +3,23 @@
 // Agent, open a listener, register a caller, or change the Android launcher.
 import { createWebuiRuntimeHost } from '@mcode-runtime/assembly';
 import { createBotRuntimeSession } from './runtime-host-session.mjs';
+import { catalogFromDescriptor, readRuntimeDescriptor } from './runtime-descriptor.mjs';
 export { createWebuiRuntimeHost };
+
+// The guest reads the descriptor the Android host wrote into its own private
+// directory. This is the only channel that carries the native provider
+// catalog into the guest.
+export { readRuntimeDescriptor };
 
 // Trusted controller factory; defining it does not launch a process/listener.
 // Android must still assemble its independent-UID model/files adapters first.
-export function createBuiltinBotRuntime({ dataDir, appVersion, signal, catalog = null, probe = null, nativeBinding = null }) {
-  return createBotRuntimeSession({ dataDir, signal, catalog, probe, nativeBinding, startHost: ({ dataDir: root }) =>
+//
+// The non-secret provider catalog arrives inside the descriptor and not as a
+// separate argument: the descriptor is the trust boundary, so the guest
+// cannot be handed a catalog the host never wrote, and a descriptor that
+// breaks the field policy is refused before anything is projected.
+export function createBuiltinBotRuntime({ dataDir, appVersion, signal, descriptor = null, probe = null, nativeBinding = null }) {
+  return createBotRuntimeSession({ dataDir, signal, catalog: catalogFromDescriptor(descriptor), probe, nativeBinding, startHost: ({ dataDir: root }) =>
     createWebuiRuntimeHost({ dataDir: root, appVersion, mcodeToolsRequested: false }) });
 }
 export { createBotAgentPort } from './agent-port.mjs';

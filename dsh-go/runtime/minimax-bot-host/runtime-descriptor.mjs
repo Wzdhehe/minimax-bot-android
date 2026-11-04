@@ -111,6 +111,19 @@ export function createRuntimeDescriptor({ entryPath, pinCommit, port, token, bro
 }
 
 /**
+ * The non-secret provider catalog of a descriptor, or null.
+ *
+ * The descriptor is the only channel that carries the native catalog into the
+ * guest, so the guest reads the catalog from the descriptor it validated
+ * itself. A hand-built descriptor is re-validated here: a catalog that breaks
+ * the field policy is refused instead of being projected.
+ */
+export function catalogFromDescriptor(descriptor) {
+  if (descriptor === null || descriptor === undefined) return null;
+  return createRuntimeDescriptor(descriptor).catalog ?? null;
+}
+
+/**
  * Reject any descriptor location the host does not own: outside the private
  * roots, inside the agent workspace, or a symlink pointing anywhere else.
  */

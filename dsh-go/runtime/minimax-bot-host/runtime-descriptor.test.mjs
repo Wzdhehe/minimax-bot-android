@@ -8,6 +8,7 @@ import {
   RUNTIME_DESCRIPTOR_FILENAME,
   assertDescriptorPathAllowed,
   buildRuntimeEnv,
+  catalogFromDescriptor,
   createRuntimeDescriptor,
   readRuntimeDescriptor,
   writeRuntimeDescriptor,
@@ -79,6 +80,24 @@ test('the descriptor refuses a catalog that carries a credential or a real endpo
   // The non-secret presence flag is allowed.
   const ok = createRuntimeDescriptor({ ...base, catalog: { providers: [{ providerId: 'p', hasApiKey: true }] } });
   assert.equal(ok.catalog.providers[0].hasApiKey, true);
+});
+
+test('the guest reads the catalog from the descriptor it validated itself', () => {
+  const descriptor = createRuntimeDescriptor({
+    entryPath: '/x/entry.mjs', pinCommit: PIN, port: 8080, token: 'b'.repeat(64),
+    catalog: {
+      providers: [{ providerId: 'minimax', apiFormat: 'openai-completions', enabled: true, models: ['m1'] }],
+      defaultProviderId: 'minimax', defaultModelId: 'm1',
+    },
+  });
+  assert.deepEqual(catalogFromDescriptor(descriptor), descriptor.catalog);
+  // A descriptor without a catalog leaves the guest without one.
+  assert.equal(catalogFromDescriptor(null), null);
+  assert.equal(catalogFromDescriptor(undefined), null);
+  assert.equal(catalogFromDescriptor(createRuntimeDescriptor({ entryPath: '/x/entry.mjs', pinCommit: PIN, port: 8080, token: 'b'.repeat(64) })), null);
+  // A hand-built descriptor cannot widen the boundary.
+  assert.throws(() => catalogFromDescriptor({ ...descriptor, catalog: { providers: [{ providerId: 'p', apiKey: 'sk-live' }] } }), /descriptor_catalog_contains_credential/);
+  assert.throws(() => catalogFromDescriptor({ ...descriptor, catalog: { providers: [{ providerId: 'p', baseUrl: 'https://api.minimax.io/v1' }] } }), /descriptor_catalog_forbidden_field/);
 });
 
 test('the descriptor round-trips through the private directory with owner-only permissions', () => {
