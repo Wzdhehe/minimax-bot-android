@@ -72,16 +72,20 @@ class RuntimeHeldDirectoryPublisherTest {
     @Test fun publisherAndHeldCapabilityCloseIndependently() = fixture { context, root ->
         val parent = RuntimePrivateDirectory.open(context, segments)
         val child = parent.openChild("messages", create = true)
-        val publisher = RuntimeAtomicPublisher.openForHeldDirectory(child)
-        publisher.close()
         // Closing the publisher must not close the caller's capability.
+        RuntimeAtomicPublisher.openForHeldDirectory(child).use { publisher ->
+            assertEquals(RuntimePublicationResult.PUBLISHED, publisher.publishIfAbsent("history.jsonl", "first\n".toByteArray()))
+        }
         child.openChild("archive", create = true).use { grandchild ->
             assertTrue(File(root, "messages/archive").isDirectory)
         }
-        // Closing the caller's capability must not break the publisher.
+        // Closing the caller's capability must not break a publisher derived
+        // from it: the publisher owns a copy of the descriptor.
+        val publisher = RuntimeAtomicPublisher.openForHeldDirectory(child)
         child.close()
         assertEquals(RuntimePublicationResult.PUBLISHED, publisher.publishIfAbsent("history.jsonl", "after\n".toByteArray()))
         assertEquals("after\n", File(root, "messages/history.jsonl").readText())
+        publisher.close()
         parent.close()
     }
 
