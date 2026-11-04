@@ -1,7 +1,27 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-RuntimeFiles：Main授予的有界文件提交能力（2026-11-04）
 
-**Node读取/size已585f082在API26/35各30项通过；stage FD改造c78faca已两版本31项过（API35首次0结果失败、重跑通过）。Main move/remove已42fba3a两版本35项通过；本轮新增显式权限IPC，设备待新CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 不修改vendor，不回退同UID Agent/shell。
+**Main文件移动/删除、显式IPC、Node调用已分别取得API26/35各35项证据（最新Node c8e702d）。append候选888aa77在API35各40项过、API26为40项1失败；Main子目录c8e506e的44项另待CI。当前正修正transport故障夹具的输入消费/边界断言，失败详情见下。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 不修改vendor，不回退同UID Agent/shell。
+
+## 888aa77 API26失败与transport夹具修正（最新）
+
+run41780482419：
+
+```text
+API35 id13299282270: node-candidate-results-api-35-t40-f0-e0-s0-passed-l0
+API26 id13298689447: node-candidate-results-api-26-t40-f1-e0-s0-native_data-lc89
+```
+
+API26 check126410640269明确只有RuntimeFileCommitHostTest.kt:89（transportRefusalMalformedRepliesAndLostRepliesCannotClaimNoWrite的replace）与native_data/UNAVAILABLE，无法下载XML，**没有读到完整堆栈**。不得把API26或整个append阶段记通过，也不把一次失败直接归因于模拟器/源码。四writer的生产限额仍正确存在；夹具现在每模式两个binary请求，共六次快速fake transact，原fake不消费输入就立刻false/异常，存在writer尚未退场而触发**transact前**UNAVAILABLE的明确竞争条件。这是根据源码/位置得出的待新CI验证解释，不虚构为已读堆栈的结论。
+
+修正只改夹具：在模拟丢回复前，按真实协议消费声明长度与EOF，并核对实际空/单字节输入；每模式强制4次transact、2次body消费，防止体读取异常被client的unknown规则吞掉而假通过。生产限额/协议/unknown语义不改，不增加sleep、重试、shell或放宽权限。本地修正后两个验收APK：
+
+```text
+BUILD SUCCESSFUL in 1m 32s
+71 actionable tasks: 10 executed, 61 up-to-date
+```
+
+新44项须在修正后的commit重新取得设备证据；前一次失败保留。本轮仅测试夹具与文档，无生产代码改动；本地无设备，不能写夹具已在API26通过。
 
 ## Main子目录cap基础（本轮，44项设备待新CI）
 
@@ -29,7 +49,7 @@ API35 id13298294234: node-candidate-results-api-35-t35-f0-e0-s0-passed-l0
 
 两新PID的移动/冲突/覆盖/删除/拒绝和原Key/模型/WAL断言通过。这个commit尚无append，不能拿同计数旧c1b9aee代替本证据。
 
-## 有界追加与同目录写者协调（本轮，40项设备待新CI）
+## 有界追加与同目录写者协调（888aa77仅API35通过，API26失败见上）
 
 为后续Store/MemoryStore日志增加Main append组件，并通过APPEND二进制pipe与固定Node JNI接入验收。Main必须显式allowAppend（默认false），不从allowReplace或PUBLISH推导，Agent仍不能选根/flags/目录。append只保留原前缀并追加完整二进制，缺失时创建，空追加可创建空文件；包括原文件的**总大小最多1MiB wire policy**，超限返回TOO_LARGE且不改原文件。注入publication-only kernel不能暗中获得替换支持。
 
@@ -304,7 +324,7 @@ OK (32 tests)
 
 ## 后续
 
-1. c78faca失败job重跑31项、42fba3a Main35、c1b9aee IPC35及c8e702d Node35已确认；继续查888aa77的40项与本轮子目录44项，不混用旧run。
+1. c78faca失败job重跑31项、42fba3a Main35、c1b9aee IPC35及c8e702d Node35已确认；888aa77 API35 t40通过/API26 t40 f1。先查transport夹具修正后的44项与c8e506e结果，不混用旧run；新功能暂停到这个失败得到验证。
 2. 移动/删除IPC和Node已通过；有界append候选另查40项。本轮只增加Main子目录cap，不向Agent发目录FD；后续须设计Main选择的子scope/目录操作权限、关闭/drain与Node调用，不能直接把Agent路径当新的Root。
 3. 有界append和Main API目录协调已加入候选；继续扩展真正受控FS所需的stat/list/mkdir/FileHandle/大日志与所有写者约束，适配原JSONL/MemoryStore并运行原恢复测试；不要全局把link改成rename。
 4. full-ICU/正式launcher/model resolver、可信Bot身份与SQLite lease另见HANDOFF，仍未完成。

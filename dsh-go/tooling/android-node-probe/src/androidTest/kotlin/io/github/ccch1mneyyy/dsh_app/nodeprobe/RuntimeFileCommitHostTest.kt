@@ -4,6 +4,7 @@ package io.github.ccch1mneyyy.dsh_app.nodeprobe
 import android.os.Binder
 import android.os.Bundle
 import android.os.Parcel
+import android.os.ParcelFileDescriptor
 import android.os.Process
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -12,6 +13,8 @@ import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeAtomicPublisher
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitClient
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitHost
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitWire
+import io.github.ccch1mneyyy.dsh_app.isolation.readBoundedRequestPipe
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimePublicationResult
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDeletionResult
 import java.io.File
@@ -77,8 +80,27 @@ class RuntimeFileCommitHostTest {
 
     @Test fun transportRefusalMalformedRepliesAndLostRepliesCannotClaimNoWrite() {
         for (mode in 0..2) {
+            val transacts = AtomicInteger()
+            val bodies = AtomicInteger()
             val binder = object : Binder() {
                 override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+                    transacts.incrementAndGet()
+                    if (code == RuntimeFileCommitWire.REPLACE || code == RuntimeFileCommitWire.APPEND) {
+                        // Lose the reply after consuming an admitted request.
+                        // Immediate fake replies leave asynchronous producers
+                        // queued and can instead test pre-IPC backpressure.
+                        data.enforceInterface(RuntimeFileCommitWire.DESCRIPTOR)
+                        assertEquals("a".repeat(64), data.readString())
+                        assertEquals("document.json", data.readString())
+                        val length = data.readInt()
+                        val expected = if (code == RuntimeFileCommitWire.APPEND) byteArrayOf(1) else byteArrayOf()
+                        val bytes = ParcelFileDescriptor.CREATOR.createFromParcel(data).use {
+                            readBoundedRequestPipe(it, length, RuntimeFileCommitWire.MAX_BYTES, 1_000) { false }
+                        }
+                        assertArrayEquals(expected, bytes)
+                        assertEquals(0, data.dataAvail())
+                        bodies.incrementAndGet()
+                    }
                     if (mode == 0) return false
                     if (mode == 1) { reply!!.writeString("private-fault-sentinel"); return true }
                     throw IllegalStateException("private-fault-sentinel")
@@ -90,6 +112,8 @@ class RuntimeFileCommitHostTest {
             assertEquals(RuntimePublicationResult.OUTCOME_UNKNOWN, client.move("source.tmp", "target.json", true))
             assertEquals(RuntimeDeletionResult.OUTCOME_UNKNOWN, client.remove("document.json"))
             assertEquals(RuntimePublicationResult.OUTCOME_UNKNOWN, client.append("document.json", byteArrayOf(1)))
+            assertEquals(4, transacts.get())
+            assertEquals(2, bodies.get())
         }
     }
 
