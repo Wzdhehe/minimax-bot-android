@@ -2,7 +2,7 @@
 
 **最新接手入口：[HANDOFF.md](HANDOFF.md)，详细收尾与下一项见[NEXT-AGENT](handoff/NEXT-AGENT.md)**。从 `feat/t-plugins` 继续；下文保留历史分轮记录，最新状态和未完成装配以总交接和专题 handoff 为准。
 
-## 当前验证入口（2026-11-03）
+## 当前验证入口（2026-11-04）
 
 当前运行时工作在 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)、[T-AndroidNode](handoff/T-AndroidNode.md)、[T-SQLite](handoff/T-SQLite.md)、[T-Persistence](handoff/T-Persistence.md)。仍是组件/模拟器，不是完整产品APK；默认入口仍DSH。
 
@@ -12,6 +12,9 @@ npm ci --ignore-scripts --no-audit --no-fund --prefix dsh-go/tooling/model-sdk-p
 node dsh-go/tooling/model-sdk-probe/prepare-pi.mjs /path/to/clean/pinned/minimax-code
 npm test --prefix dsh-go/tooling/model-sdk-probe
 npm run test:pi --prefix dsh-go/tooling/model-sdk-probe
+WEBUI_SOURCE=/path/to/clean/pinned/minimax-code \
+ESBUILD_MODULE=/path/to/esbuild/lib/main.js \
+  node --test dsh-go/runtime/minimax-bot-host/runtime-bundle.test.mjs
 python3 dsh-go/tooling/android-node-probe/test-fd-vfs.py --ndk /path/to/ndk27d
 # 先prepare Node headers及SQLite wrapper后，可加 --node-probe 验证宿主真实addon跨进程
 python3 dsh-go/tooling/android-node-probe/check-native-files.py \
@@ -72,7 +75,7 @@ Mini App 是另一类可视化程序，不是插件，暂不适配通用 Mini Ap
 - `dsh-go/app/lib/bot/` 已增加 Bot 原生会话界面和状态控制器：创建 Bot/群聊、历史、发送、停止、搜索、事件刷新、390 dp 单列和 1024 dp 双栏布局。3 项 Flutter 测试通过，包含切换会话时旧历史不得覆盖新会话及不重复发送。尚未接入正式 Android 启动器；联调入口为 `lib/dev/minimax_bot_main.dart`，仅用于连接已有本机 Bot 服务；它不是新增的独立应用，也不是已完成的引擎移植。正式默认入口暂时仍为 DSH 基线。
 - Bot 列表的设置入口已增加 Base URL、模型 ID、Key 输入和删除 Key。`BotSettingsPlugin.kt` 在 Android 宿主中用 Keystore AES-GCM 加密 Key，Dart 读取设置时只得到 `hasKey`，不会得到保存的 Key。此设置尚未接入实际 MiniMax Code provider 或原生模型请求 broker；不能声称填写后即可进行模型对话。加解密需要 Android 真机验证，独立 Kotlin 编译与 Dart 检查不能替代它。
 - 没有完成真正的隔离执行环境。PRoot 只提供兼容层，不是独立 Android UID 的安全沙箱；不要启用同 UID 任意代码执行作为替代。隔离和密钥设计见 [sandbox.md](sandbox.md)。
-- 上游 runtime 钉点已落地（**T-Runtime 卡**）：`dsh-go/runtime/minimax-bot-host/upstream-runtime-pin.mjs` 是机器可读钉点（`mcode-webui/minimax-code@97818b2890b4acae1c6bd1200a226ff506680628`，2026-10-31，MIT），`upstream-runtime-pin-check.mjs` 强制「钉点文件 ↔ 文档 ↔ checkout ↔ bundle 字节」四方一致，`docs/UPSTREAM-RUNTIME.md` 是人类可读的钉点文档。宿主测试与上游网关 smoke 均通过；19 项钉点测试通过。**这只钉住了宿主契约层**，不证明完整 runtime、插件市场或 Android 可用；上游真实的 session 端口实现从未被打包执行。
+- 上游 runtime 钉点已落地（**T-Runtime 卡**）：`dsh-go/runtime/minimax-bot-host/upstream-runtime-pin.mjs` 是机器可读钉点（`mcode-webui/minimax-code@97818b2890b4acae1c6bd1200a226ff506680628`，2026-10-31，MIT），`upstream-runtime-pin-check.mjs` 强制「钉点文件 ↔ 文档 ↔ checkout ↔ bundle 字节」四方一致，`docs/UPSTREAM-RUNTIME.md` 是人类可读的钉点文档。宿主测试与上游网关 smoke 均通过；现有23项钉点测试通过。新增完整宿主构建图检查实际打包2,124个上游输入（含真实session-ports）和官方Bot服务，逐blob校验，3项集成测试通过；第三方依赖保持external，bundle仅编译/语法检查，未import或启动。契约smoke仍只执行桩模型/会话；不证明完整runtime、插件市场或Android可用。复现和依赖/资源缺口见[钉点文档](UPSTREAM-RUNTIME.md)。
 
 
 ## 设置页 IA 与定时任务口径

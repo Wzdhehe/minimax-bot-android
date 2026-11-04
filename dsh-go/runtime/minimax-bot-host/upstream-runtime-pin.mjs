@@ -79,16 +79,17 @@ export const UPSTREAM_RUNTIME_CONTRACT_FILES = Object.freeze(
 );
 
 /**
- * Every upstream file that enters the esbuild bundle, with the SHA-256 of its
- * bytes at the pinned commit.
+ * The mandatory contract inputs, with the SHA-256 of their bytes at the
+ * pinned commit. Additional runtime inputs are checked against the pinned
+ * Git tree blob by blob.
  *
  * The bundle is built from the checkout's working tree, so the commit sha
  * alone does not say which bytes ran. These fingerprints do: the smoke passes
- * esbuild's metafile to the checker, and the checker requires every upstream
- * input of the bundle to be listed here and to match byte for byte.
+ * esbuild's metafile to the checker. Every file listed here must enter the
+ * bundle and match byte for byte; additional inputs must match the pinned tree.
  *
- * A pin bump that changes the upstream import graph changes this list. The
- * smoke fails on a stale list instead of silently running new upstream code.
+ * A pin bump that changes these contract bytes must update this list. Other
+ * inputs remain anchored to UPSTREAM_RUNTIME_TREE, including full-host builds.
  */
 export const UPSTREAM_RUNTIME_BUNDLE_SHA256 = Object.freeze({
   'packages/local-runtime-v2/src/service/miniapp/agent/gateway.ts':

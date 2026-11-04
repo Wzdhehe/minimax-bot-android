@@ -8,6 +8,10 @@
 
 下一步不能照旧第11节调用`host.application.miniAppAgent.registerArena`：公开facade不暴露该方法。真实注册在fork `createHostAgentSession().activate()` 使用内部gateway与宿主身份，必须装配它或同一可信生命周期；未完成前不能假装可信Bot caller已接通。descriptor loopback会话也不是isolated UID的可用TCP授权，必须继续既有JNI/Binder/模型FD路线。详见[NEXT-AGENT最新快照](NEXT-AGENT.md)。
 
+已补完整fork宿主构建图（build-runtime-bundle.mjs）：实际2,124上游输入逐blob通过、49外部包引用、真实session-ports和Bot服务进bundle，3项集成测试通过、pin23项与旧gateway smoke通过；不执行runtime，非Android证据。具体复现与动态SQLite/资源缺口见[钉点文档](../UPSTREAM-RUNTIME.md)。
+
+289f88f的native CI41811656655失败日志已取得：JUnit32通过、Node45/46；Key检查分支均过，最后的旧四字段descriptor断言因broker:null失败。现按五字段严格断言并要求该夹具broker=null，保留原Key/env/log/files全部检查；新本地/CI结果见[NEXT-AGENT](NEXT-AGENT.md)。同commit host41811656424、docs41811656733、scope41811656514成功。
+
 下面逐轮记录按当时状态保留，不覆盖本节与最新CI。
 
 > 收尾接手路径、工具链实查与下一项建议见[NEXT-AGENT](NEXT-AGENT.md)；下面历史段落的“待CI”须以上方最新结果为准。

@@ -6,7 +6,8 @@
 
 参考钉死点：MiniMax Bot 插件 [`0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8`](https://github.com/MiniMax-AI/MiniMax-Code-MiniApps/tree/0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8/plugins/minimax-ai/minimax-bot)；DSH Go 外壳 [`c1c0abb00907efdf48dcb443581686b67597c5a2`](https://github.com/ccch1mneyyy/dsh-Go/tree/c1c0abb00907efdf48dcb443581686b67597c5a2)；runtime（WebUI fork）[`97818b2`](https://github.com/mcode-webui/minimax-code/tree/97818b2)。**runtime 钉点的权威记录是 [UPSTREAM-RUNTIME.md](UPSTREAM-RUNTIME.md)**（含 commit、日期、tree、进入 bundle 的文件指纹与升钉流程），机器可读真值源在 `dsh-go/runtime/minimax-bot-host/upstream-runtime-pin.mjs`。官方上游合并点在合并时记录。所有条目在针对本项目完成实现和验证前保持未完成，不能因 DSH Go 或上游有功能就视为已接入。
 
-- [x] 上游 runtime 钉点与升钉流程：钉点文件、`docs/UPSTREAM-RUNTIME.md`、checkout 的 commit/tree/洁净状态、以及实际进入 bundle 的每个上游文件 sha256 四方一致，CI 在 PR 与 push 上强制；宿主测试、上游网关 smoke 与 19 项钉点测试通过。**只覆盖宿主契约层**，不证明完整 runtime、插件市场或 Android 可用。
+- [x] 上游runtime钉点与升钉流程：钉点文件、文档、干净checkout的commit/tree、实际bundle输入四方校验；6个必需契约文件核SHA256，其余输入逐一对比钉住树的blob，23项pin测试及契约smoke通过。
+- [x] 完整fork宿主**构建图检查**：真实createWebuiRuntimeHost/session-ports及官方Bot服务编入partial bundle，2,124上游输入逐blob验证、3项集成测试通过；CI已接入。第三方/动态加载与资源尚未打包，未启动runtime，不证明插件市场或Android可用，见[构建范围](UPSTREAM-RUNTIME.md)。
 - [ ] 本机安装、校验、启动、停止与升级 MiniMax Code 运行时（mcode-webui/minimax-code fork）；处理异常中断和进程清理。
 - [x] better-sqlite3 12.11.1 Android x86_64验收：内存数据库、四普通FD VFS的WAL/并行只读/两次新PID读回已API26/35通过。Main固定文件owner已验证；完整数据lease/FS/online backup、ARM64/真机仍缺，见[T-Persistence](handoff/T-Persistence.md)。
 - [x] SDK→模型FD流式适配（组件）：四类真实pi-ai provider（含Google async scope）、工具事件、背压、取消及错误不重试宿主验证通过；动态JNI/Binder路由已API26/35通过。正式model resolver/启动器与完整runtime仍未装配，见T-RuntimeBroker。

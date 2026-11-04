@@ -87,8 +87,14 @@ jobs:
           esbuild_version="$(node -p "require('./package.json').devDependencies.esbuild")"
           npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/esbuild" "esbuild@$esbuild_version"
           echo "ESBUILD_BIN=$RUNNER_TEMP/esbuild/node_modules/.bin/esbuild" >> "$GITHUB_ENV"
+          echo "ESBUILD_MODULE=$RUNNER_TEMP/esbuild/node_modules/esbuild/lib/main.js" >> "$GITHUB_ENV"
       - name: Smoke the Bot host against the pinned upstream runtime
         working-directory: dsh-go
         env:
           WEBUI_SOURCE: ${{ github.workspace }}/upstream-runtime
         run: bash runtime/minimax-bot-host/run-upstream-gateway-smoke.sh
+      - name: Verify the full pinned host build graph without executing it
+        working-directory: dsh-go
+        env:
+          WEBUI_SOURCE: ${{ github.workspace }}/upstream-runtime
+        run: node --test runtime/minimax-bot-host/runtime-bundle.test.mjs

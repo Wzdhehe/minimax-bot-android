@@ -346,7 +346,7 @@ export function checkUpstreamRuntimePin({
           }
         }
         if (!errors.length) {
-          notes.push(`the bundle consumed exactly the ${pinnedPaths.length} pinned upstream files`);
+          notes.push(`the bundle consumed ${upstreamInputs.size} verified upstream files (${pinnedPaths.length} explicit fingerprints; remaining inputs checked against the pinned tree)`);
         }
       }
     }

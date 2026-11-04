@@ -7,6 +7,22 @@
 
 本轮从远端 **7967b9d** 快进接手，仍在 `feat/t-plugins`。本节覆盖后文第6/7/8/11节中已过时的「下一步」「正在编译」「源码不存在」描述；Windows环境记录只描述上轮主机。
 
+### 后续阶段：完整fork宿主的构建图已落地
+
+新增 `runtime-bundle-entry.mjs`、`build-runtime-bundle.mjs` 和 `runtime-bundle.test.mjs`（均AGPL头），不是另写runtime。entry导出钉点真实`createWebuiRuntimeHost`、现有`createBotAgentPort`和`startBotService`；构建不调用它们。脚本复用fork自己的workspace export resolver，将原先仅6个契约输入扩为**实际完整宿主图**，并通过现有pin检查器逐blob验收。所有上游workspace包须真正进bundle，不能悄悄留为external；第三方保持external，不安装也不执行。
+
+本轮实际产物：**2,124个上游源码输入、49个外部包specifiers、13,296,231字节**（esbuild0.28.2）；另包含本仓库适配器及官方Bot服务。输出在 `/tmp/mbot-runtime-host-build`，不提交生成物。输出包含partial bundle、原metafile、manifest（SHA256、源码/依赖/警告清单）。manifest明确`status=build-graph-only`、`androidReady=false`；只校验编译/语法，不import或启动bundle。
+
+真实集成测试初轮2/2通过；加入输出父目录symlink防护后，**最终3/3通过、0 skipped，49.6秒**：实际build/摘要/原session-ports与Bot服务输入、不得剩余workspace包、故意向完整metafile添加`.git/config`必须被真实pin检查器拒绝、构建后checkout仍干净、不得覆盖已有输出、输出父目录symlink不得把产物写回钉点checkout。`bot-host.yml`已加入该测试和ESBUILD_MODULE；pin原23项通过，原gateway smoke也通过，仍明确其模型/会话为桩。pin的日志原来总说「恰好6文件」已修为实际输入数，UPSTREAM-RUNTIME.md及代码注释同步了整树校验语义。
+
+**新发现的具体打包缺口**：49项是esbuild输出里发现的外部引用，绝不是完整依赖lock。`better-sqlite3`通过`createRequire(variable)`载入，实际可不在该列表；computed imports、原生二进制、资源和import.meta.url相对路径仍需打包审计。原node:fs/child_process/网络调用仍存在，禁止以此编译成功为由同UID启动Agent。正式caller、隔离I/O、rootfs与启动器仍按下面顺序继续，未因本阶段自动完成。
+
+### 本轮CI发现并修复的旧Key测试断言
+
+289f88f的host run41811656424、文档41811656733、scope41811656514均success；native run41811656655整体failure，其中Android组件编译和实际SDK/pi-ai jobs success，native-boundary里的JUnit32通过、Node45/46通过。**已取得失败日志**：Key防泄露用例最后仍严格要求旧四字段descriptor，但上轮已加`broker:null`。不是Key泄露分支失败；也不能把整体CI写成通过。
+
+修正为仍严格要求五字段`broker/entryPath/pinCommit/port/token`，并断言此FD/proxy夹具的broker必须为null。保留JVM检查runtime descriptor、env、日志和Agent可读文件不含native生成的Key等所有断言。没有改变生产权限或放宽Key检查。重新恢复6个固定jar并逐SHA256校验，已用本环境Kotlin2.4/JDK21实跑完整native脚本，**JUnit32/32、Node46/46通过，0 skipped、退出0**（Node约20.3秒）。CI使用Kotlin2.1.21，修复后的新CI仍须单独实查。下一位须核对修复后新的CI，不要重跑旧失败commit来期待断言改变。
+
 ### 本阶段实际修改
 
 - `runtime/minimax-bot-host/service.mjs` 的 `startBotService` 接受可信启动器的 `authToken`。此前服务总是另生成 token，与 Kotlin descriptor 的 token 不同，照旧交接顺序启动会导致 Flutter 鉴权失败。现在显式 token 先校验后操作文件/监听，未提供时仍随机生成；错误只返回固定文本，不回显输入。
@@ -33,7 +49,7 @@ API另实查：held-cap run41794661470 对应 **dccb0fc3b33aa8665fdaf14776b608ea
 
 ### 继续开发的准确顺序
 
-1. **fork 真实宿主装配/可信 Bot caller**。仍用钉住的 `createWebuiRuntimeHost`，不重写17个会话端口。注意公开的 `host.application.miniAppAgent` 只暴露 run/models/reply/answer 等应用能力，**不暴露 registerArena**。钉点的 `process-local-application.test.ts` 还特意断言这一点。不能照旧第11节文字去调用不存在的方法或伪造 caller。真实注册发生在 `service/miniapp/process/host-connector/host-connector-agent.ts` 的 `createHostAgentSession().activate()`，依赖内部真实 gateway、宿主进程代数和 allowlist；release负责撤销。下一步须找到/实现同一真实gateway的可信装配接缝，复用上游生命周期，然后跑原宿主/原Bot的拒绝伪造、停用和重启测试。
+1. **fork 真实宿主装配/可信 Bot caller**（完整构建图已通过，下一步不是重复打包）。仍用钉住的 `createWebuiRuntimeHost`，不重写17个会话端口。注意公开的 `host.application.miniAppAgent` 只暴露 run/models/reply/answer 等应用能力，**不暴露 registerArena**。钉点的 `process-local-application.test.ts` 还特意断言这一点。不能照旧第11节文字去调用不存在的方法或伪造 caller。真实注册发生在 `service/miniapp/process/host-connector/host-connector-agent.ts` 的 `createHostAgentSession().activate()`，依赖内部真实 gateway、宿主进程代数和 allowlist；release负责撤销。下一步须找到/实现同一真实gateway的可信装配接缝，复用上游生命周期，然后跑原宿主/原Bot的拒绝伪造、停用和重启测试。
 2. **实际 runtime bundle / 依赖与隔离 I/O**。整树blob pin只解决「允许哪些上游字节打包」，不证明打包成功或Android能跑。fork的上游工作区解析器位于 `scripts/lib/workspace-sources-plugin.mjs`，包清单由 `release/extraction.json` 提供。当前rootfs仍只装DSH；mcode/Bot/host未装。尤其不能直接修改DSH的PRoot启动argv执行完整Agent：那仍是App同UID，违反安全边界。native model/files/SQLite能力必须接到真实运行时，再装正式独立UID启动器。
 3. **native模型映射与会话生命周期**。descriptor中的loopback broker会话不等于独立UID可直连网络。既有API26/35证据已表明隔离进程不能这样使用TCP；必须沿既有JNI→Binder→Main→模型FD路径装配。Key只在native，不能将fork默认BYOK配置文件作为捷径。Bot HTTP token和native模型会话token也不能混用。
 4. 原文件模块恢复（FileHandle/大日志/SQLite完整lease）、可信Bot MCP与定时任务归属、插件宿主安装政策完成后，才开放市场变更。UI/任务/插件页已有代码先复用。项目绑定/资料库/附件/群聊/审批等仍见parity，不能因为已有上游源码就勾选完成。
@@ -45,7 +61,7 @@ Mini App容器仍不做；`createWebuiRuntimeHost` 的 `miniAppSurface` 可省�
 
 - full-ICU producer **41757171111 attempt1 已失败**：progress artifact13302870059，名为 `node-full-icu-progress-budget_exhausted-cache-success`；cache保存success，但没有完整库、verify跳过。本轮已执行 `gh run rerun 41757171111 --failed`，**attempt2 API实查in_progress**，仍不能称full-ICU成功。后续检查cache恢复与最终产物，再决定验收；未改producer的五个权威输入。
 - 已恢复干净 `/tmp/mbot-mcode-reference`，HEAD97818b2890b4acae1c6bd1200a226ff506680628；不是后文所写「当前不存在」。Node24.19.0、Python3.12.14；JDK/Gradle/SDK/NDK/Flutter仍按第8节Linux路径实查。没有本地adb/KVM/物理设备。
-- `/tmp/mbot-native-deps` 仍不存在，旧JUnit依赖命令不能假装实跑。只删除本轮工具安装后可再下载的归档释放空间，保留SDK/JDK/NDK安装；磁盘仍有限，先df再下载。
+- `/tmp/mbot-native-deps` 本轮已从Gradle缓存/官方Maven恢复6个固定jar且逐SHA256验证；旧「不存在」描述为历史。只删除本轮工具安装后可再下载的归档释放空间，保留SDK/JDK/NDK安装；磁盘仍有限，先df再下载。
 - 继承GH_TOKEN无效，保存的gh登录可用：`env -u GH_TOKEN -u GITHUB_TOKEN gh ...`；不输出凭据。
 
 ## 1. 先认清产品状态

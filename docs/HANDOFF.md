@@ -10,6 +10,10 @@
 
 重新实查发现：fork公开的 `host.application.miniAppAgent` 不提供 `registerArena`；旧第11节「从公开应用对象注册caller」不是可直接执行的API。下一阶段须接真实内部gateway的宿主注册/撤销生命周期，不能伪造caller，也不能为省事直接用DSH同UID/PRoot跑完整Agent。`miniAppSurface` 已可省略并报OPEN_UNAVAILABLE，继续不适配Mini App容器。
 
+本轮后续已加入**完整fork宿主构建图检查**：实际打包2,124个上游输入（逐blob校验）、原session-ports和官方Bot服务，生成13,296,231字节partial bundle；49个外部包引用保持external，3项真实集成测试通过且不执行runtime。已接CI，命令与边界见[钉点文档](UPSTREAM-RUNTIME.md)。这消除了「只有契约文件能打包」的验证空白，仍不代表rootfs/正式启动器/插件市场已运行；动态better-sqlite3等加载及资源仍须单独处理。
+
+同时修正native Key测试遗留的descriptor四字段断言（现有broker字段须严格断言为null）；289f88f的native CI失败日志已读到，JUnit32通过、Node45/46，其他host/docs/scope CI成功。修复后完整native脚本结果及新CI以[NEXT-AGENT](handoff/NEXT-AGENT.md)最新记录为准，不能将旧失败run描述成成功。
+
 ## 当前状态
 
 | 能力 | 已取得的证据 | 尚未完成 |

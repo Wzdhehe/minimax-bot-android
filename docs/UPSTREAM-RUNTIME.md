@@ -82,22 +82,21 @@
 4. **checkout 内容**：`HEAD^{tree}` 必须等于钉点 tree。
 5. **checkout 工作树洁净**：`git status --porcelain` 必须为空 —— 否则 smoke 跑的就不是被钉定的那份代码。
 6. **文件字节**：6 个钉定上游文件的 sha256 必须与指纹一致。
-7. **bundle 输入**：esbuild 的 metafile 里出现的每个上游文件都必须在钉定清单内，且每个钉定文件都必须真的进了 bundle
-   （上游改了 import graph 而没升钉 → 这里失败）。
+7. **bundle 输入**：6个手工指纹文件必须全部进入bundle且匹配SHA256；其余每个上游输入必须逐一匹配钉住整树中同路径的Git blob（不存在、字节改变均失败）。不再要求完整runtime的数千个文件都手填到指纹清单。
 
 另外，smoke 用的 esbuild 版本必须与钉点上游 `package.json` 里 `devDependencies.esbuild` 一致，
 否则拒绝打包。
 
 ### 这套机制保证什么、不保证什么
 
-**保证**：在钉点 commit 上、checkout 干净、且 bundle 输入与钉定清单一致时，smoke 执行的每个上游字节都是评审过的那个版本。
+**保证**：在钉点 commit 上、checkout 干净、且 bundle 输入的手工指纹/树blob全部校验通过时，smoke 执行的每个上游字节都是评审过的那个版本。
 
 **不保证**：
 - **不保证钉点本身是对的**。钉点文件就是真值源；把它连同本文档一起改成别的 commit，本地检查器发现不了
   （三方一致 ≠ 那个 commit 正确）。真正的兜底是 **CI 会用钉点去 checkout 并重跑 smoke**：
   契约文件缺失、指纹不符、bundle 不一致或 smoke 失败，CI 都会红。
 - **不保证上游 runtime 可用**。smoke 里模型与会话是测试桩；上游真实的 `session-ports.ts` 等实现
-  **从未被打包或执行**。smoke 证明的是**适配层契约形状**，不是上游 runtime 行为。
+  不由契约smoke执行。新完整宿主bundle检查会打包真实session-ports等实现，但也只做编译/语法/依赖检查，未启动runtime。smoke证明的是**适配层契约形状**，不是上游runtime行为。
 - **不保证本地跑一次检查器就等于升钉合规**。升钉后必须**重跑验收命令**（见下）。
 
 ## 升钉（换 commit）
@@ -108,7 +107,7 @@
 # 1. 改钉点文件与本文档的 JSON 块（用钉点文件生成，别手写）
 #    dsh-go/runtime/minimax-bot-host/upstream-runtime-pin.mjs
 #    docs/UPSTREAM-RUNTIME.md 的 pin:begin/pin:end JSON 块与上方表格
-#    bundleSha256 要覆盖新 commit 下真正进入 bundle 的全部上游文件
+#    bundleSha256 覆盖必需契约输入，其余完整runtime输入按新commit的tree逐个校验
 # 2. 准备该 commit 的 WebUI checkout（需自带 node_modules/.bin/esbuild，或用 ESBUILD_BIN 指定）
 # 3. 重跑验收
 cd dsh-go
@@ -143,9 +142,26 @@ WEBUI_SOURCE=/path/to/minimax-code@97818b2 bash runtime/minimax-bot-host/run-ups
 cd dsh-go && node --test runtime/minimax-bot-host/upstream-runtime-pin.test.mjs
 ```
 
+## 完整宿主构建图检查（不启动runtime）
+
+`build-runtime-bundle.mjs` 复用钉点自己的workspace源码解析器，将真实`createWebuiRuntimeHost`及本仓库Bot适配/官方Bot服务打包到一个**partial** ESM。构建前后核对干净checkout、commit、tree和每个上游输入字节；未解析的workspace依赖会失败，第三方包保持external。输出还会经`node --check`校验语法，**不会import/执行bundle**。输出目录须不存在且位于上游checkout之外，失败清理仅属于本次构建的新输出。
+
+```bash
+# 在本仓库根；ESBUILD_MODULE是esbuild包的JS API，不是bin/esbuild。
+node dsh-go/runtime/minimax-bot-host/build-runtime-bundle.mjs \
+  --source /path/to/minimax-code@97818b2 \
+  --esbuild-module /path/to/esbuild/lib/main.js \
+  --out-dir /tmp/mbot-runtime-host-new
+WEBUI_SOURCE=/path/to/minimax-code@97818b2 \
+ESBUILD_MODULE=/path/to/esbuild/lib/main.js \
+  node --test dsh-go/runtime/minimax-bot-host/runtime-bundle.test.mjs
+```
+
+输出`runtime-host.partial.mjs`、`metafile.json`、`manifest.json`；manifest包含bundle摘要、进入bundle的上游文件、Node内建依赖和external包specifiers。`status=build-graph-only`、`androidReady=false`。**这不是完整第三方依赖lock**：例如SQLite的`createRequire(variable)`加载better-sqlite3，未必出现在esbuild的external清单；computed import、资源路径和原生依赖仍需单独审计/打包。源码里的文件/child_process/网络调用仍存在，禁止通过DSH同UID/PRoot运行此产物来绕过隔离适配。正式Android启动器、可信caller、native模型与文件映射尚未装配。
+
 ## 边界与未验证项
 
-- 本钉点只覆盖**宿主契约层**的 smoke，**不证明**完整 runtime 可用、不证明插件市场可用、不证明 Android 可运行。
+- 契约smoke只覆盖**宿主契约层**；新增完整宿主构建图只覆盖编译和语法，**不证明**完整 runtime 可用、不证明插件市场可用、不证明 Android 可运行。
 - 钉点树本身**尚未**打包进 APK；`dsh-go/` 内当前仍是 DSH runtime。
 - WebUI 的完整构建与 Android 移植可行性另见 `docs/architecture.md` 的 T-Runtime 卡与 `docs/research.md`。
 - Node 版本：上游 WebUI 仓库要求 `>=22.19 <23 || >=24.2 <27`；本仓库的宿主测试与 CI 用 Node 24。

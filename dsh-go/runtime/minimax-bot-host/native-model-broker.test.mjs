@@ -160,7 +160,9 @@ console.log(JSON.stringify({descriptor, env:process.env, argv:process.argv, file
   assert.equal(report.artifactsSafe, true, 'native key reached an observable artifact');
   assert.equal(report.logsSafe, true);
   assert.equal(report.nativeSurfacesSafe, true);
-  assert.deepEqual(Object.keys(JSON.parse(await readFile(path))).sort(), ['entryPath', 'pinCommit', 'port', 'token']);
+  const persistedDescriptor = JSON.parse(await readFile(path));
+  assert.deepEqual(Object.keys(persistedDescriptor).sort(), ['broker', 'entryPath', 'pinCommit', 'port', 'token']);
+  assert.equal(persistedDescriptor.broker, null, 'this FD/proxy fixture must not acquire a broker session');
 });
 
 test('native blocks echoed/escaped keys, provider bodies, redirects and secret-bearing exceptions', options, async (t) => {
