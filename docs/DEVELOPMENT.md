@@ -1,6 +1,6 @@
 # 开发交接
 
-**最新接手入口：[HANDOFF.md](HANDOFF.md)**。从 `feat/t-plugins` 继续；下文保留历史分轮记录，最新状态和未完成装配以总交接和专题 handoff 为准。
+**最新接手入口：[HANDOFF.md](HANDOFF.md)，详细收尾与下一项见[NEXT-AGENT](handoff/NEXT-AGENT.md)**。从 `feat/t-plugins` 继续；下文保留历史分轮记录，最新状态和未完成装配以总交接和专题 handoff 为准。
 
 ## 当前验证入口（2026-11-03）
 

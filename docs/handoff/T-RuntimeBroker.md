@@ -1,5 +1,7 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-04）
 
+> 收尾接手路径、工具链实查与下一项建议见[NEXT-AGENT](NEXT-AGENT.md)；下面历史段落的“待CI”须以上方最新结果为准。
+
 生产Main原子发布结果组件区分PUBLISHED/ALREADY_EXISTS/OUTCOME_UNKNOWN，不把rename后sync失败说成未写入。目录能力抽为RuntimePrivateDirectory，数据库owner复用；**132273a/41765512240的API26/35各17项过**，生产JNI迁移8d65ac0/41766746821也各17项过；双ABI交叉编译/JNI/16KiB检查过，未装配完整FS/launcher，见[T-RuntimeFS](T-RuntimeFS.md)。模型协议、Key保存和正式入口未变，组件close不撤销已发FD。
 
 显式replace供状态/pending更新，共用完整stage与提交结果语义，publication-only内核默认拒绝replace；**30b5249/41767469341的API26/35各21项过**。不能替换leased SQLite文件，不能自动重试unknown。

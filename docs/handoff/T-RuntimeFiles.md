@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-RuntimeFiles：Main授予的有界文件提交能力（2026-11-04）
 
+> 收尾接手路径、工具链实查与下一项建议见[NEXT-AGENT](NEXT-AGENT.md)；下面历史段落的“待CI”须以上方最新结果为准。
+
 **Main文件移动/删除、显式IPC、Node调用已分别取得API26/35各35项证据（最新Node c8e702d）。append候选888aa77首次API26有1失败，历史保留；后续Main子目录c8e506e与transport夹具修正78d49f5已各自API26/35各44项全过，详情见下。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 不修改vendor，不回退同UID Agent/shell。
 
 ## 最新44项设备结果（子目录与transport夹具修正）

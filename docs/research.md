@@ -39,3 +39,7 @@
 ## Nyral（2026-11-04 用户补充）
 
 已实查 [aixtin/nyral](https://github.com/aixtin/nyral) 的固定提交 `72289ba9ad9dcbe894a3277c6e0f4a45e6dd7328`。原生 Kotlin 自研引擎/SQLite 链更直接，但不是官方 mbot/mcode runtime 或插件市场的兼容实现；不替换既定产品方向。会话 epoch、pending 事务与轻量 UI 值得借鉴，宽存储、同 UID Shell、手机操控及系统闹钟链不照搬。逐项源码依据、构建未验证项和后续复用顺序见 [Nyral 调研](research/nyral.md)。
+
+## mcode-agent-table（2026-11-04 用户补充）
+
+MiniMax官方BYOB Table Protocol参考实现已静态检查到 `f230386ba0e405f2470d4f42863df3a5c0399297`（MIT）。对群聊发言权、协作任务、审批/核验与账本恢复有帮助；不替代Android runtime/文件隔离，也不是插件市场。MCode适配器的full执行thread、Node私钥/环境变量与直接FS不能直接照搬，Rabbit Hole Mini App仍不适配。源码依据与建议复用顺序见[调研](research/mcode-agent-table.md)。本轮未运行其测试/CLI/模型。

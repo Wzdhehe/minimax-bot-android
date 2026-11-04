@@ -1,5 +1,7 @@
 # 最新接手入口（2026-11-04）
 
+**下一位先读：[详细收尾与接手顺序](handoff/NEXT-AGENT.md)**。包含真实完成边界、最近commit/CI/artifact、Main/Node文件契约、下一项建议、工具链现状与复现命令；不是完整App已完成报告。
+
 只在 **feat/t-plugins** 连续开发、阶段验证后及时push并更新文档。用户授权持续推进；不新开分支、不动main/dev/integration、不force push、不建PR、不发布APK。
 
 ## 当前状态
@@ -63,11 +65,15 @@ dev/integration 891aefa
 
 ## 外部 agent 任务验收：文档链接检查器
 
-M3.1 Flash已提交78c8293（仅tooling/docs-links内4文件），本工作区已fetch并快进接收。38项测试与9处失效链接已独立复现；主agent修复history文档的9处链接、加入根Python缓存忽略规则。补上“目录读取失败被os.walk吞掉而误报成功”的回归，现39项通过；symlink测试外部目标也改为受管临时兄弟目录，避免共享/tmp固定文件。已新增只读、Python3.12的docs-links workflow；本地README/docs/检查器文档扫描29份0问题，**远程CI待新推送实查**。原交付报告和主验收补记均见[REPORT](../tooling/docs-links/REPORT.md)。
+M3.1 Flash已提交78c8293（仅tooling/docs-links内4文件），本工作区已fetch并快进接收。38项测试与9处失效链接已独立复现；主agent修复history文档的9处链接、加入根Python缓存忽略规则。补上“目录读取失败被os.walk吞掉而误报成功”的回归，现39项通过；symlink测试外部目标也改为受管临时兄弟目录，避免共享/tmp固定文件。已新增只读、Python3.12的docs-links workflow；本地README/docs/检查器文档扫描29份0问题，**860563e的文档CI 41784617417已success**。原交付报告和主验收补记均见[REPORT](../tooling/docs-links/REPORT.md)。
 
 ## 新增参考：Nyral
 
 用户提供aixtin/nyral，已只读检查固定提交72289ba9ad9dcbe894a3277c6e0f4a45e6dd7328（MIT），见[源码对照](research/nyral.md)。自研Kotlin引擎/原生SQLite更直接，但未发现mbot/mcode runtime或官方插件市场适配，不能因此放弃既定兼容要求。可借鉴会话epoch、pending事务与轻量交互；不搬宽存储、同UID shell、手机操控、系统闹钟链。本轮没有复制代码或构建/运行Nyral，当前脚本还有crashToken构建输入要求；原有安全边界不变。
+
+## 新增参考：mcode-agent-table
+
+用户提供的MiniMax官方BYOB项目已固定到f230386ba0e405f2470d4f42863df3a5c0399297（MIT）并静态检查，见[源码结论](research/mcode-agent-table.md)。对群聊拓扑/发言权、任务审批/执行/核验及账本恢复有用，暂作后续协作参考，不替换当前runtime/FS/身份路线，不导入Rabbit Hole Mini App。MCode适配器的full执行thread、Node私钥/env和直接FS不能照搬；本轮没有安装或运行其测试/CLI/模型。
 
 ## 已做的事情与边界
 
@@ -87,7 +93,7 @@ M3.1 Flash已提交78c8293（仅tooling/docs-links内4文件），本工作区�
 
 ## 接下来优先做
 
-1. 四普通文件FD候选46c1c07/run41703671145已API26/35通过，artifact分别13264018422/13263928937，name均`t1-f0-e0-s0-passed-l0`。ICU producer41680254279在330分钟超时、无库、verify跳过；新ccache+300分钟预算/always-save待CI，先查progress artifact/cache save outcome，不能仅凭smoke说长编译已解决。见T-AndroidNode。
+1. 四普通文件FD候选46c1c07/run41703671145已API26/35通过，artifact分别13264018422/13263928937，name均`t1-f0-e0-s0-passed-l0`。旧ICU producer41680254279在330分钟超时、无库、verify跳过；新0bf4043/run41757171111目前compile仍in_progress，cache-save/progress步骤尚未完成。先查progress artifact/cache save outcome，不能仅凭smoke说长编译已解决。见T-AndroidNode。
 2. Node READ/SIZE已585f082各30项过。c78faca/41776354659失败job重跑已31项过（首次0结果不抹去），42fba3a/41777415973已各35项过。显式Main move/remove IPC已c1b9aee各35项过，Node JNI已c8e702d各35项过；888aa77 append40项API35通过/API26 f1定位transport夹具（lc89）；78d49f5/run41781774323夹具修正和c8e506e/run41781117518子目录均已API26/35各44项通过；888aa77首次失败记录保留，可以继续新功能；之后接Main子scope/目录授权与Node，再继续FileHandle/大日志与原模块恢复（T-RuntimeFiles）。SQLite owner的close不撤销已发FD；真正lease/backup、pi-ai/model resolver与正式生命周期仍缺。目录留Main，不把cwd当权限，不选周期快照，不回退同UID任意shell。固定JNI脚本不是产品启动器。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
@@ -100,7 +106,7 @@ M3.1 Flash已提交78c8293（仅tooling/docs-links内4文件），本工作区�
 
 - Node24.19.0；Kotlin `/workspace/toolchains/kotlinc/bin/kotlinc` 2.4.0；Flutter `/workspace/toolchains/flutter/bin/`。
 - 当前组件构建：完整JDK `/tmp/mbot-jdk21`、Gradle9.3.1 `/tmp/mbot-gradle/gradle-9.3.1/bin/gradle`、SDK `/tmp/mbot-android-sdk`（platform36/build-tools36.0.0）；此次恢复改用持久缓存 `/home/agent/.gradle`。JDK/Gradle按发布SHA256验证，SDK/NDK/CMake按Google清单摘要恢复；旧/tmp缓存已清空，不能假定离线构建可用。
-- 固定测试jar `/tmp/mbot-native-deps` 已按CI摘要重取。本轮又恢复 `/tmp/mbot-ndk27d` x86编译器/sysroot/clang runtime及 `/tmp/mbot-node24-mobile.zip`，已重建JNI/SQLite；没有adb/设备/KVM，full-ICU Node源码编译在CI。
+- `/tmp/mbot-native-deps`、`/tmp/mbot-gradle-cache`、`/tmp/mbot-mcode-reference`在收尾实查不存在，需按CI固定摘要恢复jar/源码再运行对应测试，勿沿用旧路径判断。`/tmp/mbot-ndk27d`、`/tmp/mbot-node24-mobile.zip`、SQLite归档仍存在，JNI/SQLite准备输出保留；没有adb/设备/KVM，full-ICU源码编译在CI。
 - Widget测试需 `DSH_TEST_FONT_DIR=/workspace/toolchains/test-fonts`；只暂存明确路径，检查pub/analyze产生的无关修改。
 - 完整命令见T-RuntimeBroker；组件APK编译不是完整Flutter Bot APK。
 

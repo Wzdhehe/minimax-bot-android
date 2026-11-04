@@ -32,7 +32,7 @@ source artifact authority现在逐字节校验producer workflow、source pin、b
 
 ## full-ICU产物复用入口（待端到端验收）
 
-Node源码构建耗时很长，候选验收workflow现在支持复用已成功的同仓库source producer，组合**当前**JNI/SQLite/VFS/模型/Key/Intl测试，而不重跑Node编译。`android-node-probe.yml` 的 `PINNED_SOURCE_RUN_ID` 当前为空，默认仍用固定release；待41680254279的build job真正success后，可只改该值并push到feat/t-plugins触发当前验收。若GitHub已登记workflow_dispatch，也可提供 `source_run_id`；**没有实际运行dispatch，不保证分支workflow可被dispatch，不为此移动main**。
+Node源码构建耗时很长，候选验收workflow现在支持复用已成功的同仓库source producer，组合**当前**JNI/SQLite/VFS/模型/Key/Intl测试，而不重跑Node编译。`android-node-probe.yml` 的 `PINNED_SOURCE_RUN_ID` 当前为空，默认仍用固定release；待当前41757171111或后续同输入producer的build/upload真正success后，可只改该值并push到feat/t-plugins触发当前验收。若GitHub已登记workflow_dispatch，也可提供 `source_run_id`；**没有实际运行dispatch，不保证分支workflow可被dispatch，不为此移动main**。
 
 复用前 `verify-source-run.py` 必须通过：run ID仅整数、同repo/同feat/t-plugins、producer workflow路径/事件/commit正确、build job（含上传）success，且producer commit的源码pin、build-source.py、source workflow、预检helper和recipe测试与当前逐字节一致。随后download-artifact按固定name取私有产物；归档SHA交prepare-probe继续校验source manifest/config/ABI/ICU及recipe。没有任意artifact URL或静默回退。仅申请Actions只读权限，不触碰release/APK发布。
 

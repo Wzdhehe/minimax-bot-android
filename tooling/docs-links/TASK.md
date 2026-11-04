@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 给 M3.1 Flash：文档相对链接检查器
 
-状态：待外部 agent 接手。本卡由主 agent 建立；本目录是这项任务的唯一写入范围。不要修改 TASK.md。
+状态：外部agent已78c8293交付，主agent860563e验收补强，文档CI41784617417通过。以下原任务约定保留供追溯；无需重复实现。TASK.md由主agent维护。
 
 ## 仓库与边界
 
