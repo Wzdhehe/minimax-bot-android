@@ -24,7 +24,7 @@ abstract class SharedModelSources : DefaultTask() {
 }
 val productionSources by tasks.registering(SharedModelSources::class) {
     inputDir.set(file("../../app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app"))
-    includes.set(listOf("model/**", "bot/BotProviderStore.kt", "bot/BotSettingsStore.kt", "bot/NativeModelChannel.kt", "bot/NativeModelRequestHost.kt", "isolation/ModelRequestClient.kt", "isolation/RuntimeDatabaseFiles.kt", "isolation/RuntimePrivateDirectory.kt", "isolation/RuntimeAtomicPublisher.kt"))
+    includes.set(listOf("model/**", "bot/BotProviderStore.kt", "bot/BotSettingsStore.kt", "bot/NativeModelChannel.kt", "bot/NativeModelRequestHost.kt", "isolation/ModelRequestClient.kt", "isolation/RuntimeDatabaseFiles.kt", "isolation/RuntimePrivateDirectory.kt", "isolation/RuntimeAtomicPublisher.kt", "isolation/NativeRuntimePublication.kt"))
     outputDir.set(layout.buildDirectory.dir("shared-model"))
 }
 val productionResources by tasks.registering(SharedModelSources::class) {
@@ -34,7 +34,7 @@ val productionResources by tasks.registering(SharedModelSources::class) {
 }
 val verifyPreparedInputs by tasks.registering {
     doLast {
-        for (name in listOf("libnode.so", "libc++_shared.so", "libmbot_node_probe.so", "libmbot_file_publication_probe.so")) {
+        for (name in listOf("libnode.so", "libc++_shared.so", "libmbot_node_probe.so")) {
             check(file("build/verified-jni/x86_64/$name").isFile) { "Run prepare-probe.py with the pinned Node archive and NDK first" }
         }
         check(file("build/verified-assets/node-fd-probe.cjs").isFile)
@@ -55,6 +55,7 @@ val verifyPreparedInputs by tasks.registering {
 android {
     namespace = "io.github.ccch1mneyyy.dsh_app"
     compileSdk = 36
+    ndkVersion = "27.3.13750724"
     defaultConfig {
         applicationId = "io.github.ccch1mneyyy.dsh_app.nodeprobe"
         minSdk = 26
@@ -63,6 +64,13 @@ android {
         versionName = "verification-only"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk.abiFilters.add("x86_64")
+        externalNativeBuild.cmake.arguments += "-DANDROID_STL=c++_static"
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("../../app/android/app/src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -73,8 +81,8 @@ android {
         assets.srcDir("build/verified-assets")
     }
     packaging.jniLibs.useLegacyPackaging = true
-    // The release libnode is already stripped. This target compiles its JNI
-    // outside AGP; do not let AGP fetch an unrelated default NDK to re-strip.
+    // Preserve prepared Node bytes. The production file kernel is built by
+    // AGP from the App's exact CMake source with an explicit pinned NDK.
     packaging.jniLibs.keepDebugSymbols.add("**/*.so")
 }
 androidComponents.onVariants { variant ->

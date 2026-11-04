@@ -7,6 +7,7 @@ import android.system.OsConstants
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeAtomicPublisher
+import io.github.ccch1mneyyy.dsh_app.isolation.NativeRuntimePublication
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimePublicationKernel
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimePublicationResult
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataCode
@@ -25,7 +26,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class RuntimeAtomicPublisherTest {
-    private val kernel = RuntimePublicationKernel { fd, source, target -> NativeFilePublicationProbe.publish(fd, source, target) }
+    private val kernel = RuntimePublicationKernel { fd, source, target -> NativeRuntimePublication.publishNoReplace(fd, source, target) }
     private val segments = listOf("publication-test")
     private fun fixture(block: (ContextWrapper, File) -> Unit) {
         val base = InstrumentationRegistry.getInstrumentation().targetContext
@@ -40,7 +41,7 @@ class RuntimeAtomicPublisherTest {
     }
 
     @Test fun publishOncePreservesTheOriginalOnRetryAndCleansPrivateStage() = fixture { context, root ->
-        val publisher = RuntimeAtomicPublisher.open(context, segments, kernel)
+        val publisher = RuntimeAtomicPublisher.open(context, segments)
         try {
             assertEquals("RuntimeAtomicPublisher(REDACTED)", publisher.toString())
             assertEquals(RuntimePublicationResult.PUBLISHED, publisher.publishIfAbsent("document.json", "first".toByteArray()))
@@ -55,7 +56,7 @@ class RuntimeAtomicPublisherTest {
 
     @Test fun aLostKernelResultIsUnknownAndRetryDoesNotOverwritePublishedData() = fixture { context, root ->
         val uncertain = RuntimePublicationKernel { fd, source, target ->
-            val result = NativeFilePublicationProbe.publish(fd, source, target)
+            val result = NativeRuntimePublication.publishNoReplace(fd, source, target)
             if (result == 0) throw IOException("private-fault-sentinel")
             result
         }

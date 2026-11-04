@@ -1,6 +1,6 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-04）
 
-当前新增生产Main原子发布结果组件，区分PUBLISHED/ALREADY_EXISTS/OUTCOME_UNKNOWN，不把rename后sync失败说成未写入。目录能力抽为RuntimePrivateDirectory，数据库owner复用；新六项设备用例和原十一项回归待CI（Python24/host1/scope4已过）。真实JNI仍验收注入，未装配生产native/FS/launcher；见[T-RuntimeFS](T-RuntimeFS.md)。模型协议、Key保存和正式入口未变，组件close不撤销已发FD。
+生产Main原子发布结果组件区分PUBLISHED/ALREADY_EXISTS/OUTCOME_UNKNOWN，不把rename后sync失败说成未写入。目录能力抽为RuntimePrivateDirectory，数据库owner复用；**132273a/41765512240的API26/35各17项过**，包含六新增与旧回归。JNI现移到生产CMake并默认绑定，双ABI交叉编译/JNI/16KiB检查过；迁移后的设备CI仍待观察，未装配完整FS/launcher，见[T-RuntimeFS](T-RuntimeFS.md)。模型协议、Key保存和正式入口未变，组件close不撤销已发FD。
 
 > e03b997/run41686820725的SDK route矩阵已API实查API26/35 success；以下待CI是实现当轮状态。正式resolver/启动器仍未接；FD VFS 的6605508/41700450899已定位Main含目录FD的IPC发送失败，SQLite未执行，不能称持久化已解决。后续46c1c07/run41703671145的四普通文件FD方案已API26/35通过（含WAL、两新PID与既有Key/模型断言）；仍无完整产品runtime，详见 [T-Persistence](T-Persistence.md)。
 

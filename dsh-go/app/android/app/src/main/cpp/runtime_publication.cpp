@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Fixed verification-only publication primitive. No shell or pathname root API.
+// Main-only publication primitive. No shell or pathname root API.
 #include <jni.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -39,9 +39,9 @@ jint Publish(JNIEnv* env, jobject, jint directory, jstring source, jstring targe
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   JNIEnv* env = nullptr;
   if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return JNI_ERR;
-  auto type = env->FindClass("io/github/ccch1mneyyy/dsh_app/nodeprobe/NativeFilePublicationProbe");
+  auto type = env->FindClass("io/github/ccch1mneyyy/dsh_app/isolation/NativeRuntimePublication");
   if (!type) return JNI_ERR;
-  JNINativeMethod method{const_cast<char*>("publish"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Publish)};
+  JNINativeMethod method{const_cast<char*>("publishNoReplace"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Publish)};
   if (env->RegisterNatives(type, &method, 1) != JNI_OK) return JNI_ERR;
   return JNI_VERSION_1_6;
 }

@@ -79,12 +79,17 @@ internal class RuntimeAtomicPublisher private constructor(
     override fun toString() = "RuntimeAtomicPublisher(REDACTED)"
     companion object {
         private const val STAGE_PREFIX = ".native-publish-"
-        fun open(context: Context, relativeSegments: List<String>, kernel: RuntimePublicationKernel,
+        fun open(context: Context, relativeSegments: List<String>, kernel: RuntimePublicationKernel? = null,
                  maxBytes: Int = 1024 * 1024, syncDirectory: (FileDescriptor) -> Unit = { Os.fsync(it) }): RuntimeAtomicPublisher {
             RuntimePrivateDirectory.requireOwnerWorker(context)
             if (maxBytes !in 1..8 * 1024 * 1024) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+            // Resolve/load JNI only after Main/worker admission, before creating
+            // directories. An unsupported kernel has no permissive fallback.
+            val implementation = try { kernel ?: NativeRuntimePublication }
+                catch (_: LinkageError) { throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }
+                catch (_: Exception) { throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }
             val directory = RuntimePrivateDirectory.open(context, relativeSegments)
-            try { return RuntimeAtomicPublisher(directory, kernel, maxBytes, syncDirectory) }
+            try { return RuntimeAtomicPublisher(directory, implementation, maxBytes, syncDirectory) }
             catch (error: Throwable) { directory.close(); throw error }
         }
     }

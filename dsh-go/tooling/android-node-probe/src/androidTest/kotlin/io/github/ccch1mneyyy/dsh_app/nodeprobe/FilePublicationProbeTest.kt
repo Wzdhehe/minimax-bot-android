@@ -6,6 +6,7 @@ import android.system.Os
 import android.system.OsConstants
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.github.ccch1mneyyy.dsh_app.isolation.NativeRuntimePublication
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -37,7 +38,7 @@ class FilePublicationProbeTest {
     @Test fun publishesCompleteStagedFileAndSyncsItsDirectory() = fixture { root, fd ->
         val bytes = "complete-native-publication".toByteArray()
         stage(root, "stage.tmp", bytes)
-        expect(0, NativeFilePublicationProbe.publish(fd, "stage.tmp", "document.json"))
+        expect(0, NativeRuntimePublication.publishNoReplace(fd, "stage.tmp", "document.json"))
         assertFalse(File(root, "stage.tmp").exists())
         assertTrue(bytes.contentEquals(File(root, "document.json").readBytes()))
         val sync = Os.open(root.path, OsConstants.O_RDONLY or OsConstants.O_CLOEXEC or OsConstants.O_NOFOLLOW, 0)
@@ -47,7 +48,7 @@ class FilePublicationProbeTest {
     @Test fun anExistingTargetIsNeverReplaced() = fixture { root, fd ->
         stage(root, "stage.tmp", "new".toByteArray())
         stage(root, "document.json", "original".toByteArray())
-        expect(OsConstants.EEXIST, NativeFilePublicationProbe.publish(fd, "stage.tmp", "document.json"))
+        expect(OsConstants.EEXIST, NativeRuntimePublication.publishNoReplace(fd, "stage.tmp", "document.json"))
         assertEquals("original", File(root, "document.json").readText())
         assertEquals("new", File(root, "stage.tmp").readText())
     }
@@ -60,7 +61,7 @@ class FilePublicationProbeTest {
         val go = CountDownLatch(1)
         try {
             val results = listOf("first.tmp", "second.tmp").map { name ->
-                workers.submit<Int> { check(go.await(5, TimeUnit.SECONDS)); NativeFilePublicationProbe.publish(fd, name, "document.json") }
+                workers.submit<Int> { check(go.await(5, TimeUnit.SECONDS)); NativeRuntimePublication.publishNoReplace(fd, name, "document.json") }
             }
             go.countDown()
             val codes = results.map { it.get(5, TimeUnit.SECONDS) }.sorted()
@@ -74,10 +75,10 @@ class FilePublicationProbeTest {
     @Test fun traversalAndANonDirectoryFdAreRefused() = fixture { root, fd ->
         stage(root, "stage.tmp", "unchanged".toByteArray())
         for (name in listOf("../outside", "subdir/file", ".", "..", "")) {
-            expect(OsConstants.EINVAL, NativeFilePublicationProbe.publish(fd, "stage.tmp", name))
+            expect(OsConstants.EINVAL, NativeRuntimePublication.publishNoReplace(fd, "stage.tmp", name))
         }
         ParcelFileDescriptor.open(File(root, "stage.tmp"), ParcelFileDescriptor.MODE_READ_WRITE).use {
-            expect(OsConstants.ENOTDIR, NativeFilePublicationProbe.publish(it.fd, "stage.tmp", "document.json"))
+            expect(OsConstants.ENOTDIR, NativeRuntimePublication.publishNoReplace(it.fd, "stage.tmp", "document.json"))
         }
         assertEquals("unchanged", File(root, "stage.tmp").readText())
         assertFalse(File(root, "document.json").exists())

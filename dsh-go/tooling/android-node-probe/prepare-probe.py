@@ -132,9 +132,9 @@ def prepare(ndk, archive, source_sha=None):
                '-I', str(source_dir), str(ROOT / 'src/main/cpp/node_probe.cpp'),
                '-L', str(jni), '-lnode', '-o', str(jni / 'libmbot_node_probe.so')]
     subprocess.run(command, check=True)
-    subprocess.run([str(toolchain / 'bin/x86_64-linux-android26-clang++'), '-std=c++20', '-fPIC', '-shared',
-                    '-fvisibility=hidden', '-O2', '-Wl,-z,max-page-size=16384', '-Wl,-z,common-page-size=16384',
-                    str(ROOT / 'src/main/cpp/file_publication_probe.cpp'), '-o', str(jni / 'libmbot_file_publication_probe.so')], check=True)
+    # File publication is now built by AGP from the production CMake target.
+    # Drop the obsolete generated probe library on incremental preparation.
+    (jni / 'libmbot_file_publication_probe.so').unlink(missing_ok=True)
     bundle()
     (ROOT / 'build/verified-assets/node-validation.json').write_text(json.dumps({
         'requiresIntl': source_sha is not None, 'sourceArchiveSha256': source_sha, 'requiresSqlite': False,

@@ -14,6 +14,7 @@ import android.os.ParcelFileDescriptor
 import android.os.Process
 import io.github.ccch1mneyyy.dsh_app.isolation.ModelRequestClient
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDatabaseFiles
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeAtomicPublisher
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataCode
 import java.util.concurrent.Executors
@@ -42,7 +43,14 @@ class NodeIsolationProbeService : Service() {
                     val denied = try { RuntimeDatabaseFiles.open(this).close(); false }
                         catch (error: RuntimeDataFailure) { error.code == RuntimeDataCode.OWNER_ONLY }
                         catch (_: Exception) { false }
-                    response.data = Bundle().apply { putString("code", "ready"); putBoolean("database_owner_denied", denied) }
+                    val publicationDenied = try { RuntimeAtomicPublisher.open(this, listOf("forbidden")).close(); false }
+                        catch (error: RuntimeDataFailure) { error.code == RuntimeDataCode.OWNER_ONLY }
+                        catch (_: Exception) { false }
+                    response.data = Bundle().apply {
+                        putString("code", "ready")
+                        putBoolean("database_owner_denied", denied)
+                        putBoolean("publication_owner_denied", publicationDenied)
+                    }
                     try { message.replyTo?.send(response) } catch (_: Exception) { }
                 }
             }

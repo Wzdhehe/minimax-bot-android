@@ -15,7 +15,7 @@
 | FD SQLite VFS Android候选 | **46c1c07/run41703671145 API26/35 success**，artifact各t1/f0/e0/s0；WAL/并行只读/重开/integrity、两次不同PID读回、既有模型/Key断言通过；宿主另有writer/reader争用、crash恢复、sync故障注入 | 临时验收四普通文件FD；不是正式native数据lease、完整FS或产品runtime；ARM64/真机/Android crash恢复未验证 |
 | Main持久数据库文件owner | 生产RuntimeDatabaseFiles固定四文件、NOFOLLOW/普通文件/单链接/私有权限/owner/worker校验；两个APK43s构建、Python22过；验收Node改用同一生产源码 | **44c0190/41760010243 API26/35各7项全过**；含原模型/Key/WAL两PID。hardlink按平台/owner边界记录，非完整lease/撤销 |
 | Main独占文件发布探测 | 新独立JNI在Main用私有目录FD+严格basename做renameat2(NOREPLACE)，4用例已编译；APK2m7s、Python23/host1过 | **7406bb3/41761635832 API26/35各11项通过**，含原七项；仍仅验收，不是完整FS/通用link替代；见T-RuntimeFS |
-| Main原子发布结果语义 | 生产RuntimeAtomicPublisher区分已发布/已存在/结果未知；共享原数据库目录能力，六个新增仪器用例；Python24/host1/scope4通过 | 新组件及目录重构设备回归待CI，预期17项但不提前认定；内核仍验收注入，未装配完整FS/生产JNI/launcher，见T-RuntimeFS |
+| Main原子发布结果语义 | **132273a/41765512240 API26/35各17项通过**；六个新增用例与原十一项回归，含提交未知、冲突/并发/清理及数据库目录重构；native broker41765512039也通过 | JNI已移到生产CMake/default binding，双ABI交叉编译/16KiB/JNI检查过；迁移后新设备CI待观察，不是完整FS/launcher；见T-RuntimeFS |
 | full-ICU Node | 首轮41630373256超4小时取消；**重跑41680254279也因compile 330分钟超时而失败**，check annotation实查，verify skipped | 无产物/ICU设备证据；已补ccache/300分钟预算+失败也保存cache，host/NDK真实hits2+group-timeout smoke过、Python21过；首推41756717823因job-env的runner上下文不合法未创建job，已用actionlint复现并移到step env；Python21过，修后CI/cache保存恢复/完整编译待验证。默认候选没有Intl |
 
 正式入口仍DSH；上述都是组件/独立验收APK/假provider，**没有完整mcode/官方Bot产品运行、完整Flutter Bot APK或真实模型验收**。插件变更仍关闭。持久化、可信Bot身份/MCP、工具权限及生产启动器仍缺。不得因组件通过就宣称App已完成。
@@ -70,7 +70,7 @@ dev/integration 891aefa
 ## 接下来优先做
 
 1. 四普通文件FD候选46c1c07/run41703671145已API26/35通过，artifact分别13264018422/13263928937，name均`t1-f0-e0-s0-passed-l0`。ICU producer41680254279在330分钟超时、无库、verify跳过；新ccache+300分钟预算/always-save待CI，先查progress artifact/cache save outcome，不能仅凭smoke说长编译已解决。见T-AndroidNode。
-2. VFS的Android WAL/两进程干净重启证据已获得；Main持久文件owner（T-NativeDataFiles）已44c0190/41760010243两版本各7项通过，不扩大hardlink分支证据。独占发布内核7406bb3/41761635832两版本各11项过；结果语义组件新增六项设备用例，先查新CI及原十一项回归（T-RuntimeFS），再将同一内核纳入生产native构建并设计完整FS。其close不撤销已发FD；接着做身份/进程退出绑定的真正lease及完整FS/backup（T-Persistence），再装配pi-ai/model resolver与正式生命周期。目录留在Main，owner同步预创建目录项；不传目录FD/cwd当权限，不选周期快照，不回退同UID任意shell。固定JNI脚本仍不是产品启动器。
+2. VFS的Android WAL/两进程干净重启证据已获得；Main持久文件owner（T-NativeDataFiles）七项基线通过，不扩大hardlink分支证据。原子发布组件132273a/41765512240两版本各17项过，含旧回归；JNI现移到生产CMake/default binding，先查迁移后新CI（T-RuntimeFS），再设计完整FS。其close不撤销已发FD；接着做身份/进程退出绑定的真正lease及完整FS/backup（T-Persistence），再装配pi-ai/model resolver与正式生命周期。目录留在Main，owner同步预创建目录项；不传目录FD/cwd当权限，不选周期快照，不回退同UID任意shell。固定JNI脚本仍不是产品启动器。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
 5. 总工作区下实现项目管理与 Bot 绑定，遵守路径防护并分开 cwd 和访问许可；补资料库、附件、群聊/记忆/审批等全量 parity 未完成项。

@@ -113,6 +113,7 @@ class IsolatedNodeModelTest {
                                 val identity = probe.identity().get(10, TimeUnit.SECONDS)
                                 assertNotEquals(Process.myUid(), identity.uid)
                                 assertTrue(identity.data.getBoolean("database_owner_denied"))
+                                assertTrue(identity.data.getBoolean("publication_owner_denied"))
                                 NativeModelRequestHost(identity.uid, providerId!!, "normal", probe.peerBinder(), channels::open, channels::close).use { host ->
                                 val id = UUID.randomUUID().toString()
                                 val data = Bundle().apply {

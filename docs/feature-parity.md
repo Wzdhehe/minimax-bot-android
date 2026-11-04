@@ -8,8 +8,9 @@
 
 - [x] 上游 runtime 钉点与升钉流程：钉点文件、`docs/UPSTREAM-RUNTIME.md`、checkout 的 commit/tree/洁净状态、以及实际进入 bundle 的每个上游文件 sha256 四方一致，CI 在 PR 与 push 上强制；宿主测试、上游网关 smoke 与 19 项钉点测试通过。**只覆盖宿主契约层**，不证明完整 runtime、插件市场或 Android 可用。
 - [ ] 本机安装、校验、启动、停止与升级 MiniMax Code 运行时（mcode-webui/minimax-code fork）；处理异常中断和进程清理。
-- [x] better-sqlite3 12.11.1 Android x86_64验收候选从源码编译与APK打包；内存数据库设备执行待CI，持久化/WAL仍未解决，见T-SQLite。
-- [x] SDK→模型FD流式适配（宿主组件）：固定OpenAI两协议/Anthropic SDK、工具事件、背压、取消、错误不重试；四类真实pi-ai provider（含Google async scope）组件验证已过，动态Android请求桥/完整runtime仍未完成，见T-RuntimeBroker。
+- [x] better-sqlite3 12.11.1 Android x86_64验收：内存数据库、四普通FD VFS的WAL/并行只读/两次新PID读回已API26/35通过。Main固定文件owner已验证；完整数据lease/FS/online backup、ARM64/真机仍缺，见[T-Persistence](handoff/T-Persistence.md)。
+- [x] SDK→模型FD流式适配（组件）：四类真实pi-ai provider（含Google async scope）、工具事件、背压、取消及错误不重试宿主验证通过；动态JNI/Binder路由已API26/35通过。正式model resolver/启动器与完整runtime仍未装配，见T-RuntimeBroker。
+- [x] Main原子发布结果组件：132273a在API26/35各17项通过，含不覆盖/并发/提交未知与数据库回归。JNI已迁入共用生产CMake并双ABI交叉编译，迁移后设备回归待CI；不是完整runtime FS，见[T-RuntimeFS](handoff/T-RuntimeFS.md)。
 - [x] native Key broker 的四协议文本流与取消、Key边界测试；API26/35各十项Keystore/隔离UID/Unix FD/IPC仪器用例通过。仅组件基线，不证明真实模型或完整runtime；见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。
 
 - [ ] 将官方 MiniMax Bot 的业务逻辑作为内置 Bot 服务接入上述 runtime：启动、持久化、会话恢复、审批和问答；不实现通用 Mini App 容器。
@@ -30,7 +31,7 @@
 - [ ] 插件市场：浏览、搜索、来源、版本和权限说明；本机安装、更新、启停、卸载、出错恢复，以及与 MiniMax Code 插件协议的兼容性验证；不将 Mini App 作为插件列出或安装。**官方插件包格式的 `deliveryTargets` 仅允许 `desktop` / `cloud`，没有 `android`**——产品 UI 与验收须明示此限制；**Android 安装策略仍未定**，不能假定市场包默认可在 Android 分发。
 - [ ] Key / Base URL 配置、模型切换和失败处理；密钥不应由可执行任意代码的 Agent 直接读取。
 - [ ] 独立执行边界、受控文件和网络、逐次审批、停止与资源限制；PRoot 仅用于兼容，不视作安全隔离。
-  - T-Sandbox：严格工作区守卫已接入宿主文件接口和媒体路由；Android 存储/备份源码已收紧。完整 Android 构建与 `/sdcard` 仪器验收未运行，独立UID/IPC/Key/模型FD组件已在API26/35验证，但Node/完整runtime尚未加载；详见 [handoff](handoff/T-Sandbox.md)，本条保持未完成。
+  - T-Sandbox：严格工作区守卫已接入宿主文件接口和媒体路由；Android 存储/备份源码已收紧。完整 Android 构建与 `/sdcard` 仪器验收未运行；隔离Node/Key/模型FD/受限SQLite已在API26/35验证，完整runtime、工具审批和授权撤销仍缺，详见 [handoff](handoff/T-Sandbox.md)，本条保持未完成。
 - [ ] 仅本机：无远程连接、无手机操控及其权限；无第三方品牌和不允许复用的美术素材；**分发 APK 满足 AGPL-3.0 源码提供义务**。
 - [ ] 验证手机竖屏、各尺寸平板横屏/竖屏、折叠/多窗口；真实设备与真实 MiniMax 模型端到端测试。
 

@@ -3,7 +3,45 @@
 
 **尚未实现完整runtime FS。** 当前WAL/两进程读取、Main四文件owner已有各自设备证据，不能代替本卡。Mini App可视化程序仍不适配；下述官方Bot的miniapp/node目录是复用其业务后端，不新增Mini App浏览器。
 
-## Main原子发布组件（新增，设备执行待CI）
+## 生产native构建接入（最新，设备执行待CI）
+
+原验收`file_publication_probe.cpp`已移到App `src/main/cpp/runtime_publication.cpp`，同一renameat2算法注册生产`NativeRuntimePublication.publishNoReplace`。App与Node验收目标均指向同一CMakeLists，NDK27.3.13750724/CMake3.22.1，静态C++ runtime避免增加共享STL冲突，库LOAD为16KiB对齐；R8显式保留JNI类/方法。原probe类与独立probe库删除，prepare会删除旧的生成库。
+
+`RuntimeAtomicPublisher.open`默认绑定生产内核；先做Main UID/worker/预算检查，再加载JNI，加载失败只给稳定UNAVAILABLE，无降级路径。故障测试仍可由可信Main注入内核/sync。现有六项组件/四项内核用例改跑生产类；主用例走默认open。原隔离Node握手新增断言：isolated UID调用默认publisher必须OWNER_ONLY，不能创建目录或加载Main内核后冒充owner。
+
+已实际用`check-native-files.py`从同一生产CMake构建x86_64/arm64-v8a API26库，验证ELF ABI/JNI_OnLoad导出/16KiB LOAD/无共享STL依赖。SDK CMake归档按Google repository摘要核对，本机版本是`3.22.1-g37088a8`，检查允许该固定SDK构建后缀。这**仅证明两个ABI的本机交叉编译**，不是ARM64/真机执行或完整Flutter App构建。Node workflow新增同一双ABI检查；x86_64设备回归仍待新CI。
+
+```bash
+python3 dsh-go/tooling/android-node-probe/check-native-files.py \
+  --ndk /tmp/mbot-ndk27d --cmake /tmp/mbot-android-sdk/cmake/3.22.1/bin/cmake
+```
+
+```text
+PASS: production native file kernel x86_64 API26, JNI export and 16KiB LOAD alignment; not device execution
+PASS: production native file kernel arm64-v8a API26, JNI export and 16KiB LOAD alignment; not device execution
+```
+
+没有新增IPC/Agent接口、生产Node启动器或完整FS；数据库FD lease/撤销、JSONL/MemoryStore调用点与崩溃stage清理仍缺。下面132273a的17项通过是**迁移生产JNI之前**的基线，不能据此提前认定本轮生产JNI设备通过。
+
+生产CMake接入后的两个验收APK已实际构建；仍非完整Flutter APK：
+
+```text
+BUILD SUCCESSFUL in 1m 41s
+71 actionable tasks: 17 executed, 54 up-to-date
+```
+
+prepare-probe/prepare-sqlite按钉点重新执行成功，Python24项与actionlint通过；原broker设备矩阵41765512050现也已实查success。本机仍无adb/模拟器，不把交叉编译或打包冒充设备执行。
+
+## Main原子发布组件（132273a已通过API26/35）
+
+**132273a/run41765512240 success**，API实查artifact：
+
+```text
+API26 id13291988246: node-candidate-results-api-26-t17-f0-e0-s0-passed-l0
+API35 id13292912205: node-candidate-results-api-35-t17-f0-e0-s0-passed-l0
+```
+
+新增六项与原十一项均通过，包括数据库目录重构回归。同期native broker CI41765512039通过；broker设备矩阵41765512050结论另查。
 
 生产`RuntimeAtomicPublisher`只在Main worker使用，根固定在noBackupFilesDir/minimax-bot-runtime，子目录由可信Main策略选择。严格basename、最多8级、默认1MiB/最大8MiB；创建0600且O_EXCL/NOFOLLOW的随机stage，完整写入并fsync，然后调用可信注入的独占发布内核，最后同步目录。所有异常只暴露稳定code，诊断无路径/内容/cause。没有新增Binder/MethodChannel/Agent文件入口。
 
@@ -11,7 +49,7 @@
 
 `RuntimePrivateDirectory`抽出原数据库owner的目录检查/祖先目录同步：目录能力始终留在Main。原数据库固定四文件、权限/链接/inode检查不变；需要原七项设备回归，不能仅凭重构编译成功认定没有回归。目录原始FD关闭失败时，不把dup交出并泄漏。
 
-新增六个设备用例，注入原真实JNI探测：发布/重复不覆盖、native实际发布后抛异常、rename后sync异常、输入/预算/UI拒绝、已知ENOSYS拒绝清理与空文件、两个独立owner并发一winner。原十一项保留；预期总17项，**实际计数与结果须以新CI为准**。Python报告器新增固定`RuntimeAtomicPublisherTest`/`laN`与invalid_data，不打印注入故障正文或私有路径。
+新增六个设备用例，当轮注入原真实JNI探测：发布/重复不覆盖、native实际发布后抛异常、rename后sync异常、输入/预算/UI拒绝、已知ENOSYS拒绝清理与空文件、两个独立owner并发一winner。原十一项保留；本轮已真实17项通过。Python报告器新增固定`RuntimeAtomicPublisherTest`/`laN`与invalid_data，不打印注入故障正文或私有路径。
 
 本轮实际运行Python24项、精确APK JS host1项、scope4项，均通过；actionlint1.7.12检查Node候选/source两workflow通过（禁用外部shellcheck/pyflakes），git diff --check通过。组件最终构建命令与原始结尾：
 
@@ -27,7 +65,7 @@ BUILD SUCCESSFUL in 1m 21s
 69 actionable tasks: 12 executed, 57 up-to-date
 ```
 
-**边界**：组件逻辑位于生产源码，但native内核仍由验收APK注入；尚未绑定生产JNI打包/启动器、runtime FS协议、原JSONL/MemoryStore或Agent身份。close仅关Main本地目录FD，不是Agent撤销或SQLite lease。物理真机/ARM64/断电均未验证。
+**132273a时的边界**：组件逻辑位于生产源码，native内核由验收APK注入；生产JNI迁移见最新节。尚未绑定启动器、runtime FS协议、原JSONL/MemoryStore或Agent身份。close仅关Main本地目录FD，不是Agent撤销或SQLite lease。物理真机/ARM64/断电均未验证。
 
 ## 原子发布设备结果（最新）
 
@@ -81,7 +119,7 @@ report-results允许固定FilePublicationProbeTest位置（artifact后缀lpN）�
 
 ## 接着做
 
-1. Main受限原子发布内核已取得API26/35证据；结果语义组件现已实现并编译，新增六项设备测试待CI。通过后将同一内核纳入生产native构建，再绑定受控FS能力；保留输入/冲突/并发/结果未知测试，不开放泛化syscall。
+1. 132273a组件17项已API26/35通过；同一内核现纳入生产native构建并有双ABI交叉编译证据，先查迁移后的新CI，再绑定受控FS能力；保留输入/冲突/并发/结果未知测试，不开放泛化syscall。
 2. 然后设计Main持有的专用runtime-data FS能力与提交/恢复语义，再适配固定JSONL/MemoryStore调用并跑原实现测试。还需明确读写预算、流、原子替换、exclusive publication、所有写者同步和退出生命周期；目前没有这些生产接口。
 3. 完整online backup、JSON/history、uploads/assets与模型配置安全投影都仍缺；不能因数据库owner或本探测通过就切正式入口。
 4. 官方server.mjs确实创建HTTP server并listen；isolated UID的UI传输也需独立native桥接（未实现）。只在宿主临时验证过HTTP server可通过connection事件处理已连接Unix FD而不listen，不是Android或完整官方后端已接通。

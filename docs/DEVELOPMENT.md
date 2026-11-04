@@ -14,9 +14,14 @@ npm test --prefix dsh-go/tooling/model-sdk-probe
 npm run test:pi --prefix dsh-go/tooling/model-sdk-probe
 python3 dsh-go/tooling/android-node-probe/test-fd-vfs.py --ndk /path/to/ndk27d
 # 先prepare Node headers及SQLite wrapper后，可加 --node-probe 验证宿主真实addon跨进程
+python3 dsh-go/tooling/android-node-probe/check-native-files.py \
+  --ndk /path/to/ndk27d --cmake /path/to/android-sdk/cmake/3.22.1/bin/cmake
+# 同一生产CMake的x86_64/arm64-v8a API26交叉编译/JNI/16KiB检查，不是ARM64运行
 ```
 
 Android工具与实际命令见专题卡；`tooling/android-broker-probe`编译真实native源码/测试，`tooling/android-node-probe`另需先prepare-probe、prepare-sqlite（Node archive/NDK/esbuild均钉版本）。后者默认候选无Intl，full-ICU从源码独立CI构建（ccache/300分钟预算保留保存时间；缓存实际复用与完整编译待CI，见T-AndroidNode）；已有成功producer可按T-AndroidNode的PINNED_SOURCE_RUN_ID复用，不必重复长编译（此复用路径端到端未验证）。实际API26/35结果以HANDOFF中的run ID为准；宿主测试和编译不能代替设备执行，物理真机/ARM64未验证。
+
+Main文件发布JNI现由App/Node验收工程共用生产CMake构建，需NDK27.3.13750724、SDK CMake3.22.1；`RuntimeAtomicPublisher.open`在Main worker admission后加载。组件17项设备基线与生产JNI迁移后的设备结果须区分，见[T-RuntimeFS](handoff/T-RuntimeFS.md)。
 
 ## 产品边界
 

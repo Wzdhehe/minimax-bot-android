@@ -28,7 +28,7 @@ fun buildMinuteVersionCode(): Int {
 android {
     namespace = "io.github.ccch1mneyyy.dsh_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.3.13750724"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -43,8 +43,16 @@ android {
         // Do not bypass Android's exec restrictions with the legacy DSH target.
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild.cmake.arguments += "-DANDROID_STL=c++_static"
         versionCode = flutter.versionCode.takeIf { it > 1 } ?: buildMinuteVersionCode()
         versionName = flutter.versionName
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     flavorDimensions += "abi"
