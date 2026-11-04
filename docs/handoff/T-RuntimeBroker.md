@@ -1,5 +1,15 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-04）
 
+## 最新：descriptor与Bot真实listener共用启动会话（2026-11-04）
+
+从7967b9d接手后发现服务实际忽略Kotlin/Node descriptor的token，自己另生成一份，照旧交接流程Flutter无法鉴权。`startBotService`现在支持可信启动器传入`authToken`（32–64小写hex），拒绝非法显式值后才操作文件和监听，未提供时仍随机生成；响应/错误不回显token。Node broker端口规范及两类token长度也与Kotlin对齐，0/65536/前导零和超长凭据拒绝。
+
+相关真实Bot HTTP测试含成功鉴权、broker角色token拒绝、响应不含token、重启拒绝旧token、非法输入不创建文件；CI host-contracts加入descriptor套件。实际宿主结果：**28 tests / 28 pass / 0 fail / 0 skipped**；actionlint及diff检查退出0。此阶段没有改native/正式启动器或运行Android；Key仍留native，**完整产品/真实provider/真机未验证**。
+
+下一步不能照旧第11节调用`host.application.miniAppAgent.registerArena`：公开facade不暴露该方法。真实注册在fork `createHostAgentSession().activate()` 使用内部gateway与宿主身份，必须装配它或同一可信生命周期；未完成前不能假装可信Bot caller已接通。descriptor loopback会话也不是isolated UID的可用TCP授权，必须继续既有JNI/Binder/模型FD路线。详见[NEXT-AGENT最新快照](NEXT-AGENT.md)。
+
+下面逐轮记录按当时状态保留，不覆盖本节与最新CI。
+
 > 收尾接手路径、工具链实查与下一项建议见[NEXT-AGENT](NEXT-AGENT.md)；下面历史段落的“待CI”须以上方最新结果为准。
 
 生产Main原子发布结果组件区分PUBLISHED/ALREADY_EXISTS/OUTCOME_UNKNOWN，不把rename后sync失败说成未写入。目录能力抽为RuntimePrivateDirectory，数据库owner复用；**132273a/41765512240的API26/35各17项过**，生产JNI迁移8d65ac0/41766746821也各17项过；双ABI交叉编译/JNI/16KiB检查过，未装配完整FS/launcher，见[T-RuntimeFS](T-RuntimeFS.md)。模型协议、Key保存和正式入口未变，组件close不撤销已发FD。

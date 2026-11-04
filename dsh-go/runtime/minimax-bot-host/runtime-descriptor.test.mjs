@@ -107,3 +107,14 @@ test('the runtime environment is built from an allowlist, so no key or token rid
   assert.ok(!JSON.stringify(env).includes('super-secret-key'));
   assert.ok(!JSON.stringify(env).includes('token-value'));
 });
+
+
+test('Node rejects broker ports and token lengths the Kotlin descriptor writer cannot issue', () => {
+  const valid = { entryPath: '/private/entry.mjs', pinCommit: PIN, port: 43117, token: 'a'.repeat(64),
+    broker: { baseUrl: 'http://127.0.0.1:43118', token: 'b'.repeat(64) } };
+  for (const baseUrl of ['http://127.0.0.1:0', 'http://127.0.0.1:65536', 'http://127.0.0.1:99999', 'http://127.0.0.1:00080']) {
+    assert.throws(() => createRuntimeDescriptor({ ...valid, broker: { ...valid.broker, baseUrl } }), /loopback broker/);
+  }
+  assert.throws(() => createRuntimeDescriptor({ ...valid, token: 'a'.repeat(65) }), /session token/);
+  assert.throws(() => createRuntimeDescriptor({ ...valid, broker: { ...valid.broker, token: 'b'.repeat(65) } }), /broker session token/);
+});

@@ -62,17 +62,18 @@ export function createRuntimeDescriptor({ entryPath, pinCommit, port, token, bro
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new TypeError('A loopback port is required');
   }
-  if (typeof token !== 'string' || !/^[0-9a-f]{32,}$/.test(token)) {
+  if (typeof token !== 'string' || !/^[0-9a-f]{32,64}$/.test(token)) {
     throw new TypeError('A session token is required');
   }
   if (broker === null || broker === undefined) {
     return Object.freeze({ entryPath, pinCommit, port, token, broker: null });
   }
   const { baseUrl, token: brokerToken } = broker ?? {};
-  if (typeof baseUrl !== 'string' || !/^http:\/\/127\.0\.0\.1:[0-9]{1,5}$/.test(baseUrl)) {
+  const brokerPort = typeof baseUrl === 'string' ? /^http:\/\/127\.0\.0\.1:([0-9]{1,5})$/.exec(baseUrl)?.[1] : undefined;
+  if (!brokerPort || Number(brokerPort) < 1 || Number(brokerPort) > 65535 || String(Number(brokerPort)) !== brokerPort) {
     throw new TypeError('A loopback broker URL is required');
   }
-  if (typeof brokerToken !== 'string' || !/^[0-9a-f]{32,}$/.test(brokerToken)) {
+  if (typeof brokerToken !== 'string' || !/^[0-9a-f]{32,64}$/.test(brokerToken)) {
     throw new TypeError('A broker session token is required');
   }
   return Object.freeze({ entryPath, pinCommit, port, token, broker: Object.freeze({ baseUrl, token: brokerToken }) });

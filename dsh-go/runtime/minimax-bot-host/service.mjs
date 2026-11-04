@@ -7,13 +7,19 @@ import { createProviderBroker } from './provider-broker.mjs';
 
 /** The descriptor belongs on a private Android host channel. This authenticates
  * HTTP requests; it does not isolate Agent code or provide model credentials. */
-export async function startBotService({ port, dataDir, filesDir, agent, modelBroker, getUsageQuota, signal, logger }) {
+export async function startBotService({ port, dataDir, filesDir, agent, modelBroker, getUsageQuota, signal, logger, authToken }) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError('A local port is required');
+  // A trusted launcher may already have published this session in its private
+  // descriptor. Validate before filesystem or listener side effects, and never
+  // silently rotate an explicitly supplied but malformed credential.
+  if (authToken !== undefined && (typeof authToken !== 'string' || !/^[0-9a-f]{32,64}$/.test(authToken))) {
+    throw new TypeError('A 32-64 hex Bot session token is required');
+  }
+  const token = authToken ?? randomBytes(32).toString('hex');
   const workspace = await createHostWorkspace(filesDir);
   // Provider probes use the same native stream capability as model calls.
   // No resolver returning plaintext credentials is accepted by this wrapper.
   const providerBroker = modelBroker ? createProviderBroker({ modelBroker }) : undefined;
-  const token = randomBytes(32).toString('hex');
   const credential = Buffer.from(`Bearer ${token}`);
   const host = `127.0.0.1:${port}`;
   const lifecycle = await start({

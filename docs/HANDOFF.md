@@ -4,6 +4,12 @@
 
 只在 **feat/t-plugins** 连续开发、阶段验证后及时push并更新文档。用户授权持续推进；不新开分支、不动main/dev/integration、不force push、不建PR、不发布APK。
 
+## 本轮续写：启动会话鉴权（2026-11-04）
+
+从远端7967b9d接手。修复实际 Bot listener 忽略 descriptor token 而另生成凭据的问题；可信启动器可显式传 `authToken`，输入错误在文件/监听副作用前拒绝。Node descriptor 端口/token校验与Kotlin一致，host CI加入descriptor测试。**宿主28项通过**（含实际HTTP鉴权、错误角色token拒绝、重启旧token拒绝）；未修改正式Android启动器，完整APK/真机/真实provider仍**未验证**。详细代码定位、测试命令、剩余装配缺口与环境见[NEXT-AGENT最新快照](handoff/NEXT-AGENT.md)。
+
+重新实查发现：fork公开的 `host.application.miniAppAgent` 不提供 `registerArena`；旧第11节「从公开应用对象注册caller」不是可直接执行的API。下一阶段须接真实内部gateway的宿主注册/撤销生命周期，不能伪造caller，也不能为省事直接用DSH同UID/PRoot跑完整Agent。`miniAppSurface` 已可省略并报OPEN_UNAVAILABLE，继续不适配Mini App容器。
+
 ## 当前状态
 
 | 能力 | 已取得的证据 | 尚未完成 |
@@ -94,8 +100,8 @@ M3.1 Flash已提交78c8293（仅tooling/docs-links内4文件），本工作区�
 
 ## 接下来优先做
 
-1. 四普通文件FD候选46c1c07/run41703671145已API26/35通过，artifact分别13264018422/13263928937，name均`t1-f0-e0-s0-passed-l0`。旧ICU producer41680254279在330分钟超时、无库、verify跳过；新0bf4043/run41757171111目前compile仍in_progress，cache-save/progress步骤尚未完成。先查progress artifact/cache save outcome，不能仅凭smoke说长编译已解决。见T-AndroidNode。
-2. Node READ/SIZE已585f082各30项过。c78faca/41776354659失败job重跑已31项过（首次0结果不抹去），42fba3a/41777415973已各35项过。显式Main move/remove IPC已c1b9aee各35项过，Node JNI已c8e702d各35项过；888aa77 append40项API35通过/API26 f1定位transport夹具（lc89）；78d49f5/run41781774323夹具修正和c8e506e/run41781117518子目录均已API26/35各44项通过；888aa77首次失败记录保留，可以继续新功能；之后接Main子scope/目录授权与Node，再继续FileHandle/大日志与原模块恢复（T-RuntimeFiles）。SQLite owner的close不撤销已发FD；真正lease/backup、pi-ai/model resolver与正式生命周期仍缺。目录留Main，不把cwd当权限，不选周期快照，不回退同UID任意shell。固定JNI脚本不是产品启动器。
+1. 查full-ICU producer41757171111 **attempt2**：本轮已重跑失败job，API实查in_progress。attempt1是budget_exhausted，cache-save success（artifact13302870059），没有库/verify证据；五个producer输入未改。后续须看真实cache恢复、完整编译/产物与Intl设备矩阵，不因缓存保存成功就宣布解决。
+2. 按[NEXT-AGENT最新快照](handoff/NEXT-AGENT.md)接fork完整宿主、可信内部gateway注册和native/独立UID模型/文件能力。held-cap publisher已完成（41794661470 API26/35各49项过），Kotlin descriptor也已设备验证（41794831403各19项过），本轮补了实际Bot服务会话token一致性。不要重做旧held-cap建议，不手写17个会话端口、不伪造注册、不回退同UID shell。rootfs/正式启动器仍缺；单纯改DSH argv不能算安全集成。
 3. 注册内置 Bot 的可信身份/MCP/会话归属，再验收 Bot 自主创建任务和后台通知。现 MCP 测试传 caller_bot_id 不证明防伪造。
 4. Android 安装策略定稿并由宿主强制后，才逐步开放插件变更；先处理 installed cursor 协议差异。不会因为 UI 测试能启停就开放实际执行。
 5. 总工作区下实现项目管理与 Bot 绑定，遵守路径防护并分开 cwd 和访问许可；补资料库、附件、群聊/记忆/审批等全量 parity 未完成项。
@@ -107,7 +113,7 @@ M3.1 Flash已提交78c8293（仅tooling/docs-links内4文件），本工作区�
 
 - Node24.19.0；Kotlin `/workspace/toolchains/kotlinc/bin/kotlinc` 2.4.0；Flutter `/workspace/toolchains/flutter/bin/`。
 - 当前组件构建：完整JDK `/tmp/mbot-jdk21`、Gradle9.3.1 `/tmp/mbot-gradle/gradle-9.3.1/bin/gradle`、SDK `/tmp/mbot-android-sdk`（platform36/build-tools36.0.0）；此次恢复改用持久缓存 `/home/agent/.gradle`。JDK/Gradle按发布SHA256验证，SDK/NDK/CMake按Google清单摘要恢复；旧/tmp缓存已清空，不能假定离线构建可用。
-- `/tmp/mbot-native-deps`、`/tmp/mbot-gradle-cache`、`/tmp/mbot-mcode-reference`在收尾实查不存在，需按CI固定摘要恢复jar/源码再运行对应测试，勿沿用旧路径判断。`/tmp/mbot-ndk27d`、`/tmp/mbot-node24-mobile.zip`、SQLite归档仍存在，JNI/SQLite准备输出保留；没有adb/设备/KVM，full-ICU源码编译在CI。
+- `/tmp/mbot-native-deps`、`/tmp/mbot-gradle-cache`不存在；`/tmp/mbot-mcode-reference`本轮已恢复为干净钉点checkout，pin测试23项通过。缺失jar仍需按CI固定摘要恢复再运行对应测试，勿沿用旧路径判断。`/tmp/mbot-ndk27d`、`/tmp/mbot-node24-mobile.zip`、SQLite归档仍存在，JNI/SQLite准备输出保留；没有adb/设备/KVM，full-ICU源码编译在CI。
 - Widget测试需 `DSH_TEST_FONT_DIR=/workspace/toolchains/test-fonts`；只暂存明确路径，检查pub/analyze产生的无关修改。
 - 完整命令见T-RuntimeBroker；组件APK编译不是完整Flutter Bot APK。
 

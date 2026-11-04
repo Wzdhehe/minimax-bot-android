@@ -1,7 +1,52 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 下一位 Agent 的详细交接（2026-11-04 UTC）
 
-本文件是用户要求额度恢复前交接的收尾快照。配合[总入口](../HANDOFF.md)、[架构](../architecture.md)、[安全边界](../sandbox.md)、[文件能力](T-RuntimeFiles.md)和[模型 broker](T-RuntimeBroker.md)阅读。后面的新提交、远程 CI 状态仍须实查；本文件不把历史观察自动提升成当前结论。
+本文件包含多轮接力记录；以最前面的「最新接手快照」为当前状态，编号章节保留历史和详细背景。本文件也是用户要求的详细开发交接。配合[总入口](../HANDOFF.md)、[架构](../architecture.md)、[安全边界](../sandbox.md)、[文件能力](T-RuntimeFiles.md)和[模型 broker](T-RuntimeBroker.md)阅读。后面的新提交、远程 CI 状态仍须实查；本文件不把历史观察自动提升成当前结论。
+
+## 最新接手快照：Linux 续写与启动鉴权修复（2026-11-04 UTC）
+
+本轮从远端 **7967b9d** 快进接手，仍在 `feat/t-plugins`。本节覆盖后文第6/7/8/11节中已过时的「下一步」「正在编译」「源码不存在」描述；Windows环境记录只描述上轮主机。
+
+### 本阶段实际修改
+
+- `runtime/minimax-bot-host/service.mjs` 的 `startBotService` 接受可信启动器的 `authToken`。此前服务总是另生成 token，与 Kotlin descriptor 的 token 不同，照旧交接顺序启动会导致 Flutter 鉴权失败。现在显式 token 先校验后操作文件/监听，未提供时仍随机生成；错误只返回固定文本，不回显输入。
+- Node descriptor 的服务/broker token 长度与 Kotlin 对齐为32–64位小写十六进制；broker 端口拒绝0、超过65535和非规范前导零。没有改变密钥保存、模型请求或 Android 启动代码。
+- 使用**实际内置 Bot HTTP 服务**测试 descriptor token 鉴权、broker token 不可冒用 Bot token、重启后旧凭据拒绝，以及错误 token 不产生目录。不是只比较两个对象。
+- host CI 的常规契约测试加入 `runtime-descriptor.test.mjs`。同一文件原先虽由模型检查脚本覆盖，但未纳入此 job。
+
+### 本轮实跑证据与边界
+
+```text
+node --test dsh-go/runtime/minimax-bot-host/{agent-port,service,runtime-descriptor,workspace,provider-broker,usage-quota,schedule}.test.mjs
+ℹ tests 28
+ℹ suites 0
+ℹ pass 28
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+```
+
+`/tmp/mbot-actionlint -shellcheck= -pyflakes= .github/workflows/bot-host.yml` 与 `git diff --check` 退出0。Linux 上 pin 检查器原有23项也已实跑全过；Windows的21/23结果仍保留，不把平台差异隐藏为本轮失败。上述鉴权验证是**宿主测试，不是完整 Android 启动或真实 provider 证据**。本阶段未修改 native，未重新构建/运行 Android；真机、ARM64、完整 APK均**未验证**。
+
+API另实查：held-cap run41794661470 对应 **dccb0fc3b33aa8665fdaf14776b608ea606db42b**（原表曾误写d558d1d），两个API job success；descriptor run41794831403 对应0f88f0f，两API success；host41794831396 success。这些是历史提交的CI，不能用来代替本阶段待触发的CI。
+
+### 继续开发的准确顺序
+
+1. **fork 真实宿主装配/可信 Bot caller**。仍用钉住的 `createWebuiRuntimeHost`，不重写17个会话端口。注意公开的 `host.application.miniAppAgent` 只暴露 run/models/reply/answer 等应用能力，**不暴露 registerArena**。钉点的 `process-local-application.test.ts` 还特意断言这一点。不能照旧第11节文字去调用不存在的方法或伪造 caller。真实注册发生在 `service/miniapp/process/host-connector/host-connector-agent.ts` 的 `createHostAgentSession().activate()`，依赖内部真实 gateway、宿主进程代数和 allowlist；release负责撤销。下一步须找到/实现同一真实gateway的可信装配接缝，复用上游生命周期，然后跑原宿主/原Bot的拒绝伪造、停用和重启测试。
+2. **实际 runtime bundle / 依赖与隔离 I/O**。整树blob pin只解决「允许哪些上游字节打包」，不证明打包成功或Android能跑。fork的上游工作区解析器位于 `scripts/lib/workspace-sources-plugin.mjs`，包清单由 `release/extraction.json` 提供。当前rootfs仍只装DSH；mcode/Bot/host未装。尤其不能直接修改DSH的PRoot启动argv执行完整Agent：那仍是App同UID，违反安全边界。native model/files/SQLite能力必须接到真实运行时，再装正式独立UID启动器。
+3. **native模型映射与会话生命周期**。descriptor中的loopback broker会话不等于独立UID可直连网络。既有API26/35证据已表明隔离进程不能这样使用TCP；必须沿既有JNI→Binder→Main→模型FD路径装配。Key只在native，不能将fork默认BYOK配置文件作为捷径。Bot HTTP token和native模型会话token也不能混用。
+4. 原文件模块恢复（FileHandle/大日志/SQLite完整lease）、可信Bot MCP与定时任务归属、插件宿主安装政策完成后，才开放市场变更。UI/任务/插件页已有代码先复用。项目绑定/资料库/附件/群聊/审批等仍见parity，不能因为已有上游源码就勾选完成。
+5. 正式APK、真实provider、ARM64/物理设备与手机/平板布局、后台/通知/profile验收。没有设备写未验证。
+
+Mini App容器仍不做；`createWebuiRuntimeHost` 的 `miniAppSurface` 可省略，钉点已按 `OPEN_UNAVAILABLE` 处理。无需为了绕过此项伪造成功的presenter，也不新增Flutter Mini App视图。此结论取自factory选项与实际源码，不是新产品决定。
+
+### ICU 与本轮环境
+
+- full-ICU producer **41757171111 attempt1 已失败**：progress artifact13302870059，名为 `node-full-icu-progress-budget_exhausted-cache-success`；cache保存success，但没有完整库、verify跳过。本轮已执行 `gh run rerun 41757171111 --failed`，**attempt2 API实查in_progress**，仍不能称full-ICU成功。后续检查cache恢复与最终产物，再决定验收；未改producer的五个权威输入。
+- 已恢复干净 `/tmp/mbot-mcode-reference`，HEAD97818b2890b4acae1c6bd1200a226ff506680628；不是后文所写「当前不存在」。Node24.19.0、Python3.12.14；JDK/Gradle/SDK/NDK/Flutter仍按第8节Linux路径实查。没有本地adb/KVM/物理设备。
+- `/tmp/mbot-native-deps` 仍不存在，旧JUnit依赖命令不能假装实跑。只删除本轮工具安装后可再下载的归档释放空间，保留SDK/JDK/NDK安装；磁盘仍有限，先df再下载。
+- 继承GH_TOKEN无效，保存的gh登录可用：`env -u GH_TOKEN -u GITHUB_TOKEN gh ...`；不输出凭据。
 
 ## 1. 先认清产品状态
 
@@ -61,7 +106,7 @@ env -u GH_TOKEN -u GITHUB_TOKEN git ls-remote --heads origin main dev/integratio
 | 文档CI | 41784617417，860563e | Documentation relative links success；这是文档检查，不构建APK |
 | held-cap publisher 首轮 | 41790384428，7ebc42f | **failure**：artifact `t49-f1-e0-s0-closed_data-lh83`；新测试先关了 publisher 又用已关的 publisher，实现正确、测试时序写错 |
 | held-cap publisher 修一次 | 41792577317，7348fb6 | **failure**：artifact `t49-f1-e0-s0-assertion-lh86`；第二个 publisher 对已存在文件用 publishIfAbsent，正确返回 ALREADY_EXISTS，断言写错 |
-| held-cap publisher 通过 | 41794661470，d558d1d | API26 artifact 13305711005、API35 13305117892，各 `t49-f0-e0-s0-passed-l0`；44 原有 + 5 新增全过 |
+| held-cap publisher 通过 | 41794661470，dccb0fc | API26 artifact 13305711005、API35 13305117892，各 `t49-f0-e0-s0-passed-l0`；44 原有 + 5 新增全过 |
 | descriptor 设备测试 | 41794831403，0f88f0f | API26 artifact 13305641051、API35 13305471825，各 19 项 0 失败；含新增 3 项 RuntimeDescriptorTest |
 
 API26首次失败定位transport夹具的replace（lc89），只取得有限artifact/check信息，未取得完整XML堆栈。源码显示原fake立即回false/异常、不消费pipe，六次快速binary调用可先撞到4-writer的**transact前**UNAVAILABLE；修正夹具按真实wire消费声明长度/EOF并计数，不sleep/不重试。后续44项通过与首次失败都保留，不把第一次失败涂成通过，也不把推断写成已读堆栈。
@@ -106,7 +151,7 @@ Node验证代码在`dsh-go/tooling/android-node-probe/`：`src/main/cpp/node_pro
 
 ## 6. 下一项从哪里开始（按可验证小阶段推进）
 
-先read-only查full-ICU run，再继续文件能力。不要先重写Nyral/agent-table，也不要重复重建所有UI。
+本节为旧阶段顺序。held-cap factory现已落地并有49项设备证据；请先按文首最新快照继续，不要重做本节A。不要先重写Nyral/agent-table，也不要重复重建所有UI。
 
 ### A. Main持有的child cap接到真实文件能力
 
@@ -133,7 +178,7 @@ Node验证代码在`dsh-go/tooling/android-node-probe/`：`src/main/cpp/node_pro
 
 插件市场变更还关闭，安装策略与Android原生依赖须由宿主强制；下载GitHub包不等于可安全安装执行。完整APK、ARM64/真机、权限/后台/手机竖屏/平板横屏、profile性能仍需要独立验收。
 
-## 7. full-ICU正在进行，不要中断或误报成功
+## 7. full-ICU首轮观察（历史；最新attempt见文首）
 
 截至本轮收尾实查：**0bf4043/run41757171111**仍in_progress；compile step从2026-11-04 01:55:50 UTC开始。预检/cache-restore step为success，但不证明cache命中或保存。GNU timeout编译预算300分钟，外层step330/job360分钟；约06:55 UTC后可能进入超时收尾，实际以Actions为准。
 
@@ -290,7 +335,7 @@ Execution failed for task ':android_file_picker:compileDebugKotlin'.
 另一处必须知道：app 的 Android 构建会引入 `dsh-go/runtime/out/<abi>/assets` 与 `jniLibs`（Linux rootfs + proot + Node + DSH 引擎），它们由 `runtime/build-runtime.sh` 产出，而**该脚本是 Linux 宿主专用**（bash + curl + xz + python3 + Ubuntu base 解包）。Windows 上编出来的 APK 因此**没有引擎**：能装、能启动、能看界面，但装不了 runtime。真正的"可用"还要等 rootfs 里有 mcode fork + 官方 Bot + host adapter（第 11 节那三处缺口）。
 
 
-## 可直接给下一位的简短提示
+## 旧Windows接手提示（历史；当前按文首快照）
 
 ```text
 接手Wzdhehe/minimax-bot-android现有feat/t-plugins，不另起分支。
