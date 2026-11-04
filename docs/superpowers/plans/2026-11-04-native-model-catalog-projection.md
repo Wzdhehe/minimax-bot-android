@@ -26,6 +26,7 @@
 7. **额外提供 `setSessionModel`**：用官方带 `sessionId` 的 `select` 写会话模型选择，实现「切模型在下一轮生效、在飞轮继续用旧模型」，并对不在 native 目录内的目标明确拒绝。
 8. **CI 清单新增三份测试文件**（`bot-host.yml` 的 `host-contracts` 步骤）：`model-catalog-projection` / `native-model-binding` / `native-model-runtime`。
 9. **本机未能执行的验收**：真实 fork factory 与真实 host probe 只能在 CI（Linux + esbuild + better-sqlite3 原生件）跑，本机不得声称通过；`runtime-descriptor` 原有 7 项在本机因 Windows 权限位/符号链接限制失败，已在改动前 baseline 复跑确认失败项完全相同。
+10. **CI 回归与修复（如实记录）**：descriptor 加 `catalog` 字段后（commit `b0974c3` 起），`native-model-broker` 的 `native-boundary` job 连续三次 failure（run 41839610040 / 41839956006 / 41840362270）。真因不是产品逻辑，而是既有 `native-model-broker.test.mjs` 断言 descriptor 的**精确键集合**，新增字段使其失配。修复在 commit `9e32d04`：更新该断言并**加强**为同时断言目录不含 `apiKey`/`baseUrl`。最终验收：commit `9e32d04` 的 host 41842253311 / native 41842253222 / scope 41842253245 全部 success，native-boundary Node 段 52/52；真实 fork 验收 run 41840651106（commit 044600c）整体 success。
 
 ## Global Constraints
 

@@ -120,7 +120,11 @@ PASS: pinned runtime, 40 direct dependency versions, resources and Linux-only SQ
 
 真实 fork factory（Linux，只能 CI 跑）：`runtime-host-session-cases.mjs` 新增一例，走**真实钉点 gateway/facade**，用假 provider 门面断言投影调用序列、`providerBinding`、每轮绑定与切模型拒绝。
 
-**远程验收：run 41840651106（commit 044600c）整体 success。**
+**远程验收（最终）：commit 9e32d04 的 host 41842253311、native 41842253222、scope 41842253245 全部 success；docs 41842002392（a62ef0b）success。**
+
+过程如实记录：descriptor 携带目录后（commit b0974c3 起），native-model-broker 的 native-boundary job 连续三次 **failure**（run 41839610040 / 41839956006 / 41840362270），真因是 `native-model-broker.test.mjs` 里断言 descriptor **精确键集合**为 `['broker','entryPath','pinCommit','port','token']`，新增的 `catalog` 字段使其失配——不是产品逻辑回归，但确实打断了 CI。修复在 commit `9e32d04`：该断言改为包含 `catalog`，并**加强**为同时断言目录只含 provider/apiFormat/models、且序列化后的 descriptor 不含 `apiKey`、`baseUrl`。修后 native-boundary 的 Node 段 **tests 52 / pass 52 / fail 0 / skipped 0**，其中 `native-held key never reaches runtime descriptor, environment, logs or Agent-readable files` 为 `ok 31`；该 job 的 `provider-sdk-streams` 与 `android-component-compilation` 也均 success。
+
+**真实 fork factory 验收：run 41840651106（commit 044600c）整体 success**（该提交未触及 `dsh-go/runtime/minimax-bot-host/**`，故未触发 native-broker workflow）。
 
 - `host-contracts` job：success。三份新测试已进 CI 清单（`model-catalog-projection` / `native-model-binding` / `native-model-runtime`）。
 - `Pin and smoke the upstream runtime fork` job：success。

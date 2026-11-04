@@ -131,7 +131,7 @@ env -u GH_TOKEN -u GITHUB_TOKEN gh run view 41826964500 --json status,conclusion
 
 **上项已完成**（a2c17d5 / 41831847047，见本节文首更新）。
 
-**本项已完成（2026-11-04，run 41840651106 / commit 044600c）**：native 非密钥目录投影与每轮受控绑定已落地，详见第5节与[T-RuntimeHost](T-RuntimeHost.md)。**下一项**：按[T-RuntimeBroker](T-RuntimeBroker.md)文首的契约把 native 侧接线补齐——descriptor 写入**剥离后**的非密钥目录，并把 native broker binding 交给 guest runtime 进程；之后官方连通性测试才会真跑（此前 `connectivity` 为 `not_run`），再往后是每 Bot 可信 MCP caller 绑定与真实 provider 验收。仍不发明跨端协议，不把真实Key写进BYOK yaml/env/descriptor/log，未接broker时明确拒绝模型执行，不加假回答。
+**本项已完成（2026-11-04，最终提交 9e32d04；真实 fork 验收 run 41840651106 / commit 044600c）**：native 非密钥目录投影与每轮受控绑定已落地，详见第5节与[T-RuntimeHost](T-RuntimeHost.md)。**下一项**：按[T-RuntimeBroker](T-RuntimeBroker.md)文首的契约把 native 侧接线补齐——descriptor 写入**剥离后**的非密钥目录，并把 native broker binding 交给 guest runtime 进程；之后官方连通性测试才会真跑（此前 `connectivity` 为 `not_run`），再往后是每 Bot 可信 MCP caller 绑定与真实 provider 验收。仍不发明跨端协议，不把真实Key写进BYOK yaml/env/descriptor/log，未接broker时明确拒绝模型执行，不加假回答。
 
 收尾只读取得source/candidate日志和API状态；source XML下载遇HTTP403，未本地解析其JUnit明细，故不编造source的f/e/s计数（49是日志启动数）。candidate的t49/f0/e0/s0来自现有结果artifact名称；后续组合验收还须核实际JS分支，而不只计数。
 
