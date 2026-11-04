@@ -18,7 +18,7 @@
 
 reader改用O_NOFOLLOW打开文件，对**同一个FD**做fstat（普通文件、当前UID、owner-only）与JSON读取，避免检查后按路径重新打开。测试临时目录也统一清理，不留旧descriptor fixture。
 
-**准确边界**：Node实现仍要求私有目录及其祖先由可信宿主持有，不是openat/held-dirfd能力，不能防同UID恶意代码并发替换目录。Android Kotlin writer本轮未改，其路径型API仍需要在正式Main-held目录/FD启动链中装配；不能因Node helper修复就声称整条native/guest交接已隔离。模型Key仍只在native，loopback descriptor不是隔离UID的网络许可。
+**准确边界**：Node实现仍要求私有目录及其祖先由可信宿主持有，不是openat/held-dirfd能力，不能防同UID恶意代码并发替换目录。Android Kotlin writer（`app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/RuntimeDescriptor.kt`，路径以dsh-go为根）本轮未改，其路径型API仍需要在正式Main-held目录/FD启动链中装配；不能因Node helper修复就声称整条native/guest交接已隔离。**19项broker设备矩阵中的descriptor用例是在Main UID读回文件，不是独立UID guest读回**；测试名里的guest不能当成跨UID证据。模型Key仍只在native，loopback descriptor不是隔离UID的网络许可。
 
 修复前叶软链/父软链/额外字段三项失败（8/11），extra环境用例也单独复现失败（11/12）。本阶段最终完整host/native结果与新CI见下一条验证记录；此前5873c98的成功CI只证明那个阶段，不代替本次修复。
 
@@ -38,7 +38,20 @@ OK (32 tests)
 # skipped 0
 ```
 
-descriptor独立12项包含四项新增回归，已纳入上述两套检查。文档扫描31份0问题，git diff --check退出0。本阶段未改native或重新运行Android设备；Key边界仍通过真实native/JVM fixture注入与子进程观察验收，不能称真实provider或真机验收。新push后的CI待实查。
+descriptor独立12项包含四项新增回归，已纳入上述两套检查。文档扫描31份0问题，git diff --check退出0。本阶段未改native或重新运行Android设备；Key边界仍通过真实native/JVM fixture注入与子进程观察验收，不能称真实provider或真机验收。修复后的新CI现已实查全success，见下表。
+
+### 24bdeca安全复核阶段的远程CI（最新代码证据）
+
+代码SHA：`24bdeca8b19e9f702a29d2f42644f473582bdf1a`，远端ref已确认；后续纯文档收尾会再有commit。未动main/dev/integration，未force push/PR/APK发布。
+
+| CI | 结果与实查范围 |
+|---|---|
+| [host 41814570291](https://github.com/Wzdhehe/minimax-bot-android/actions/runs/41814570291) | success；已取日志：常规宿主32项、pin23项、完整宿主构建图3项全过，0 skipped；workspace/Dart/契约smoke jobs成功 |
+| [native 41814570242](https://github.com/Wzdhehe/minimax-bot-android/actions/runs/41814570242) | success；已取日志：JUnit32/Node50全过、0 skipped；native-boundary、provider-sdk-streams、android-component-compilation三个job均成功，组件构建2m58s；本轮无新的设备仪器运行 |
+| [docs 41814570339](https://github.com/Wzdhehe/minimax-bot-android/actions/runs/41814570339) | success；对应代码commit的文档相对链接检查 |
+| [scope 41814570376](https://github.com/Wzdhehe/minimax-bot-android/actions/runs/41814570376) | success；不代表完整Android功能已实现 |
+
+最后的已确认远端保护分支仍为main `e32fbd7383cd9bdc268aa7df2ec9150e8bc4e48e`、dev/integration `891aefa71c5aea952ec8aa2502c2ada854854042`。正式Bot APK、真实provider、ARM64/物理真机和profile性能仍**未验证**。下一项按本文件「继续开发的准确顺序」，不能再重复已完成的held-cap factory或仅重做打包。
 
 ### 已实查的5873c98远程CI（本次路径修复前）
 
@@ -400,21 +413,21 @@ Execution failed for task ':android_file_picker:compileDebugKotlin'.
 另一处必须知道：app 的 Android 构建会引入 `dsh-go/runtime/out/<abi>/assets` 与 `jniLibs`（Linux rootfs + proot + Node + DSH 引擎），它们由 `runtime/build-runtime.sh` 产出，而**该脚本是 Linux 宿主专用**（bash + curl + xz + python3 + Ubuntu base 解包）。Windows 上编出来的 APK 因此**没有引擎**：能装、能启动、能看界面，但装不了 runtime。真正的"可用"还要等 rootfs 里有 mcode fork + 官方 Bot + host adapter（第 11 节那三处缺口）。
 
 
-## 旧Windows接手提示（历史；当前按文首快照）
+## 可直接给下一位的当前接手提示
 
 ```text
-接手Wzdhehe/minimax-bot-android现有feat/t-plugins，不另起分支。
-先读AGENTS.md、docs/HANDOFF.md、docs/handoff/NEXT-AGENT.md与T-RuntimeFiles/T-RuntimeBroker。
-产品是Bot App：mbot业务在前，mcode runtime做底座（插件市场兼容靠mcode）。
-runtime接线三处缺口（NEXT-AGENT第11节）：descriptor的Kotlin半边本轮已补（设备已验）；
-rootfs仍没装mcode/Bot/host、正式启动器仍缺；不能直接用同UID的DSH/PRoot运行完整Agent。
-本轮5873c98已实际打包完整宿主图（2124上游输入），但仅partial build，不是Android runtime。
-架构已定：guest入口用fork自己的createWebuiRuntimeHost起runtime宿主（它才有插件市场目录），
-内置Bot以宿主注册的caller身份接进（身份不来自Bot请求）。
-pin已扩展为按整树blob校验（b0d570c），fork runtime现在可以进bundle。
-APK现状：flutter build apk --debug 在Windows上13分钟后挂在Kotlin增量缓存.tab（NEXT-AGENT第13节），
-可用 kotlin.incremental=false 重试；rootfs缺失，编出来的APK还没有引擎。
-目录FD留Main；不加同UID任意shell、宽存储、明文Key、MiniApp容器或远控。
-阶段验证后更新交接并及时push；不动main/dev、不force、不PR、不发布APK。
-当前Linux环境按文首和第8节实查；第12/13节仅为历史Windows记录。没有真机写未验证。
+接手Wzdhehe/minimax-bot-android最新origin/feat/t-plugins，不另起分支。
+本轮代码阶段为289f88f、5873c98、24bdeca，最终文档收尾以远端HEAD为准。
+先读AGENTS.md、docs/HANDOFF.md、docs/handoff/NEXT-AGENT.md文首与T-RuntimeBroker/T-RuntimeFiles。
+已补descriptor/Bot HTTP同会话鉴权；完整fork宿主图已实际编译2124上游输入，但只是partial bundle。
+已修Node descriptor叶/父软链、额外字段落盘、extra环境白名单，修前失败用例与修后证据均记录。
+本地宿主32、JUnit32、native/Node50项全过；24bdeca的host/native/docs/scope CI现也全success。
+下一主线：fork真实内部gateway的可信caller注册/撤销、native模型/文件FD装配、正式独立UID启动器。
+host.application.miniAppAgent没有registerArena，不能伪造caller或重写17个会话端口。
+Kotlin descriptor设备测试只是Main UID读回；600私有文件/loopback token不证明隔离guest可用。
+目录FD留Main；SQLite close不撤销已发FD；不加同UID任意shell、宽存储、明文Key、远控或MiniApp UI。
+full-ICU 41757171111 attempt1预算失败但缓存保存成功，本轮已重跑attempt2，勿重复启动并行producer。
+当前是Linux cloud；工具/干净fork/jar已恢复，Windows D盘和APK .tab失败只是历史记录。
+默认入口仍DSH，无完整Bot APK/真实provider/ARM64或物理真机证据；未验证就写未验证。
+及时更新handoff并push；不动main/dev，不force，不PR，不发布APK。
 ```

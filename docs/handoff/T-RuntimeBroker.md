@@ -4,7 +4,7 @@
 
 既有实现有四个可复现缺口：写穿叶软链接、经父目录软链读/写workspace/private根外、writer把额外字段（如apiKey）原样JSON序列化、extra环境绕过allowlist。分别取得修复前失败；现改为私有stage/O_EXCL/O_NOFOLLOW/fsync+rename、真实父路径政策校验、同一FD fstat/owner/权限与读取、固定字段投影，extra与baseEnv用同一白名单。回归不依赖真实Key，不修改vendor快照或正式Android launcher。
 
-这仍是可信宿主私有目录的Node helper，**不是openat能力或并发同UID攻击防护**。Kotlin路径型writer本轮未改；正式Main-held目录、独立UID与模型/文件FD启动链仍须装配。本地最新宿主32项、JUnit32项、native/Node50项全通过且0 skipped（其中descriptor12项），文档31份0问题。新CI以[NEXT-AGENT](NEXT-AGENT.md)文首为准，不挪用旧run。
+这仍是可信宿主私有目录的Node helper，**不是openat能力或并发同UID攻击防护**。Kotlin路径型writer本轮未改；正式Main-held目录、独立UID与模型/文件FD启动链仍须装配。本地最新宿主32项、JUnit32项、native/Node50项全通过且0 skipped（其中descriptor12项），文档31份0问题。24bdeca新CI已实查host41814570291、native41814570242、docs41814570339、scope41814570376均success；host日志32项/0 skipped，native的boundary、SDK/pi-ai与Android组件job均过。本阶段没有新设备仪器运行，详见[NEXT-AGENT](NEXT-AGENT.md)文首。
 
 前阶段5873c98已远程实查host41813024238（28+23+完整图3）、native41813024224（JUnit32/Node46、SDK/pi-ai及Android组件2m29s）、docs41813024207、scope41813024280全部success。289f88f旧schema断言失败保留为历史。
 
