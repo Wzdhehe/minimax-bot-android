@@ -98,3 +98,8 @@ jobs:
         env:
           WEBUI_SOURCE: ${{ github.workspace }}/upstream-runtime
         run: node --test runtime/minimax-bot-host/runtime-bundle.test.mjs
+      - name: Verify trusted Bot caller lifecycle against the pinned gateway
+        working-directory: dsh-go
+        env:
+          WEBUI_SOURCE: ${{ github.workspace }}/upstream-runtime
+        run: node --test runtime/minimax-bot-host/runtime-host-session.test.mjs

@@ -4,6 +4,12 @@
 
 只在 **feat/t-plugins** 连续开发、阶段验证后及时push并更新文档。用户授权持续推进；不新开分支、不动main/dev/integration、不force push、不建PR、不发布APK。
 
+## 最新续写：内置服务身份与真实gateway接缝
+
+已新增宿主装配器：在钉点RuntimeServices创建gateway的位置接同一个原gateway，构造完成后注册固定内置服务ID和随机代次，随后复用原facade/agent-port；不造第二个gateway，不手写session端口，不接受请求指定身份。close/abort撤销arena、取消排队/在途请求并阻止旧port复活，并发close等待同一清理。**真实gateway/facade的8项生命周期用例已本地通过**，session/model执行为桩，完整图构建仍单独验收；详见[T-RuntimeHost](handoff/T-RuntimeHost.md)。
+
+真实完整factory的临时Linux启动探测已越过SQLite初始化；缺内置Agent资源的问题已用原copy helper复现/确认，临时补资源后的旧control bundle已启动/关闭成功。正把资源纳入pin构建并验新Bot包装入口。尚未证明完整runtime/Bot产品启动，也未修改正式Android启动器/Key路径。每Bot MCP caller绑定仍缺，不能将内置服务arena注册等同自主任务身份已验。
+
 ## 本轮续写：启动会话鉴权（2026-11-04）
 
 从远端7967b9d接手。修复实际 Bot listener 忽略 descriptor token 而另生成凭据的问题；可信启动器可显式传 `authToken`，输入错误在文件/监听副作用前拒绝。Node descriptor 端口/token校验与Kotlin一致，host CI加入descriptor测试。**宿主28项通过**（含实际HTTP鉴权、错误角色token拒绝、重启旧token拒绝）；未修改正式Android启动器，完整APK/真机/真实provider仍**未验证**。详细代码定位、测试命令、剩余装配缺口与环境见[NEXT-AGENT最新快照](handoff/NEXT-AGENT.md)。

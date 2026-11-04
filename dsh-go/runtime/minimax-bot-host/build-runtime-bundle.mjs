@@ -11,6 +11,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkUpstreamRuntimePin } from './upstream-runtime-pin-check.mjs';
 import { UPSTREAM_RUNTIME_PIN } from './upstream-runtime-pin.mjs';
+import { runtimeBuildWiring } from './runtime-build-plugin.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const options = {};
@@ -49,14 +50,15 @@ const packages = new Map(extraction.packageRoots.map((directory) => {
   return [manifest.name, { directory, manifest }];
 }));
 const artifactName = 'runtime-host.partial.mjs';
+const wiring = runtimeBuildWiring(source);
 const built = await esbuild.build({
   absWorkingDir: source,
   entryPoints: [join(here, 'runtime-bundle-entry.mjs')],
   outfile: join(outDir, artifactName),
   bundle: true, platform: 'node', format: 'esm', target: 'node24',
   packages: 'external', write: false, metafile: true,
-  alias: { '@mcode-runtime/assembly': join(source, 'packages/webui/src/runtime/assembly.ts') },
-  plugins: [createWorkspaceSourcesPlugin(packages, source)],
+  alias: wiring.alias,
+  plugins: [wiring.plugin, createWorkspaceSourcesPlugin(packages, source)],
   logLevel: 'silent',
 });
 // Relative metafile paths are relative to absWorkingDir, not the invoker's cwd.
@@ -79,6 +81,9 @@ try {
   ]) {
     if (!upstreamInputs.includes(required)) throw new Error(`Real runtime input missing: ${required}`);
   }
+  if (!Object.hasOwn(metafile.inputs, join(here, 'runtime-miniapp-index.mjs'))) {
+    throw new Error('Pinned RuntimeServices no longer reaches the trusted Bot gateway seam');
+  }
   const imports = [...new Set(Object.values(metafile.outputs).flatMap((output) =>
     output.imports.filter((entry) => entry.external).map((entry) => entry.path)))].sort();
   const workspaceNames = new Set(packages.keys());
@@ -95,6 +100,7 @@ try {
     status: 'build-graph-only', androidReady: false,
     upstream: { repository: UPSTREAM_RUNTIME_PIN.repository, commit: UPSTREAM_RUNTIME_PIN.commit, tree: UPSTREAM_RUNTIME_PIN.tree },
     esbuildVersion: esbuild.version,
+    hostAdaptations: wiring.adaptations,
     bundlerWarnings: built.warnings.map(({ id, text }) => ({ id, text })),
     artifact: { path: artifactName, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') },
     upstreamInputs,
@@ -106,7 +112,7 @@ try {
     limitations: [
       'Third-party packages are external and not installed, locked or executed by this build.',
       'Computed loads, runtime assets and import.meta.url-relative resources need separate packaging review.',
-      'Trusted Bot caller registration and native model/files/SQLite isolation adapters are not assembled.',
+      'Bot caller registration is wired at the pinned gateway constructor; full runtime boot and Android native model/files/SQLite adapters still need validation.',
       'Do not launch this bundle through the same-UID DSH/PRoot process.',
     ],
   };

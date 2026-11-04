@@ -7,6 +7,14 @@
 
 本轮从远端 **7967b9d** 快进接手，仍在 `feat/t-plugins`。本节覆盖后文第6/7/8/11节中已过时的「下一步」「正在编译」「源码不存在」描述；Windows环境记录只描述上轮主机。
 
+### 最新续写：真实gateway的内置服务身份
+
+本轮从45c84e8续写，新增[T-RuntimeHost](T-RuntimeHost.md)装配器与测试。在`RuntimeServices→./service/miniapp/index.js`这一个精确构建接缝包装原构造器，AsyncLocalStorage只捕获同dataDir/同次启动的唯一原gateway；真实RuntimeServices仍绑定全部原session ports。宿主返回后注册固定`builtin:minimax-bot`与随机代次，复用原facade/agent-port；close/abort撤销并拒绝旧port，并发close等待同一Promise。构建manifest明列hostAdaptations，不修改源checkout或pin。
+
+真实gateway/facade的8项生命周期用例本地全过，明确stub模型/session；不是完整runtime或Android证明。完整图新增adapter edge/manifest断言后3项全过（0 skipped，约80秒），新CI待push后实查。临时Linux真实factory探测已确认40个直接依赖可安装（禁lifecycle脚本）、验证仅宿主的SQLite预编译件后越过迁移，缺原Agent assets的问题随后用原copy helper临时补齐，旧control bundle已实跑HOST_READY/HOST_CLOSED并退出0；新Bot包装入口及资源pin构建仍在继续。临时npm tree不当作正式依赖lock，更不打进Android。
+
+本阶段未改native、正式DSH入口或Key桥；独立UID下模型/文件适配、每Bot MCP caller/自主任务和正式启动器仍缺。后面旧「没有可信gateway接缝」是此前状态；不要重做手工17端口或伪造注册。
+
 ### 最新：回查旧实现，修复descriptor文件与环境边界
 
 用户要求接手时复核既有质量；本轮没有只沿用「已完成」标签。对Node `runtime-descriptor.mjs` 的读写/环境交接发现并分别在修复前复现四个用例失败：

@@ -159,6 +159,8 @@ ESBUILD_MODULE=/path/to/esbuild/lib/main.js \
 
 输出`runtime-host.partial.mjs`、`metafile.json`、`manifest.json`；manifest包含bundle摘要、进入bundle的上游文件、Node内建依赖和external包specifiers。`status=build-graph-only`、`androidReady=false`。**这不是完整第三方依赖lock**：例如SQLite的`createRequire(variable)`加载better-sqlite3，未必出现在esbuild的external清单；computed import、资源路径和原生依赖仍需单独审计/打包。源码里的文件/child_process/网络调用仍存在，禁止通过DSH同UID/PRoot运行此产物来绕过隔离适配。正式Android启动器、可信caller、native模型与文件映射尚未装配。
 
+新增内置Bot宿主装配通过一个精确的esbuild import解析接缝接原gateway构造器，仍让原RuntimeServices绑定真实session ports。manifest的`hostAdaptations`明列原importer/specifier和本地adapter；不是改上游文件字节，也不以文件pin声称运行行为毫无适配。真实gateway的8项生命周期用例见[T-RuntimeHost](handoff/T-RuntimeHost.md)。完整factory资源/依赖启动验收与Android隔离装配仍需分别完成。
+
 ## 边界与未验证项
 
 - 契约smoke只覆盖**宿主契约层**；新增完整宿主构建图只覆盖编译和语法，**不证明**完整 runtime 可用、不证明插件市场可用、不证明 Android 可运行。
