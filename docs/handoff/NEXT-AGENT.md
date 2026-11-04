@@ -7,9 +7,49 @@
 
 本轮从远端 **7967b9d** 快进接手，仍在 `feat/t-plugins`。本节覆盖后文第6/7/8/11节中已过时的「下一步」「正在编译」「源码不存在」描述；Windows环境记录只描述上轮主机。
 
+### 最新：回查旧实现，修复descriptor文件与环境边界
+
+用户要求接手时复核既有质量；本轮没有只沿用「已完成」标签。对Node `runtime-descriptor.mjs` 的读写/环境交接发现并分别在修复前复现四个用例失败：
+
+1. 已存在的descriptor文件若是指向workspace文件的软链接，旧writeFile会写穿并覆盖目标；现使用私有随机stage目录、O_EXCL/O_NOFOLLOW创建文件、写入/fsync后rename替换链接本身，目标项目文件保持原样。
+2. 父目录软链接可把descriptor读/写重定向到workspace或private根外，旧检查仅比路径字符串；现对已有父路径解析真实位置，再核allowedRoots和workspace排除，新目录也先核对真实已有祖先。
+3. writer直接JSON.stringify调用方传入的对象，即使正常descriptor builder会过滤字段，直接调用writer仍可把额外apiKey字段写进文件；现先经createRuntimeDescriptor校验/白名单投影，序列化得到的固定字段对象。
+4. buildRuntimeEnv对baseEnv用allowlist，对extra却只按敏感变量名黑名单过滤；extra.CONFIG_JSON/NODE_EXTRA等普通变量名可携带凭据内容。现extra也只能使用同一allowlist里的名字，保留受允许变量的覆盖能力。
+
+reader改用O_NOFOLLOW打开文件，对**同一个FD**做fstat（普通文件、当前UID、owner-only）与JSON读取，避免检查后按路径重新打开。测试临时目录也统一清理，不留旧descriptor fixture。
+
+**准确边界**：Node实现仍要求私有目录及其祖先由可信宿主持有，不是openat/held-dirfd能力，不能防同UID恶意代码并发替换目录。Android Kotlin writer本轮未改，其路径型API仍需要在正式Main-held目录/FD启动链中装配；不能因Node helper修复就声称整条native/guest交接已隔离。模型Key仍只在native，loopback descriptor不是隔离UID的网络许可。
+
+修复前叶软链/父软链/额外字段三项失败（8/11），extra环境用例也单独复现失败（11/12）。本阶段最终完整host/native结果与新CI见下一条验证记录；此前5873c98的成功CI只证明那个阶段，不代替本次修复。
+
+本阶段本地最终实跑（Kotlin2.4/JDK21、Node24.19.0，均退出0）：
+
+```text
+宿主 agent/service/runtime-descriptor/workspace/provider/usage/schedule：
+ℹ tests 32
+ℹ pass 32
+ℹ fail 0
+ℹ skipped 0
+完整 test-native-model-broker.sh：
+OK (32 tests)
+# tests 50
+# pass 50
+# fail 0
+# skipped 0
+```
+
+descriptor独立12项包含四项新增回归，已纳入上述两套检查。文档扫描31份0问题，git diff --check退出0。本阶段未改native或重新运行Android设备；Key边界仍通过真实native/JVM fixture注入与子进程观察验收，不能称真实provider或真机验收。新push后的CI待实查。
+
+### 已实查的5873c98远程CI（本次路径修复前）
+
+- host **41813024238 success**：常规宿主28、pin23、完整宿主构建图3项全过，0 skipped；已取得日志，完整图测试约36.6秒。旧gateway smoke仍明确是stub模型/session。
+- native **41813024224 success**：Kotlin2.1.21/JUnit32、Node46项、真实SDK/pi-ai jobs通过；Android组件test/assemble任务`BUILD SUCCESSFUL in 2m 29s`。仅组件编译，不是完整Bot APK或新设备运行。
+- docs **41813024207 success**；scope **41813024280 success**。
+- 289f88f的native首次失败历史保留在下面，现已被5873c98的修复后成功run覆盖，不要再把它写成当前阻塞。
+
 ### 后续阶段：完整fork宿主的构建图已落地
 
-新增 `runtime-bundle-entry.mjs`、`build-runtime-bundle.mjs` 和 `runtime-bundle.test.mjs`（均AGPL头），不是另写runtime。entry导出钉点真实`createWebuiRuntimeHost`、现有`createBotAgentPort`和`startBotService`；构建不调用它们。脚本复用fork自己的workspace export resolver，将原先仅6个契约输入扩为**实际完整宿主图**，并通过现有pin检查器逐blob验收。所有上游workspace包须真正进bundle，不能悄悄留为external；第三方保持external，不安装也不执行。
+新增 `runtime-bundle-entry.mjs`、`build-runtime-bundle.mjs` 和 `runtime-bundle.test.mjs`（均AGPL头），不是另写runtime。entry导出钉点真实`createWebuiRuntimeHost`、现有`createBotAgentPort`和`startBotService`；构建不调用它们。脚本复用fork自己的workspace export resolver，将原先仅6个契约输入扩为**实际完整宿主图**，并通过现有pin检查器逐blob验收。构建图内引用的上游workspace模块须真正进bundle，不能悄悄留为external；第三方保持external，不安装也不执行。
 
 本轮实际产物：**2,124个上游源码输入、49个外部包specifiers、13,296,231字节**（esbuild0.28.2）；另包含本仓库适配器及官方Bot服务。输出在 `/tmp/mbot-runtime-host-build`，不提交生成物。输出包含partial bundle、原metafile、manifest（SHA256、源码/依赖/警告清单）。manifest明确`status=build-graph-only`、`androidReady=false`；只校验编译/语法，不import或启动bundle。
 
@@ -21,7 +61,7 @@
 
 289f88f的host run41811656424、文档41811656733、scope41811656514均success；native run41811656655整体failure，其中Android组件编译和实际SDK/pi-ai jobs success，native-boundary里的JUnit32通过、Node45/46通过。**已取得失败日志**：Key防泄露用例最后仍严格要求旧四字段descriptor，但上轮已加`broker:null`。不是Key泄露分支失败；也不能把整体CI写成通过。
 
-修正为仍严格要求五字段`broker/entryPath/pinCommit/port/token`，并断言此FD/proxy夹具的broker必须为null。保留JVM检查runtime descriptor、env、日志和Agent可读文件不含native生成的Key等所有断言。没有改变生产权限或放宽Key检查。重新恢复6个固定jar并逐SHA256校验，已用本环境Kotlin2.4/JDK21实跑完整native脚本，**JUnit32/32、Node46/46通过，0 skipped、退出0**（Node约20.3秒）。CI使用Kotlin2.1.21，修复后的新CI仍须单独实查。下一位须核对修复后新的CI，不要重跑旧失败commit来期待断言改变。
+修正为仍严格要求五字段`broker/entryPath/pinCommit/port/token`，并断言此FD/proxy夹具的broker必须为null。保留JVM检查runtime descriptor、env、日志和Agent可读文件不含native生成的Key等所有断言。没有改变生产权限或放宽Key检查。重新恢复6个固定jar并逐SHA256校验，已用本环境Kotlin2.4/JDK21实跑完整native脚本，**JUnit32/32、Node46/46通过，0 skipped、退出0**（Node约20.3秒）。CI使用Kotlin2.1.21，5873c98的修复后41813024224也已全success（32/46）；本轮后续descriptor路径硬化会触发新的CI，不能借用此run。不要重跑旧失败commit期待断言改变。
 
 ### 本阶段实际修改
 
@@ -107,7 +147,7 @@ env -u GH_TOKEN -u GITHUB_TOKEN git ls-remote --heads origin main dev/integratio
 | 78c8293 | Flash交付检查器、38项测试、README/真实扫描报告 | 已fetch、快进接收；改动仅tooling/docs-links的4文件 |
 | 860563e | 主agent验收修正、39项测试、坏链接修复、Python忽略、文档CI | 本地通过；Actions41784617417已success |
 
-**最新实际HEAD不是固定860563e**：收尾的本文件、研究文档和进度更新还会有文档提交，最终SHA以远端ref和交付回复为准。Native生产代码最近阶段是c8e506e，验收夹具最近阶段是78d49f5；之后的工具/文档提交不证明新的Android能力。
+**本轮代码阶段**：289f88f为descriptor/Bot listener鉴权；5873c98为完整宿主构建图与Key测试旧schema断言修复；从7967b9d快进续写。最终文档收尾SHA以远端ref为准。更早的表格为历史，Main-held factory和descriptor设备证据见第4节及文首，后续宿主构建不证明新的Android运行能力。
 
 ## 4. 已实查的CI证据，不要重做已经通过的基线
 
@@ -148,7 +188,7 @@ env -u GH_TOKEN -u GITHUB_TOKEN gh api repos/Wzdhehe/minimax-bot-android/actions
 | `isolation/RuntimePrivateDirectory.kt` | Main-owned私有目录cap；openChild逐级固定openat/mkdirat，0700/NOFOLLOW/owner/worker、累计8级。child有独立FD，关parent不撤销child；File字段仅信息，不用于重新解析已移动父路径 |
 | `isolation/NativeRuntimePublication.kt`及App `src/main/cpp/runtime_publication.cpp` | 固定发布/替换/普通文件删除、Main openRead、保留stage helpers和child directory；无任意flags、shell或Agent目录FD |
 | `isolation/RuntimeDirectoryMutationLock.kt` | 按持有目录FD的(dev,ino)协调Main publisher，live owner引用计数。只协调参与该API的Main写者，不是排斥其他进程/旁路native代码的文件锁 |
-| `isolation/RuntimeAtomicPublisher.kt` | 完整stage→fsync→原子发布/替换→目录sync；同目录move/remove；有界整文件append。现factory仍按可信relativeSegments开目录，**还没有从已持有child cap建立publisher的正式factory** |
+| `isolation/RuntimeAtomicPublisher.kt` | 完整stage→fsync→原子发布/替换→目录sync；同目录move/remove；有界整文件append。`openForHeldDirectory`已从Main-held cap复制独立所有权、共享同inode gate；49项设备基线已验，不再是待开发factory |
 | `isolation/RuntimeFileCommitHost.kt`、`RuntimeFileCommitClient.kt` | 真实UID+随机nonce+peer死亡绑定；单个严格ASCII basename。Main显式授予read/replace/move/remove/append；覆盖移动需move且replace。每host admission/输出、每客户端writer有限；大body和read结果走匿名pipe |
 | `isolation/RuntimeFileSnapshot.kt`、`BoundedPipeReader.kt`、`BoundedPipeWriter.kt` | Main openat私有普通文件；有界读取、精确长度+EOF、poll截止/取消、未消费输出释放；不向Agent交存储文件/目录FD |
 | `isolation/RuntimeDatabaseFiles.kt` | Main固定SQLite四普通文件FD（DB/WAL/SHM/journal）；close只关本地副本，不是撤销已发FD或完整数据库lease |
@@ -169,13 +209,11 @@ Node验证代码在`dsh-go/tooling/android-node-probe/`：`src/main/cpp/node_pro
 
 本节为旧阶段顺序。held-cap factory现已落地并有49项设备证据；请先按文首最新快照继续，不要重做本节A。不要先重写Nyral/agent-table，也不要重复重建所有UI。
 
-### A. Main持有的child cap接到真实文件能力
+### A. held-cap factory已完成，不要重复实现
 
-建议先完成“publisher可从Main-held目录cap建立独立所有权”的最小阶段，再扩展子scope broker。这是**建议的下一步，不是已经存在的API或冻结协议**。
+`RuntimePrivateDirectory.duplicate()` 与 `RuntimeAtomicPublisher.openForHeldDirectory(...)` 已在Main复制独立目录FD所有权，不按可变File路径重开；失败/close不误关借用的parent，共用同目录mutation gate、worker检查和结果语义。41794661470在API26/35各49项通过（44原有+5新增）。原本建议的factory阶段已完成。
 
-现有缺口：openChild能安全打开子目录，但生产publisher仍只接受context+relativeSegments；若按File路径重开会丢掉held-cap对父路径替换的防护。新factory须明确是复制还是转移cap所有权，失败/close不误关借用的parent，沿用同目录mutation gate、worker检查和结果语义。
-
-之后由可信Main选Bot/项目/消息/记忆子scope，并为真实UID显式授权操作；Agent不能选择任意根、扩大scope或把cwd当许可。目录FD不外发。需覆盖权限组合、越界/symlink/父路径替换、并发、关闭/drain、unknown与Key边界，并保留现有44项；新增测试必须核对新CI的commit和计数。
+下一层Bot/项目/记忆子scope授权及Node目录IPC仍缺：由可信Main选scope并给真实UID显式授权，Agent不能选择任意根或扩大scope。目录FD仍不外发，cwd仍不是许可。继续时保留49项设备基线，新增用例必须看新CI的commit/计数，不能借用旧run。
 
 ### B. 原模块恢复，而非仅有一组文件原语
 
@@ -196,7 +234,7 @@ Node验证代码在`dsh-go/tooling/android-node-probe/`：`src/main/cpp/node_pro
 
 ## 7. full-ICU首轮观察（历史；最新attempt见文首）
 
-截至本轮收尾实查：**0bf4043/run41757171111**仍in_progress；compile step从2026-11-04 01:55:50 UTC开始。预检/cache-restore step为success，但不证明cache命中或保存。GNU timeout编译预算300分钟，外层step330/job360分钟；约06:55 UTC后可能进入超时收尾，实际以Actions为准。
+最早的attempt1现已budget_exhausted，cache保存成功；本轮已重跑失败job，attempt2仍compile中。具体artifact和最新状态见文首；GNU timeout仍为300分钟，不更改producer输入，也不要重复启动并行producer。cache restore step success本身不是cache命中证据。
 
 ```bash
 env -u GH_TOKEN -u GITHUB_TOKEN gh run view 41757171111 --json status,conclusion,jobs
@@ -221,9 +259,9 @@ producer的五个输入从0bf4043后未改：source workflow、node-source-build
 | Kotlin / Flutter | `/workspace/toolchains/kotlinc/bin/kotlinc`2.4.0；`/workspace/toolchains/flutter`，测试字体`/workspace/toolchains/test-fonts` |
 | Node/SQLite archive | `/tmp/mbot-node24-mobile.zip`、`/tmp/mbot-sqlite-12.11.1.tgz`当前存在，prepare按仓库pin校验 |
 | Node准备输出 | probe的build/verified-jni、verified-assets及model-sdk-probe/.build仍在，均忽略/非源码；改JNI/JS才重准备 |
-| **不存在** | `/tmp/mbot-native-deps`、`/tmp/mbot-gradle-cache`、`/tmp/mbot-mcode-reference`；旧文档说恢复过不代表现在仍有 |
+| 本轮恢复 | `/tmp/mbot-native-deps`（6个固定jar逐SHA256校验）、`/tmp/mbot-mcode-reference`（干净钉点checkout）存在；`/tmp/mbot-gradle-cache`仍不存在，使用`/home/agent/.gradle` |
 | 参考源码 | `/tmp/mbot-nyral-reference`、`/tmp/mbot-agent-table-reference`存在，只读调研，不能当已安装可运行依赖 |
-| 磁盘/设备 | 收尾约workspace861MiB、tmp1.9GiB可用；无本地adb/KVM/物理真机，勿下载数GB模拟器到已紧张磁盘 |
+| 磁盘/设备 | 本轮实查workspace861MiB、tmp2.7GiB可用；无本地adb/KVM/物理真机，勿下载数GB模拟器到已紧张磁盘 |
 
 JDK/Gradle按发布SHA256、SDK/NDK/CMake按Google清单摘要恢复；不要把partial目录当完整安装。proxy/CA保持环境配置。Gradle首次offline因缓存metadata不全失败，online经proxy/系统CA解析后才通过；不是源码错误。
 
@@ -262,7 +300,18 @@ python3 dsh-go/tooling/android-node-probe/check-native-files.py \
   --ndk /tmp/mbot-ndk27d --cmake /tmp/mbot-android-sdk/cmake/3.22.1/bin/cmake
 ```
 
-若需重跑native宿主JUnit32/Node44，先按`.github/workflows/native-model-broker.yml`取齐并校验固定6个jar，再设MBOT_NATIVE_DEPS运行test-native-model-broker.sh；当前旧/tmp jar目录不存在。真实pi-ai打包需要clean的97818b2890b4acae1c6bd1200a226ff506680628源码；旧/tmp checkout不存在，不能只依赖残留.build声称重新验证。
+本轮已恢复固定6个jar，以下命令实跑JUnit32/Node46通过；换环境须重验依赖：
+
+```bash
+KOTLINC=/workspace/toolchains/kotlinc/bin/kotlinc \
+MBOT_NATIVE_DEPS=/tmp/mbot-native-deps MBOT_JAVA=/tmp/mbot-jdk21/bin/java \
+  bash dsh-go/tooling/test-native-model-broker.sh
+WEBUI_SOURCE=/tmp/mbot-mcode-reference \
+ESBUILD_MODULE=/workspace/minimax-bot-android/dsh-go/tooling/model-sdk-probe/node_modules/esbuild/lib/main.js \
+  node --test dsh-go/runtime/minimax-bot-host/runtime-bundle.test.mjs
+```
+
+真实pi-ai打包仍需clean的钉点源码；本轮恢复的`/tmp/mbot-mcode-reference`可用，但不能只靠残留.build声称重新执行了SDK测试。SDK/pi-ai本轮证据来自CI，不是本地重新跑。
 
 ## 10. 本轮收尾与外部参考
 
@@ -304,15 +353,15 @@ fork 钉在 `mcode-webui/minimax-code@97818b2`（MIT）。上游契约别名见 
 
 所以设备端 guest 入口的形状是：**读 descriptor → `createWebuiRuntimeHost` 起 runtime 宿主 → 在同一进程用宿主的 agent 应用注册内置 Bot caller → `createBotAgentPort` 交给 `startBotService({ port, dataDir, filesDir, agent, modelBroker })` → Bot HTTP 服务对 Flutter 暴露（Bearer token 来自 descriptor）**。模型请求走 descriptor 里的 native broker 会话，Key 不进 guest。
 
-尚未定的一处：宿主需要的 Mini App presenter（`miniAppSurface` 选项在 upstream 是 host-owned port，浏览器实现是 `server/miniapp/presenter.ts`）。手机端没有浏览器视图，要决定是给个 no-op presenter（`open` 动作报 `OPEN_UNAVAILABLE`）还是接 Flutter 侧视图。
+本轮已核实：`miniAppSurface`可省略，上游已有OPEN_UNAVAILABLE处理，不需要新增presenter或Mini App容器。上面的入口形状仍是目标架构，**不是已可执行代码**；公开agent facade不提供registerArena，内部gateway注册和独立UID/FD模型路径须按文首缺口完成。Bot服务可传`authToken: descriptor.token`，不能把模型broker token拿来作为Bot HTTP token。
 
-### 卡点：当前 pin 不允许把 fork 的 runtime 打进 bundle
+### 原卡点（已解决）：旧pin只允许契约输入
 
-`upstream-runtime-pin-check.mjs` 第 304 行明确：**"the bundle consumed an upstream file that is not pinned" 是 error**。也就是说 bundle 里只能出现 `UPSTREAM_RUNTIME_BUNDLE_SHA256` 列出的那几个文件（目前就是 4 个契约文件：`agent/gateway.ts`、`agent/contracts.ts`、`agent/model-selection.ts`、`process-local-miniapp-agent-application.ts`、`shared/miniapp-surface.ts`）。
+`upstream-runtime-pin-check.mjs` 第 304 行明确：**"the bundle consumed an upstream file that is not pinned" 是 error**。也就是说 bundle 里只能出现 `UPSTREAM_RUNTIME_BUNDLE_SHA256` 列出的那几个文件（旧实现的手工必需清单实际上有6个文件：`agent/gateway.ts`、`agent/contracts.ts`、`agent/model-selection.ts`、`service/miniapp/contracts.ts`、`process-local-miniapp-agent-application.ts`、`shared/miniapp-surface.ts`）。
 
 而**插件市场与 Mini App 进程目录不在这个集合里**：它们在 `packages/webui/src/runtime/assembly.ts`、`packages/local-runtime-v2/**`、`packages/agent-*/**`。所以：
 
-- 只按当前 pin 打包 → 只能用那 4 个契约文件 → **我们得自己实现那 17 个端口，插件市场与 Mini App 进程不成立**。
+- 只按当前 pin 打包 → 只能用手工清单中的6个文件 → **我们得自己实现那 17 个端口，插件市场与 Mini App 进程不成立**。
 - 要让插件市场成立 → 必须把 fork 的 runtime 打进 guest → **必须扩展 pin 的可打包文件集合**。pin 文件自己写了："Bumping the pin is a deliberate act: update the constants, update docs/UPSTREAM-RUNTIME.md, then re-run the acceptance commands."
 
 可行的扩展方式（下一位可评估）：**用已有的整树 pin 代替手工逐文件指纹**。`UPSTREAM_RUNTIME_TREE = 5d79407ffcd54715567b49e0fac46c8ccc6e2ec8` 已经钉住整棵树；把"bundle 的每个 input 必须在该树的对应 blob 里"作为校验，就不必手工维护成百上千个文件指纹，同时仍然能证明"进 bundle 的字节就是钉住的那棵树的字节"。这属于改**验收工具**，不是放宽安全边界：checkout 仍是树级钉住，bundle 输入仍逐个按 blob 校验。
@@ -358,7 +407,8 @@ Execution failed for task ':android_file_picker:compileDebugKotlin'.
 先读AGENTS.md、docs/HANDOFF.md、docs/handoff/NEXT-AGENT.md与T-RuntimeFiles/T-RuntimeBroker。
 产品是Bot App：mbot业务在前，mcode runtime做底座（插件市场兼容靠mcode）。
 runtime接线三处缺口（NEXT-AGENT第11节）：descriptor的Kotlin半边本轮已补（设备已验）；
-rootfs仍没装mcode/Bot/host、设备侧仍无人启动Bot服务 —— 这两件是主线。
+rootfs仍没装mcode/Bot/host、正式启动器仍缺；不能直接用同UID的DSH/PRoot运行完整Agent。
+本轮5873c98已实际打包完整宿主图（2124上游输入），但仅partial build，不是Android runtime。
 架构已定：guest入口用fork自己的createWebuiRuntimeHost起runtime宿主（它才有插件市场目录），
 内置Bot以宿主注册的caller身份接进（身份不来自Bot请求）。
 pin已扩展为按整树blob校验（b0d570c），fork runtime现在可以进bundle。
@@ -366,5 +416,5 @@ APK现状：flutter build apk --debug 在Windows上13分钟后挂在Kotlin增量
 可用 kotlin.incremental=false 重试；rootfs缺失，编出来的APK还没有引擎。
 目录FD留Main；不加同UID任意shell、宽存储、明文Key、MiniApp容器或远控。
 阶段验证后更新交接并及时push；不动main/dev、不force、不PR、不发布APK。
-工具链按本文件实查（D盘Windows环境+平台限制）；没有真机的内容写未验证，不编造。
+当前Linux环境按文首和第8节实查；第12/13节仅为历史Windows记录。没有真机写未验证。
 ```

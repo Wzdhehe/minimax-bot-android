@@ -1,5 +1,13 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-04）
 
+## 最新安全复核：Node descriptor与环境交接（2026-11-04）
+
+既有实现有四个可复现缺口：写穿叶软链接、经父目录软链读/写workspace/private根外、writer把额外字段（如apiKey）原样JSON序列化、extra环境绕过allowlist。分别取得修复前失败；现改为私有stage/O_EXCL/O_NOFOLLOW/fsync+rename、真实父路径政策校验、同一FD fstat/owner/权限与读取、固定字段投影，extra与baseEnv用同一白名单。回归不依赖真实Key，不修改vendor快照或正式Android launcher。
+
+这仍是可信宿主私有目录的Node helper，**不是openat能力或并发同UID攻击防护**。Kotlin路径型writer本轮未改；正式Main-held目录、独立UID与模型/文件FD启动链仍须装配。本地最新宿主32项、JUnit32项、native/Node50项全通过且0 skipped（其中descriptor12项），文档31份0问题。新CI以[NEXT-AGENT](NEXT-AGENT.md)文首为准，不挪用旧run。
+
+前阶段5873c98已远程实查host41813024238（28+23+完整图3）、native41813024224（JUnit32/Node46、SDK/pi-ai及Android组件2m29s）、docs41813024207、scope41813024280全部success。289f88f旧schema断言失败保留为历史。
+
 ## 最新：descriptor与Bot真实listener共用启动会话（2026-11-04）
 
 从7967b9d接手后发现服务实际忽略Kotlin/Node descriptor的token，自己另生成一份，照旧交接流程Flutter无法鉴权。`startBotService`现在支持可信启动器传入`authToken`（32–64小写hex），拒绝非法显式值后才操作文件和监听，未提供时仍随机生成；响应/错误不回显token。Node broker端口规范及两类token长度也与Kotlin对齐，0/65536/前导零和超长凭据拒绝。

@@ -13,8 +13,8 @@
 // token inside a descriptor is a session-scoped loopback credential, not the
 // provider API key; the provider key never reaches this process.
 
-import { chmodSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, resolve, sep } from 'node:path';
+import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 
 export const RUNTIME_DESCRIPTOR_FILENAME = 'runtime-descriptor.json';
 
@@ -99,58 +99,93 @@ export function assertDescriptorPathAllowed(path, { allowedRoots = [], workspace
   return target;
 }
 
-/**
- * Write the descriptor into the host private directory. The file is created
- * with owner-only permissions and re-chmod'ed afterwards so a permissive
- * umask cannot widen it.
- */
-export function writeRuntimeDescriptor({ dir, descriptor, allowedRoots = [], workspaceRoot = null }) {
-  const root = resolve(dir);
-  assertDescriptorPathAllowed(dir, { allowedRoots: allowedRoots.length ? allowedRoots : [root], workspaceRoot });
-  const target = resolve(root, RUNTIME_DESCRIPTOR_FILENAME);
-  assertDescriptorPathAllowed(target, { allowedRoots: allowedRoots.length ? allowedRoots : [root], workspaceRoot });
-  mkdirSync(root, { recursive: true, mode: 0o700 });
-  writeFileSync(target, `${JSON.stringify(descriptor, null, 2)}\n`, { mode: OWNER_ONLY });
-  chmodSync(target, OWNER_ONLY);
-  return target;
+function descriptorFailure(code) {
+  return Object.assign(new Error(code), { code });
+}
+
+// Resolve existing ancestors before appending missing components. This checks
+// parent aliases even when a descriptor directory has not been created yet.
+function physicalLocation(path) {
+  let ancestor = resolve(path);
+  const missing = [];
+  for (;;) {
+    try { return resolve(realpathSync(ancestor), ...missing); }
+    catch (error) {
+      if (error.code !== 'ENOENT') throw descriptorFailure('descriptor_path_rejected');
+      const parent = dirname(ancestor);
+      if (parent === ancestor) throw descriptorFailure('descriptor_path_rejected');
+      missing.unshift(basename(ancestor));
+      ancestor = parent;
+    }
+  }
+}
+
+function privateDirectoryLocation(directory, { allowedRoots, workspaceRoot }) {
+  const physical = physicalLocation(directory);
+  assertDescriptorPathAllowed(physical, {
+    allowedRoots: allowedRoots.map(physicalLocation),
+    workspaceRoot: workspaceRoot ? physicalLocation(workspaceRoot) : null,
+  });
+  return physical;
 }
 
 /**
- * Read a descriptor back. The file must be a regular, owner-only file inside
- * the private roots and outside the workspace.
+ * Atomically publish validated descriptor fields in a trusted host-owned
+ * directory. Parent aliases cannot redirect it into the workspace; replacing
+ * a planted leaf symlink never writes through to the link's target.
+ * This is not an openat capability API: directory ancestors must remain under
+ * trusted host ownership. It does not defend against concurrent same-UID
+ * code replacing those directories, or replace Android UID isolation.
  */
+export function writeRuntimeDescriptor({ dir, descriptor, allowedRoots = [], workspaceRoot = null }) {
+  const validated = createRuntimeDescriptor(descriptor);
+  const root = resolve(dir);
+  const policy = { allowedRoots: allowedRoots.length ? allowedRoots : [root], workspaceRoot };
+  assertDescriptorPathAllowed(root, policy);
+  const target = resolve(root, RUNTIME_DESCRIPTOR_FILENAME);
+  assertDescriptorPathAllowed(target, policy);
+  const physicalRoot = privateDirectoryLocation(root, policy);
+  mkdirSync(physicalRoot, { recursive: true, mode: 0o700 });
+  const staging = mkdtempSync(join(physicalRoot, '.runtime-descriptor-'));
+  let fd;
+  try {
+    const stagedFile = join(staging, 'session.json');
+    fd = openSync(stagedFile, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, OWNER_ONLY);
+    writeFileSync(fd, `${JSON.stringify(validated, null, 2)}\n`);
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = undefined;
+    renameSync(stagedFile, join(physicalRoot, RUNTIME_DESCRIPTOR_FILENAME));
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+    rmSync(staging, { recursive: true, force: true });
+  }
+  return target;
+}
+
+/** Read and validate one opened file, without reopening a checked pathname. */
 export function readRuntimeDescriptor({ path, allowedRoots = [], workspaceRoot = null } = {}) {
   const target = assertDescriptorPathAllowed(path, { allowedRoots, workspaceRoot });
-  let stats;
-  try { stats = lstatSync(target); }
-  catch {
-    const error = new Error('descriptor_missing');
-    error.code = 'descriptor_missing';
-    throw error;
-  }
-  if (!stats.isFile() || stats.isSymbolicLink()) {
-    const error = new Error('descriptor_not_a_regular_file');
-    error.code = 'descriptor_not_a_regular_file';
-    throw error;
-  }
-  if ((stats.mode & 0o077) !== 0) {
-    const error = new Error('descriptor_permissions');
-    error.code = 'descriptor_permissions';
-    throw error;
-  }
-  let parsed;
-  try { parsed = JSON.parse(readFileSync(target, 'utf8')); }
-  catch {
-    const error = new Error('descriptor_invalid');
-    error.code = 'descriptor_invalid';
-    throw error;
-  }
+  const physicalRoot = privateDirectoryLocation(dirname(target), { allowedRoots, workspaceRoot });
+  const physicalTarget = join(physicalRoot, basename(target));
+  let fd;
   try {
-    return createRuntimeDescriptor(parsed);
-  } catch {
-    const error = new Error('descriptor_invalid');
-    error.code = 'descriptor_invalid';
-    throw error;
+    // Keep the stable leaf-symlink error, including for a dangling link.
+    const leaf = lstatSync(physicalTarget);
+    if (!leaf.isFile() || leaf.isSymbolicLink()) throw descriptorFailure('descriptor_not_a_regular_file');
+    fd = openSync(physicalTarget, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const stats = fstatSync(fd);
+    if (!stats.isFile()) throw descriptorFailure('descriptor_not_a_regular_file');
+    if ((stats.mode & 0o077) !== 0 || (typeof process.getuid === 'function' && stats.uid !== process.getuid())) {
+      throw descriptorFailure('descriptor_permissions');
+    }
+    try { return createRuntimeDescriptor(JSON.parse(readFileSync(fd, 'utf8'))); }
+    catch { throw descriptorFailure('descriptor_invalid'); }
+  } catch (error) {
+    if (error.code?.startsWith('descriptor_')) throw error;
+    throw descriptorFailure(error.code === 'ELOOP' ? 'descriptor_not_a_regular_file' : 'descriptor_missing');
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
 }
 
@@ -166,7 +201,7 @@ export function buildRuntimeEnv({ baseEnv = process.env, extra = {} } = {}) {
     if (typeof value === 'string' && value) env[name] = value;
   }
   for (const [name, value] of Object.entries(extra)) {
-    if (typeof name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) continue;
+    if (!ENV_ALLOWLIST.includes(name)) continue;
     if (CREDENTIAL_NAME.test(name)) continue;
     if (typeof value !== 'string') continue;
     env[name] = value;

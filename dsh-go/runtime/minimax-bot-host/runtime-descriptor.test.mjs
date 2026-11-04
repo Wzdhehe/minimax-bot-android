@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import { chmodSync, mkdirSync, mkdtempSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { after, test } from 'node:test';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -13,10 +13,14 @@ import {
   writeRuntimeDescriptor,
 } from './runtime-descriptor.mjs';
 
+const fixtureRoots = [];
+after(() => { for (const root of fixtureRoots) rmSync(root, { recursive: true, force: true }); });
+
 const PIN = '97818b2890b4acae1c6bd1200a226ff506680628';
 
 function makeDirs() {
   const root = mkdtempSync(join(tmpdir(), 'mbot-descriptor-'));
+  fixtureRoots.push(root);
   const priv = join(root, 'private');
   const workspace = join(root, 'private', 'workspace');
   return { root, priv, workspace };
@@ -117,4 +121,57 @@ test('Node rejects broker ports and token lengths the Kotlin descriptor writer c
   }
   assert.throws(() => createRuntimeDescriptor({ ...valid, token: 'a'.repeat(65) }), /session token/);
   assert.throws(() => createRuntimeDescriptor({ ...valid, broker: { ...valid.broker, token: 'b'.repeat(65) } }), /broker session token/);
+});
+
+
+test('publishing a descriptor replaces a planted leaf symlink without writing its workspace target', () => {
+  const { priv, workspace } = makeDirs();
+  mkdirSync(workspace, { recursive: true });
+  const project = join(workspace, 'project.txt');
+  writeFileSync(project, 'must stay unchanged', { mode: 0o600 });
+  const target = join(priv, RUNTIME_DESCRIPTOR_FILENAME);
+  symlinkSync(project, target);
+  const descriptor = createRuntimeDescriptor({ entryPath: '/private/entry.mjs', pinCommit: PIN, port: 43117, token: 'a'.repeat(64) });
+  writeRuntimeDescriptor({ dir: priv, descriptor, allowedRoots: [priv], workspaceRoot: workspace });
+  assert.equal(readFileSync(project, 'utf8'), 'must stay unchanged');
+  assert.deepEqual(readRuntimeDescriptor({ path: target, allowedRoots: [priv], workspaceRoot: workspace }), descriptor);
+});
+
+test('a parent symlink cannot redirect descriptor reads or writes into the workspace or outside private roots', () => {
+  const { root, priv, workspace } = makeDirs();
+  mkdirSync(workspace, { recursive: true });
+  const outside = join(root, 'outside');
+  mkdirSync(outside);
+  const descriptor = createRuntimeDescriptor({ entryPath: '/private/entry.mjs', pinCommit: PIN, port: 43117, token: 'a'.repeat(64) });
+  for (const [name, directory] of [['workspace-link', workspace], ['outside-link', outside]]) {
+    const alias = join(priv, name);
+    symlinkSync(directory, alias, 'dir');
+    const target = join(directory, RUNTIME_DESCRIPTOR_FILENAME);
+    const initial = JSON.stringify(descriptor);
+    writeFileSync(target, initial, { mode: 0o600 });
+    const guard = { allowedRoots: [priv], workspaceRoot: workspace };
+    assert.throws(() => readRuntimeDescriptor({ path: join(alias, RUNTIME_DESCRIPTOR_FILENAME), ...guard }),
+      (error) => error.code === 'descriptor_path_rejected');
+    assert.throws(() => writeRuntimeDescriptor({ dir: alias, descriptor, ...guard }),
+      (error) => error.code === 'descriptor_path_rejected');
+    assert.equal(readFileSync(target, 'utf8'), initial);
+  }
+});
+
+test('writer validates and projects descriptor fields before serializing anything', () => {
+  const { priv } = makeDirs();
+  const descriptor = createRuntimeDescriptor({ entryPath: '/private/entry.mjs', pinCommit: PIN, port: 43117, token: 'a'.repeat(64) });
+  const path = writeRuntimeDescriptor({ dir: priv, descriptor: { ...descriptor, apiKey: 'test-key-must-not-be-written' }, allowedRoots: [priv] });
+  assert.ok(!readFileSync(path, 'utf8').includes('test-key-must-not-be-written'));
+  assert.deepEqual(readRuntimeDescriptor({ path, allowedRoots: [priv] }), descriptor);
+});
+
+
+test('extra environment values use the same allowlist and cannot introduce a secret-bearing configuration variable', () => {
+  const env = buildRuntimeEnv({ baseEnv: { PATH: '/usr/bin', HOME: '/private' }, extra: {
+    CONFIG_JSON: '{"apiKey":"fixture-secret-must-not-inherit"}',
+    NODE_EXTRA: 'fixture-secret-must-not-inherit',
+    LANG: 'zh_CN.UTF-8',
+  } });
+  assert.deepEqual(env, { PATH: '/usr/bin', HOME: '/private', LANG: 'zh_CN.UTF-8' });
 });

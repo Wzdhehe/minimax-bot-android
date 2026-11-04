@@ -10,9 +10,13 @@
 
 重新实查发现：fork公开的 `host.application.miniAppAgent` 不提供 `registerArena`；旧第11节「从公开应用对象注册caller」不是可直接执行的API。下一阶段须接真实内部gateway的宿主注册/撤销生命周期，不能伪造caller，也不能为省事直接用DSH同UID/PRoot跑完整Agent。`miniAppSurface` 已可省略并报OPEN_UNAVAILABLE，继续不适配Mini App容器。
 
-本轮后续已加入**完整fork宿主构建图检查**：实际打包2,124个上游输入（逐blob校验）、原session-ports和官方Bot服务，生成13,296,231字节partial bundle；49个外部包引用保持external，3项真实集成测试通过且不执行runtime。已接CI，命令与边界见[钉点文档](UPSTREAM-RUNTIME.md)。这消除了「只有契约文件能打包」的验证空白，仍不代表rootfs/正式启动器/插件市场已运行；动态better-sqlite3等加载及资源仍须单独处理。
+本轮代码阶段**5873c98**已推送。后续加入**完整fork宿主构建图检查**：实际打包2,124个上游输入（逐blob校验）、原session-ports和官方Bot服务，生成13,296,231字节partial bundle；49个外部包引用保持external，3项真实集成测试通过且不执行runtime。已接CI，命令与边界见[钉点文档](UPSTREAM-RUNTIME.md)。这消除了「只有契约文件能打包」的验证空白，仍不代表rootfs/正式启动器/插件市场已运行；动态better-sqlite3等加载及资源仍须单独处理。
 
-同时修正native Key测试遗留的descriptor四字段断言（现有broker字段须严格断言为null）；289f88f的native CI失败日志已读到，JUnit32通过、Node45/46，其他host/docs/scope CI成功。修复后完整native脚本结果及新CI以[NEXT-AGENT](handoff/NEXT-AGENT.md)最新记录为准，不能将旧失败run描述成成功。
+同时修正native Key测试遗留的descriptor四字段断言（现有broker字段须严格断言为null），本地完整JUnit32/Node46通过；289f88f的native CI失败日志已读到，JUnit32通过、Node45/46，其他host/docs/scope CI成功。修复后完整native脚本结果及新CI以[NEXT-AGENT](handoff/NEXT-AGENT.md)最新记录为准，不能将旧失败run描述成成功。
+
+本轮随后复核并修复Node descriptor的四处问题：叶文件软链写穿、父目录软链绕开workspace/private排除、writer未投影额外字段、extra环境变量绕过allowlist。四项均先复现失败再修复；现在私有stage原子rename、父路径真实位置校验、同一FD读取/owner权限检查、固定字段序列化及两路同白名单。它仍依赖宿主私有目录所有权，不能替代Main-held cap/独立UID；native路径API及正式启动器本轮未改。本地完整宿主32项、JUnit32项、native/Node50项全通过且0 skipped；文档31份无坏链接，详细验证记录见[NEXT-AGENT](handoff/NEXT-AGENT.md)。
+
+5873c98的远程CI已实查：**host41813024238、native41813024224、docs41813024207、scope41813024280全success**，日志含完整图3/3、JUnit32/Node46及Android组件构建2m29s。这是路径硬化前的阶段证据，不冒充后续新CI。
 
 ## 当前状态
 
@@ -39,7 +43,7 @@
 | 有界append/目录协调 | Main按目录FD inode协调publish/replace/move/remove/append；新增APPEND显式权限与Node JNI，五新增设备用例、原Key/WAL回归保留，两个验收APK2m34s、Python29/host1/scope4/actionlint过 | 888aa77首次API26 t40 f1保留；后续**c8e506e与78d49f5各自API26/35均44项通过**（含追加、目录与夹具修正）；O(文件大小)整文件原子追加/总量1MiB，不是O_APPEND/FileHandle/大JSONL或跨进程锁，见T-RuntimeFiles |
 | Main子目录cap | 固定openat/mkdirat、私有0700/owner/NOFOLLOW、8级上限；四新增用例、两个验收APK1m33s、Python30/scope4及双ABI JNI/16KiB过 | **c8e506e/41781117518及78d49f5/41781774323均API26/35各44项通过**；只Main API，未给Agent目录FD/IPC/Node，不是完整FS，见T-RuntimeFiles |
 | **设备端 runtime 接线（当前阶段）** | 已查清三处硬缺口并补其一：Kotlin 侧 descriptor 写入（0600/O_EXCL/O_NOFOLLOW/rename/owner-only 校验）+ Node 契约同步扩展 broker 会话；**设备已验**：41794831403 API26/35 success（各19项、含新增3项descriptor用例、0失败），41794661470 node矩阵 API26/35 各49项0失败（44+5 held-cap），host 41794831396 success。**pin 已扩展为按整树 blob 校验**（b0d570c），fork runtime 现在可以进 bundle | rootfs 仍只装 DSH 引擎，mcode fork/官方 Bot/host adapter 未进 guest；设备侧无人启动 Bot 服务；**产品 APK 未产出**（Windows 上卡在 Kotlin 增量缓存，见 NEXT-AGENT 第13节）；见 NEXT-AGENT 第11节 |
-| full-ICU Node | 首轮41630373256超4小时取消；**重跑41680254279也因compile 330分钟超时而失败**，check annotation实查，verify skipped | 无产物/ICU设备证据；已补ccache/300分钟预算+失败也保存cache，host/NDK真实hits2+group-timeout smoke过、Python21过；首推41756717823因job-env的runner上下文不合法未创建job，已用actionlint复现并移到step env；Python21过，修后CI/cache保存恢复/完整编译待验证。默认候选没有Intl |
+| full-ICU Node | 旧41630373256取消、41680254279超330分钟失败。新41757171111 attempt1也budget_exhausted，但artifact13302870059确认cache-save success | 本轮已重跑失败job，attempt2编译中；preflight/cache restore step成功不证明hits或完整库。无full-ICU产物/Intl设备证据，默认候选无Intl；五个producer权威输入未改，不重复启动并行producer |
 
 正式入口仍DSH；上述都是组件/独立验收APK/假provider，**没有完整mcode/官方Bot产品运行、完整Flutter Bot APK或真实模型验收**。插件变更仍关闭。持久化、可信Bot身份/MCP、工具权限及生产启动器仍缺。不得因组件通过就宣称App已完成。
 
