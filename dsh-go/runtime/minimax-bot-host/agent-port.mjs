@@ -39,7 +39,9 @@ export function createBotAgentPort({ agent, caller, binding = null, resolveModel
 
   /** Run one turn inside the native route of its own model. */
   function boundTurn(input, call) {
-    if (!binding) return call();
+    // An absent broker must never turn a model request into an upstream
+    // network request, including when the runtime has old provider config.
+    if (!binding) return Promise.reject(new NativeBindingError('native_binding_unavailable'));
     return (async () => binding.runForModelKey(await modelKeyFor(input), call))();
   }
 

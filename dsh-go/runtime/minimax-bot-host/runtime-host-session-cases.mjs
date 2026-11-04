@@ -10,6 +10,28 @@ function deferred() {
   const promise = new Promise((done) => { resolve = done; });
   return { promise, resolve };
 }
+// The lifecycle cases use real gateway registration with stubbed session
+// turns. They still exercise the native-binding-required runtime path.
+function boundFixture() {
+  return {
+    catalog: { providers: [{ providerId: 'fixture-provider', apiFormat: 'openai-completions',
+      enabled: true, models: ['fixture-model'] }] },
+    nativeBinding: { open() { throw new Error('model execution is stubbed'); }, cancel() {} },
+  };
+}
+function fixtureModels() {
+  return {
+    modelProviders: {
+      async listUser() { return []; },
+      async create(input) { return { providerId: `custom_provider:${input.name}`, name: input.name }; },
+      async update(input) { return { providerId: input.providerId, name: input.name }; },
+    },
+    models: {
+      async list() { return [{ modelConfigId: 'custom_provider:fixture-provider/fixture-model', selected: true }]; },
+      async select() { return true; },
+    },
+  };
+}
 function fixture(dataDir, { runTurn, onClose = async () => {}, modelApplication = null } = {}) {
   const owners = new Map();
   const created = [];
@@ -42,14 +64,14 @@ function fixture(dataDir, { runTurn, onClose = async () => {}, modelApplication 
     replyPermission: async () => 'processed',
   });
   const application = createProcessLocalMiniAppAgentApplication(gateway);
-  const hostApplication = { miniAppAgent: application, ...(modelApplication ?? {}) };
+  const hostApplication = { miniAppAgent: application, ...(modelApplication ?? fixtureModels()) };
   const assembled = { host: { apiHost: { close: onClose }, application: hostApplication } };
   return { assembled, application, gateway, created, owners, turns };
 }
 
 test('trusted registration uses the actual gateway and ignores request-supplied identity', async (t) => {
   let host;
-  const session = await createBotRuntimeSession({ dataDir: '/fixture/first', startHost: async ({ dataDir }) => {
+  const session = await createBotRuntimeSession({ dataDir: '/fixture/first', ...boundFixture(), startHost: async ({ dataDir }) => {
     host = fixture(dataDir);
     return host.assembled;
   } });
@@ -70,6 +92,22 @@ test('trusted registration uses the actual gateway and ignores request-supplied 
   await assert.rejects(session.agent.run({ text: 'steal', sessionId: 'foreign-session' }), (error) => error.code === 'SESSION_NOT_FOUND');
   await assert.rejects(host.application.models({ caller: { pluginId: 'builtin:minimax-bot', runId: 'forged' } }),
     (error) => error.code === 'AGENT_UNAVAILABLE');
+});
+
+test('a runtime without a native binding refuses turns before entering the real gateway', async (t) => {
+  let host;
+  const session = await createBotRuntimeSession({ dataDir: '/fixture/unbound', startHost: async ({ dataDir }) => {
+    host = fixture(dataDir);
+    return host.assembled;
+  } });
+  t.after(() => session.close());
+  await assert.rejects(session.agent.run({ text: 'must not execute' }),
+    (error) => error.code === 'native_binding_unavailable');
+  await assert.rejects(session.agent.answer({ sessionId: 'session-1', requestId: 'q', answers: [] }),
+    (error) => error.code === 'native_binding_unavailable');
+  assert.equal(host.created.length, 0);
+  assert.equal(host.turns.length, 0);
+  assert.equal((await session.agent.models()).models.length, 1);
 });
 
 test('the native catalog is projected through the upstream provider API and every turn is bound', async (t) => {
@@ -139,7 +177,7 @@ test('the native catalog is projected through the upstream provider API and ever
 test('concurrent host construction keeps gateway ownership within its own async scope', async (t) => {
   const a = deferred(), b = deferred();
   const hosts = [];
-  const start = (dataDir, own, other) => createBotRuntimeSession({ dataDir, startHost: async ({ dataDir: root }) => {
+  const start = (dataDir, own, other) => createBotRuntimeSession({ dataDir, ...boundFixture(), startHost: async ({ dataDir: root }) => {
     own.resolve(); await other.promise;
     const host = fixture(root); hosts.push(host);
     return host.assembled;
@@ -158,7 +196,7 @@ test('closing revokes queued and active turns, joins teardown and blocks retaine
   const bothStarted = deferred(), closeStarted = deferred(), finishClose = deferred();
   const signals = [];
   let host, closeCount = 0;
-  const session = await createBotRuntimeSession({ dataDir: '/fixture/cancel', startHost: async ({ dataDir }) => {
+  const session = await createBotRuntimeSession({ dataDir: '/fixture/cancel', ...boundFixture(), startHost: async ({ dataDir }) => {
     host = fixture(dataDir, {
       runTurn: async (input) => {
         signals.push(input.signal);

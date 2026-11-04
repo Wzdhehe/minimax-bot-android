@@ -9,6 +9,13 @@ import { createBotAgentPort } from './agent-port.mjs';
 import { NativeBindingError } from './native-model-binding.mjs';
 import { start } from '../vendor/minimax-bot/miniapp/node/server.mjs';
 
+// These tests exercise the upstream gateway/service contract with fake turns;
+// the real scoped fetch and native binding are covered separately.
+const stubRoute = {
+  binding: { runForModelKey: (_key, operation) => operation() },
+  resolveModelKey: async () => 'fixture/model',
+};
+
 test('preserves the host identity and forwards cancellation, interaction and failures', async () => {
   const calls = [];
   const failure = new Error('runtime refused request');
@@ -18,7 +25,7 @@ test('preserves the host identity and forwards cancellation, interaction and fai
     return { method };
   }]));
   const caller = { pluginId: 'builtin-bot', runId: 'generation-1' };
-  const port = createBotAgentPort({ agent: gateway, caller });
+  const port = createBotAgentPort({ agent: gateway, caller, ...stubRoute });
   caller.runId = 'changed';
   const abort = new AbortController();
   const onEvent = () => {};
@@ -57,7 +64,7 @@ test('official Bot service can send two turns through the agent port', async (t)
     pluginRoot: resolve('runtime/vendor/minimax-bot'), dataDir,
     listen: { host: '127.0.0.1', port: portNumber }, signal: new AbortController().signal,
     logger: { info() {}, warn() {}, error() {} },
-    agent: createBotAgentPort({ agent: gateway, caller: { pluginId: 'builtin-bot', runId: 'registered-run' } }),
+    agent: createBotAgentPort({ agent: gateway, caller: { pluginId: 'builtin-bot', runId: 'registered-run' }, ...stubRoute }),
   });
   t.after(async () => {
     await app.dispose();
@@ -176,13 +183,17 @@ test('binds the answer turn as well', async () => {
   assert.deepEqual(order, ['custom_provider:minimax/m1']);
 });
 
-test('keeps the unbound behaviour when no binding is configured', async () => {
+test('refuses model turns before calling the gateway when no binding is configured', async () => {
   const calls = [];
   const agent = {
     run: async (input) => { calls.push(['run', input.model]); return 'ok'; },
-    models: async () => ({}), reply: async () => {}, answer: async () => {},
+    models: async () => ({}), reply: async () => {},
+    answer: async () => { calls.push(['answer']); },
   };
   const port = createBotAgentPort({ agent, caller: { pluginId: 'builtin:minimax-bot', runId: 'r1' } });
-  assert.equal(await port.run({ text: 'hi', model: 'custom_provider:minimax/m1' }), 'ok');
-  assert.deepEqual(calls, [['run', 'custom_provider:minimax/m1']]);
+  await assert.rejects(port.run({ text: 'hi', model: 'custom_provider:minimax/m1' }),
+    (error) => error.code === 'native_binding_unavailable');
+  await assert.rejects(port.answer({ sessionId: 's1', requestId: 'q', answers: [] }),
+    (error) => error.code === 'native_binding_unavailable');
+  assert.deepEqual(calls, []);
 });

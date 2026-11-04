@@ -38,7 +38,11 @@ gateway.bind({
   replyPermission: async () => 'processed',
 });
 const agent = createProcessLocalMiniAppAgentApplication(gateway);
-const bot = createBotAgentPort({ agent, caller: { pluginId: 'builtin-bot', runId: 'generation-1' } });
+// Gateway contract only: session and model execution are deliberately stubbed.
+const bot = createBotAgentPort({ agent, caller: { pluginId: 'builtin-bot', runId: 'generation-1' },
+  binding: { runForModelKey: (_key, operation) => operation() },
+  resolveModelKey: async () => 'fixture/model',
+});
 try {
   await assert.rejects(bot.run({ text: 'hello' }), (error) => error.code === 'NOT_PERMITTED');
   const release = gateway.registerArena({

@@ -1,5 +1,13 @@
 # T-RuntimeBroker（HANDOFF 第 2 项，部分完成，2026-11-04）
 
+## 继续开发：未绑定时拒绝模型执行（2026-11-04）
+
+复核20c4516发现`createBotAgentPort`在`binding=null`时仍直接调用`agent.run/answer`，旧文档所写「明确拒绝」当时不成立；上游已有配置时可能绕过约定的native模型路由。现端口在进入gateway前返回稳定错误`native_binding_unavailable`，不会发起session/turn；models/reply仍可调用。新增端口负例和钉点真实gateway负例，已有身份/取消夹具显式使用假绑定，不声称真实模型或Android执行。
+
+41847283176的API35重跑已实查success、API26/35结果artifact均t49/f0/e0/s0；首次emulator SDK下载损坏失败与重跑分开记录。正式隔离UID launcher、native broker实际绑定、设备/真实provider仍待做。
+
+本机实跑：端口/绑定/目录装配合计24项通过；真实钉点gateway生命周期10项通过（含新增拒绝）；Bot→钉点gateway smoke通过（session/model桩）；全量fork构建图2124输入及780资源通过，real-host工厂/SQLite/官方Bot重开1项通过，含未绑定turn拒绝。均为Linux宿主，不替代Android设备。
+
 ## 最新：目录接线闭环已落地，broker binding 仍缺（2026-11-04，commit f23775b）
 
 下面「native 侧待接线的目录契约」的第 1、2 条**已实现**：native 侧现在能产出**剥离后**的非密钥目录，descriptor 携带它，guest 读回后交给钉点官方 provider API 投影。**第 4 条（native broker binding 进 guest 进程）仍未做**，`nativeBinding` 仍为 `null`，所以官方连通性测试仍记 `not_run`，模型请求仍无路由可用。

@@ -3,7 +3,15 @@
 
 更新时间：2026-11-04 12:28 UTC。**本文件已重新整理为当前状态，不再向前堆叠互相冲突的历史TODO。** 历史版可看[3d686ee之前的交接](https://github.com/Wzdhehe/minimax-bot-android/blob/3d686ee5b9d0ee81863ab5fea548819da5be519e/docs/handoff/NEXT-AGENT.md)。旧专题里的「当前/下一步」须结合本文件和对应commit/run理解，不能见一句TODO就重做。
 
-用户最后要求：准备收尾，交接要详细，等待原agent额度恢复再继续。本次收尾**不再扩功能**；接手后先完成第4节的CI核对，再按第5节限定任务推进。遇到没有实查的接口，先读源码/写清缺口，不得为展示进度虚构协议或开通入口。
+用户最新要求继续开发；本文件文首「当前续写」覆盖旧轮次的暂停指令与TODO。遇到没有实查的接口，先读源码/写清缺口，不得为展示进度虚构协议或开通入口。
+
+## 当前续写（覆盖下文历史TODO，2026-11-04）
+
+用户已要求继续开发；本轮从远端20c4516快进。实查41847283176重跑后整体success：API26/35结果artifact均t49/f0/e0/s0；首次API35模拟器包下载损坏的失败历史保留。41850609902等是GitHub Android模拟器，不能称物理真机。
+
+本轮复核发现`createBotAgentPort`无binding时原来仍调用上游gateway，与既定「未接broker时拒绝模型」相矛盾。现`run`与`answer`在进入gateway前返回`native_binding_unavailable`；`models`/`reply`不变。真实钉点gateway测试覆盖无binding拒绝且无session/turn发生；原身份/取消用例显式使用假路由，其模型执行仍为桩。真实完整factory另覆盖已投影模型但无binding时拒绝。**修复不是Android launcher或真实模型已接通。**
+
+后续继续独立UID launcher、可信broker与文件能力接线；每个阶段必须可验、保留fail-closed与Key只在native。留意`native-model-binding.mjs`的进程级global fetch多实例生命周期问题：每个binding当前各自保存/恢复fetch，并发安装和不同顺序关闭可能相互覆盖，需先加真实并发回归、证明解决方案后再供多实例使用。
 
 ## 1. 先认清交付状态
 

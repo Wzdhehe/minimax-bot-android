@@ -80,6 +80,10 @@ for (let pass = 0; pass < 2; pass++) {
     // NOT_PERMITTED/AGENT_UNAVAILABLE would reveal a broken registration seam.
     await assert.rejects(runtime.agent.reply({ sessionId: 'missing-session', requestId: 'missing-ask', decision: 'deny' }),
       (error) => error.code === 'SESSION_NOT_FOUND');
+    // A persisted provider and a selected model must not bypass the absent
+    // native broker. No upstream session/model turn may be started.
+    await assert.rejects(runtime.agent.run({ text: 'not sent', model: 'custom_provider:probe/probe-model' }),
+      (error) => error.code === 'native_binding_unavailable');
     await mkdir(join(root, 'files'), { recursive: true });
     service = await startBotService({ port, dataDir: join(root, 'bot'), filesDir: join(root, 'files'), agent: runtime.agent,
       authToken: token, signal: new AbortController().signal, logger: { info() {}, warn() {}, error() {} } });
@@ -109,4 +113,4 @@ for (let pass = 0; pass < 2; pass++) {
     await assert.rejects(runtime.agent.models(), (error) => error.code === 'AGENT_UNAVAILABLE');
   }
 }
-console.log('PASS: real fork factory cold-start/reopen, descriptor read-back with projected non-secret provider catalog with placeholder credential and virtual origin, registered gateway with SQLite lookup, authenticated official Bot create/persist/read, shared close and stale-port rejection; no model turn or Android execution');
+console.log('PASS: real fork factory cold-start/reopen, descriptor read-back with projected non-secret provider catalog with placeholder credential and virtual origin, registered gateway with SQLite lookup, unbound model turn refused, authenticated official Bot create/persist/read, shared close and stale-port rejection; no model turn or Android execution');

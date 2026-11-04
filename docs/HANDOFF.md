@@ -2,15 +2,17 @@
 
 **先读[当前接手合同与完整快照](handoff/NEXT-AGENT.md)**。该文已重写为单一当前版本，列明提交/CI、唯一下一项、允许修改面、验收及禁止推断；旧交接保留在Git历史。下面大表和专题内的逐轮记录只作证据背景，不能当当前TODO。
 
-用户已要求收尾，等待额度恢复再继续；本轮不再扩功能。当前只在**feat/t-plugins**，阶段成果已推；不另起分支、不动main/dev/integration、不force、不PR、不发布APK。最终纯文档HEAD以远端为准。
+用户已要求继续开发。当前只在**feat/t-plugins**，阶段成果及时推送；不另起分支、不动main/dev/integration、不force、不PR、不发布APK。
 
 ## 当前已完成与未完成
 
+- 本轮修复缺失native binding时的绕过：Bot的run/answer现在返回`native_binding_unavailable`，不会调用上游gateway；带绑定的turn仍走scope。真实gateway生命周期新增负例。目录仍可展示；native broker接线与正式启动器尚未完成。
+
 - d31b379：通过原RuntimeServices精确构建接缝注册内置服务身份，不造第二gateway、不写17ports；8真实gateway/facade生命周期cases过，session执行为桩。
 - f937a3e：780 canonical资源逐blob/inventory校验，构建4项；真实原factory/gateway/session/SQLite + 官方Bot JSON冷启动/重开/鉴权/创建/持久化读回1项（无桩factory）过。**host41824727445、native41824727414、docs41824727413、scope41824727426全success**，已读日志。
-- 3d686ee：修Android full-ICU最后metadata报告，要求真实full配置、读ICU/Unicode头、Ninja前预检；Python32/真实头parser smoke过。新producer **41826964330的build/upload已success**，artifact13318613900为45,047,372字节，authority检查已本地通过；**API26/35 verify也均success，日志均启动49测试后BUILD SUCCESSFUL，Intl/Key验证已过**。candidate41826964500 API26/35均success（结果artifact t49/f0/e0/s0），但它仍用无Intl默认release；新ICU与SQLite组合尚未验证。
+- 3d686ee：修Android full-ICU最后metadata报告，要求真实full配置、读ICU/Unicode头、Ninja前预检；Python32/真实头parser smoke过。新producer **41826964330的build/upload已success**，artifact13318613900为45,047,372字节，authority检查已本地通过；**API26/35 verify也均success，日志均启动49测试后BUILD SUCCESSFUL，Intl/Key验证已过**。后续a2c17d5/run41831847047已完成新ICU与当前SQLite/文件/模型/Key组合的API26/35模拟器验证，详见下方。
 - 旧41757171111 attempt2已实际完成5885/5885和110.72MiB库strip，失败在原versions.py只允许intl=none；cache3211 hits（55.85%）且保存成功。旧失败run不能复用，也不要rerun旧commit期待新修复。
-- 目录接线阶段（f23775b / 8a52f85 / 9c715b5）：host 41847283169、native 41847283225 / 41850609903、scope 41847283180 / 41850609904、docs 41850610022 / 41852384364、设备 41850609902 全部 success。**唯一未闭环的是 `Isolated Android Node candidate`（run 41847283176）的 API35 job**：API26 success（49/0/0/0），API35 首次失败真因是 runner 的 emulator SDK 包下载损坏（emulator 未启动、0 个测试，APK 构建步骤尚未执行到），已 `gh run rerun --failed` 重跑，**重跑结果待实查，不得当作已通过**。
+- 目录接线阶段（f23775b / 8a52f85 / 9c715b5）：host 41847283169、native 41847283225 / 41850609903、scope 41847283180 / 41850609904、docs 41850610022 / 41852384364、设备 41850609902 全部 success。`Isolated Android Node candidate`（run 41847283176）API26 success（49/0/0/0）；API35 首次因runner模拟器SDK包下载损坏失败（0测试），**重跑已实查success**，结果artifact API35 t49/f0/e0/s0。是模拟器证据，不是物理真机。
 - **没有模型turn、可用Android Bot APK、真实provider、ARM64/物理真机或profile证据。** 默认App仍DSH；native 非密钥目录投影、每轮绑定与descriptor接线已落地，但 **broker binding 进 guest 进程、隔离模型/文件FD、正式启动器、每Bot可信MCP/自主任务仍缺**，市场写入关闭。
 
 ## 接手第一项（必须按顺序）
