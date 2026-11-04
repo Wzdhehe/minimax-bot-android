@@ -13,7 +13,7 @@ FAILURE = re.compile(r'node_probe_failed_at_(' + PHASE + r')_code_(' + CODE + r'
 TEST_PREFIX = {'IsolatedNodeModelTest': '', 'RuntimeDatabaseFilesTest': 'd',
     'FilePublicationProbeTest': 'p', 'RuntimeAtomicPublisherTest': 'a',
     'RuntimeFileCommitHostTest': 'c', 'RuntimeFileSnapshotTest': 's', 'RuntimeFileMutationTest': 'm',
-    'RuntimeFileAppendTest': 'b'}
+    'RuntimeFileAppendTest': 'b', 'RuntimePrivateDirectoryTest': 'r'}
 LOCATION = re.compile(r'(' + '|'.join(TEST_PREFIX) + r')\.kt:([0-9]{1,5})\b')
 PUBLICATION_ERRNO = re.compile(r'\bpublication_errno_([0-9]{1,4})\b')
 KINDS = {

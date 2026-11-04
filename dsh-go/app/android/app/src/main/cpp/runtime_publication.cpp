@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Main-only publication primitive. No shell or pathname root API.
+// Main-only directory/file primitives. No shell or pathname root API.
 #include <jni.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -56,6 +56,27 @@ jint OpenRead(JNIEnv* env, jobject, jint directory, jstring name) {
   const int fd = openat(directory, file.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
   return fd >= 0 ? fd : -errno;
 }
+jint OpenChildDirectory(JNIEnv* env, jobject, jint directory, jstring name, jboolean create) {
+  const auto child = basename(env, name);
+  if (env->ExceptionCheck() || child.empty() || child.rfind(".native-publish-", 0) == 0) return -EINVAL;
+  const int error = directory_error(directory);
+  if (error) return -error;
+  struct stat parent{};
+  if (fstat(directory, &parent) != 0) return -errno;
+  if ((parent.st_mode & 077) != 0) return -EACCES;
+  if (create && mkdirat(directory, child.c_str(), 0700) != 0 && errno != EEXIST) return -errno;
+  const int fd = openat(directory, child.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+  if (fd < 0) return -errno;
+  struct stat info{};
+  int failure = 0;
+  if (fstat(fd, &info) != 0) failure = errno;
+  else if (!S_ISDIR(info.st_mode) || info.st_uid != getuid() || (info.st_mode & 077) != 0) failure = EACCES;
+  // A failed create may leave a directory behind. Never erase it or claim
+  // absence; trusted Main may reopen the same idempotent child operation.
+  if (!failure && create && (fsync(fd) != 0 || fsync(directory) != 0)) failure = errno;
+  if (failure) { close(fd); return -failure; }
+  return fd;
+}
 jint OpenStage(JNIEnv* env, jobject, jint directory, jstring name) {
   const auto file = basename(env, name);
   if (env->ExceptionCheck() || file.rfind(".native-publish-", 0) != 0) return -EINVAL;
@@ -92,10 +113,11 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     {const_cast<char*>("publishNoReplace"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Publish)},
     {const_cast<char*>("replace"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Replace)},
     {const_cast<char*>("openRead"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(OpenRead)},
+    {const_cast<char*>("openChildDirectory"), const_cast<char*>("(ILjava/lang/String;Z)I"), reinterpret_cast<void*>(OpenChildDirectory)},
     {const_cast<char*>("openStage"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(OpenStage)},
     {const_cast<char*>("removeStage"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(RemoveStage)},
     {const_cast<char*>("remove"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(RemoveRegular)},
   };
-  if (env->RegisterNatives(type, methods, 6) != JNI_OK) return JNI_ERR;
+  if (env->RegisterNatives(type, methods, static_cast<jint>(sizeof(methods) / sizeof(methods[0]))) != JNI_OK) return JNI_ERR;
   return JNI_VERSION_1_6;
 }

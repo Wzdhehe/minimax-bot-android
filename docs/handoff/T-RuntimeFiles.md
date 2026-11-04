@@ -3,6 +3,32 @@
 
 **Node读取/size已585f082在API26/35各30项通过；stage FD改造c78faca已两版本31项过（API35首次0结果失败、重跑通过）。Main move/remove已42fba3a两版本35项通过；本轮新增显式权限IPC，设备待新CI。不是完整node:fs、官方Bot已接通或SQLite FD撤销。** 不修改vendor，不回退同UID Agent/shell。
 
+## Main子目录cap基础（本轮，44项设备待新CI）
+
+为后续消息/记忆目录增加RuntimePrivateDirectory.openChild(name,create=false)，**只供可信Main调用，未新增Agent IPC/Node目录入口**。每步由持有的Main目录FD通过固定openat打开单个严格basename，create时mkdirat0700，不接flags/绝对路径；O_DIRECTORY/NOFOLLOW/CLOEXEC、parent/child目录类型/owner/私有权限检查。create成功返回前同步子目录与父目录。create=false缺失为NOT_FOUND且不创建；创建失败可能留下私有空目录，UNAVAILABLE不能推断不存在，不擅自清理；同名mkdir重试本身幂等。未来Agent mkdir协议须明确结果，不照搬此Main factory异常当“没有发生”。
+
+Kotlin沿用Main owner/worker/closed检查，累计最多8级（含最初可信relativeSegments），拒绝保留stage前缀。child拥有独立FD，parent关闭不撤销child；路径被改名/替换后仍由原cap打开后代，不能再按信息性File路径做IO。目录FD始终留Main，Root仍由可信策略选择；不把它说成SQLite lease/全FS沙箱。
+
+四新增用例（40→44）：显式创建/不创建/重开及真实文件读回；父路径改名+外部symlink替代后创建仍留原cap，关闭父/子后孙cap保持有效；symlink/普通文件/宽权限目录/恶意Native输入/冒充parent拒绝、外部哨兵不变；UI/closed/第九级在创建前拒绝。reporter固定RuntimePrivateDirectoryTest/lrN，不输出路径或内容，Python30/scope4通过；生产CMake x86_64/arm64-v8a API26、JNI导出/16KiB通过，只是交叉编译。两个验收APK构建原始结尾：
+
+```text
+BUILD SUCCESSFUL in 1m 33s
+71 actionable tasks: 16 executed, 55 up-to-date
+```
+
+新44项须另查CI，不能套旧35或40项。本地没有adb/物理真机。原Root factory与DB file owner的路径打开未整体改造，这不是目录/全部写入路径竞态已解决。
+
+## c8e702d设备结果（Node move/rename/remove）
+
+run41779493946 **success**，API实查：
+
+```text
+API26 id13299151086: node-candidate-results-api-26-t35-f0-e0-s0-passed-l0
+API35 id13298294234: node-candidate-results-api-35-t35-f0-e0-s0-passed-l0
+```
+
+两新PID的移动/冲突/覆盖/删除/拒绝和原Key/模型/WAL断言通过。这个commit尚无append，不能拿同计数旧c1b9aee代替本证据。
+
 ## 有界追加与同目录写者协调（本轮，40项设备待新CI）
 
 为后续Store/MemoryStore日志增加Main append组件，并通过APPEND二进制pipe与固定Node JNI接入验收。Main必须显式allowAppend（默认false），不从allowReplace或PUBLISH推导，Agent仍不能选根/flags/目录。append只保留原前缀并追加完整二进制，缺失时创建，空追加可创建空文件；包括原文件的**总大小最多1MiB wire policy**，超限返回TOO_LARGE且不改原文件。注入publication-only kernel不能暗中获得替换支持。
@@ -33,7 +59,7 @@ API35 id13299245445: node-candidate-results-api-35-t35-f0-e0-s0-passed-l0
 
 真实isolated UID新增权限组合/移动/删除/拒绝与unknown及旧35项通过；同期native41779079439、broker设备41779079401、scope41779079436均success。该版本尚无Node移动/删除入口（后续c8e702d），也没有本轮append。
 
-## Node move/rename/remove JNI（本轮，设备待新CI）
+## Node move/rename/remove JNI（c8e702d设备通过，以下为当轮实现记录）
 
 验收linked binding追加三个固定异步方法：move(source,target)独占移动，rename(source,target)覆盖移动，remove(name)仅删普通文件。仍复用最多4个libuv任务与隔离Kotlin client→Main授予的文件cap；不传根、任意flags、目录FD、Key或nonce给JS。source/target仅字符串与有限长度/arity，Main再做完整basename/身份/操作权限检查。JNI进入mutation后结果丢失仍返回outcome_unknown，不能错误沿用查询的unavailable；remove只回removed或unknown，有限已知拒绝用code。
 
@@ -278,7 +304,7 @@ OK (32 tests)
 
 ## 后续
 
-1. c78faca失败job重跑31项与42fba3a两版本35项已确认；继续查本轮新IPC的35项结果，不混用旧run。
-2. 显式移动/删除IPC已实现并补真实isolated UID/权限组合/关闭/结果未知断言；验证后接Node与原模块，不能从PUBLISH推导删除权或把通用fs.link替换为移动。
+1. c78faca失败job重跑31项、42fba3a Main35、c1b9aee IPC35及c8e702d Node35已确认；继续查888aa77的40项与本轮子目录44项，不混用旧run。
+2. 移动/删除IPC和Node已通过；有界append候选另查40项。本轮只增加Main子目录cap，不向Agent发目录FD；后续须设计Main选择的子scope/目录操作权限、关闭/drain与Node调用，不能直接把Agent路径当新的Root。
 3. 有界append和Main API目录协调已加入候选；继续扩展真正受控FS所需的stat/list/mkdir/FileHandle/大日志与所有写者约束，适配原JSONL/MemoryStore并运行原恢复测试；不要全局把link改成rename。
 4. full-ICU/正式launcher/model resolver、可信Bot身份与SQLite lease另见HANDOFF，仍未完成。

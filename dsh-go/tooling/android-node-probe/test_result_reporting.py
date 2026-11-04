@@ -169,3 +169,13 @@ class ResultReportingTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.module.report(self.root, status)
         self.assertEqual(status.read_text(), 't1-f1-e0-s0-large_data-lb61\n')
+
+    def test_child_directory_failure_never_emits_private_paths(self):
+        code, output = self.run_report('/private/child-path runtime_data_denied at x(RuntimePrivateDirectoryTest.kt:73)')
+        self.assertEqual(code, 1)
+        self.assertIn('kind=denied_data', output)
+        self.assertNotIn('/private', output)
+        status = self.root / 'status.txt'
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.module.report(self.root, status)
+        self.assertEqual(status.read_text(), 't1-f1-e0-s0-denied_data-lr73\n')

@@ -18,6 +18,7 @@ internal class RuntimePrivateDirectory private constructor(
     internal val file: File,
     internal val descriptor: ParcelFileDescriptor,
     private val ownerUid: Int,
+    private val depth: Int,
 ) : Closeable {
     @Volatile private var closed = false
     fun requireWorker() {
@@ -30,6 +31,32 @@ internal class RuntimePrivateDirectory private constructor(
     @Synchronized fun <T> withDescriptor(block: (Int) -> T): T {
         requireWorker()
         return block(descriptor.fd)
+    }
+    /** Trusted Main child-cap walk, not a request to grant Agent directory FDs.
+     * A create failure can leave a private directory; do not infer its absence.
+     * The stored File is informational; nested IO must use this held capability.
+     */
+    @Synchronized fun openChild(name: String, create: Boolean = false): RuntimePrivateDirectory {
+        requireWorker()
+        if (depth >= 8 || !validName(name) || name.startsWith(".native-publish-")) throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+        var child: ParcelFileDescriptor? = null
+        try {
+            val raw = NativeRuntimePublication.openChildDirectory(descriptor.fd, name, create)
+            if (raw < 0) throw ErrnoException("runtime_child", -raw)
+            child = ParcelFileDescriptor.adoptFd(raw)
+            val result = RuntimePrivateDirectory(File(file, name), child, ownerUid, depth + 1)
+            child = null
+            return result
+        } catch (error: Exception) {
+            val code = if (error is ErrnoException) when (error.errno) {
+                OsConstants.ENOENT -> RuntimeDataCode.NOT_FOUND
+                OsConstants.ELOOP, OsConstants.ENOTDIR, OsConstants.EACCES, OsConstants.EPERM -> RuntimeDataCode.DENIED
+                OsConstants.EINVAL -> RuntimeDataCode.INVALID
+                else -> RuntimeDataCode.UNAVAILABLE
+            } else RuntimeDataCode.UNAVAILABLE
+            throw RuntimeDataFailure(code)
+        } catch (_: LinkageError) { throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }
+        finally { try { child?.close() } catch (_: Exception) { } }
     }
     @Synchronized override fun close() {
         if (closed) return
@@ -67,7 +94,7 @@ internal class RuntimePrivateDirectory private constructor(
                     // has succeeded; otherwise a failing close leaks ownership.
                     try { descriptor = ParcelFileDescriptor.dup(fd) }
                     finally { Os.close(fd) }
-                    val result = RuntimePrivateDirectory(directory, descriptor!!, Process.myUid())
+                    val result = RuntimePrivateDirectory(directory, descriptor!!, Process.myUid(), segments.size)
                     transferred = true
                     return result
                 } finally {
