@@ -82,3 +82,14 @@ class ResultReportingTest(unittest.TestCase):
         self.assertEqual(status.read_text(), 't1-f1-e0-s0-vfs_open-SQLITE_CANTOPEN-l153\n')
         self.assertEqual(outputs.read_text(), 'result_id=' + status.read_text())
         self.assertNotIn('private-sentinel', outputs.read_text())
+
+    def test_native_data_owner_failure_has_a_finite_file_and_code_identifier(self):
+        code, output = self.run_report('private-sentinel runtime_data_unavailable at x(RuntimeDatabaseFilesTest.kt:31)')
+        self.assertEqual(code, 1)
+        self.assertIn('failure kind=native_data', output)
+        self.assertIn('RuntimeDatabaseFilesTest.kt:31', output)
+        self.assertNotIn('private-sentinel', output)
+        status = self.root / 'status.txt'
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.module.report(self.root, status)
+        self.assertEqual(status.read_text(), 't1-f1-e0-s0-native_data-ld31\n')

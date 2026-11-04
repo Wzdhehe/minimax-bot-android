@@ -22,6 +22,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.ccch1mneyyy.dsh_app.bot.BotProviderStore
 import io.github.ccch1mneyyy.dsh_app.bot.NativeModelRequestHost
 import io.github.ccch1mneyyy.dsh_app.bot.NativeModelChannels
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDatabaseFiles
 import io.github.ccch1mneyyy.dsh_app.model.NativeModelBroker
 import io.github.ccch1mneyyy.dsh_app.model.ProviderCall
 import io.github.ccch1mneyyy.dsh_app.model.ProviderResponse
@@ -46,8 +47,10 @@ class IsolatedNodeModelTest {
     @Test fun isolatedNodeUsesNativeOnlyKeysForStreamingCancellationAndEchoRefusal() {
         val base = InstrumentationRegistry.getInstrumentation().targetContext
         val prefix = "node-key-test-${UUID.randomUUID()}-"
+        val dataDirectory = File(base.noBackupFilesDir, "node-data-${UUID.randomUUID()}").apply { mkdirs() }
         val context = object : ContextWrapper(base) {
             override fun getSharedPreferences(name: String, mode: Int) = base.getSharedPreferences(prefix + name, mode)
+            override fun getNoBackupFilesDir() = dataDirectory
         }
         val store = BotProviderStore(context)
         val secret = "node-test-only-${UUID.randomUUID()}"
@@ -55,22 +58,16 @@ class IsolatedNodeModelTest {
         val logs = java.util.concurrent.CopyOnWriteArrayList<String>()
         val marker = File(base.filesDir, "node-private-${UUID.randomUUID()}")
         marker.writeText("non-sensitive marker")
-        val dataDirectory = File(base.filesDir, "node-data-${UUID.randomUUID()}").apply { mkdirs() }
-        val dataFiles = listOf("state.db", "state.db-wal", "state.db-shm", "state.db-journal").map { File(dataDirectory, it).apply { writeBytes(byteArrayOf()) } }
+        var dataFiles = emptyList<File>()
+        var databaseOwner: RuntimeDatabaseFiles? = null
         val dataDescriptors = mutableListOf<ParcelFileDescriptor>()
         assertTrue(marker.inputStream().use { it.read() } >= 0)
         var providerId: String? = null
         var previousPid = -1
         try {
-            dataFiles.forEach { dataDescriptors.add(ParcelFileDescriptor.open(it, ParcelFileDescriptor.MODE_READ_WRITE)) }
-            // Fixed physical entries remain owned by Main for the whole lease.
-            // Sync their creation here; the isolate receives no directory FD.
-            dataDescriptors.forEach { Os.fsync(it.fileDescriptor) }
-            val directoryFd = Os.open(dataDirectory.absolutePath, OsConstants.O_RDONLY, 0)
-            try {
-                check((Os.fstat(directoryFd).st_mode and OsConstants.S_IFMT) == OsConstants.S_IFDIR)
-                Os.fsync(directoryFd)
-            } finally { Os.close(directoryFd) }
+            databaseOwner = RuntimeDatabaseFiles.open(context)
+            dataFiles = databaseOwner.physicalFiles
+            dataDescriptors.addAll(databaseOwner.duplicateForTransfer())
             store.save(mapOf("name" to "Node test", "baseUrl" to "https://example.invalid/v1",
                 "apiFormat" to "openai-completions", "models" to listOf("normal", "stalled", "echo"), "key" to secret))
             providerId = ((store.catalog()["providers"] as List<*>).single() as Map<*, *>)["providerId"] as String
@@ -115,6 +112,7 @@ class IsolatedNodeModelTest {
                             ProbeConnection(base).use { probe ->
                                 val identity = probe.identity().get(10, TimeUnit.SECONDS)
                                 assertNotEquals(Process.myUid(), identity.uid)
+                                assertTrue(identity.data.getBoolean("database_owner_denied"))
                                 NativeModelRequestHost(identity.uid, providerId!!, "normal", probe.peerBinder(), channels::open, channels::close).use { host ->
                                 val id = UUID.randomUUID().toString()
                                 val data = Bundle().apply {
@@ -222,6 +220,7 @@ class IsolatedNodeModelTest {
             base.deleteSharedPreferences(prefix + "minimax_bot_provider")
             marker.delete()
             dataDescriptors.forEach { try { it.close() } catch (_: Exception) { } }
+            databaseOwner?.close()
             dataDirectory.deleteRecursively()
         }
     }

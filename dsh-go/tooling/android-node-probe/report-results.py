@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 PHASE = r'bootstrap|sqlite_load|sqlite_memory|vfs_register|vfs_open|vfs_wal|vfs_verify|vfs_write|vfs_reopen|model_streams|model_dynamic|sdk_route|unknown'
 CODE = r'SQLITE_CANTOPEN|SQLITE_IOERR_SHMOPEN|SQLITE_IOERR|SQLITE_BUSY|SQLITE_READONLY|SQLITE_ERROR|SQLITE_PERM|SQLITE_MISUSE|SQLITE_NOTFOUND|fd_vfs_unavailable|fd_vfs_input_invalid|sqlite_parent_missing|unknown'
 FAILURE = re.compile(r'node_probe_failed_at_(' + PHASE + r')_code_(' + CODE + r')(?:\b|$)')
-LOCATION = re.compile(r'IsolatedNodeModelTest\.kt:([0-9]{1,5})\b')
+LOCATION = re.compile(r'(IsolatedNodeModelTest|RuntimeDatabaseFilesTest)\.kt:([0-9]{1,5})\b')
 KINDS = {
     'java.lang.AssertionError': 'assertion', 'java.util.concurrent.TimeoutException': 'timeout',
     'java.util.concurrent.ExecutionException': 'future_failed', 'java.lang.UnsatisfiedLinkError': 'native_link',
@@ -19,6 +19,8 @@ KINDS = {
     'android.os.DeadObjectException': 'ipc', 'java.io.IOException': 'io',
     'java.lang.SecurityException': 'permission', 'Process crashed': 'process_crashed',
     'INSTALL_FAILED': 'installation',
+    'runtime_data_owner_only': 'owner_only', 'runtime_data_worker_required': 'worker_required',
+    'runtime_data_unavailable': 'native_data', 'runtime_data_closed': 'closed_data',
 }
 
 
@@ -49,9 +51,9 @@ def report(directory, status_file=None, github_output=None):
             if match:
                 print('::error::Node probe phase=' + match[1] + ' code=' + match[2])
                 identifier = match[1] + '-' + match[2]
-            for line in sorted(set(LOCATION.findall(text)))[:5]:
-                print('::error::Node probe failure location=IsolatedNodeModelTest.kt:' + line)
-                source_line = line
+            for filename, line in sorted(set(LOCATION.findall(text)))[:5]:
+                print('::error::Node probe failure location=' + filename + '.kt:' + line)
+                source_line = line if filename == 'IsolatedNodeModelTest' else 'd' + line
             for kind in sorted({kind for needle, kind in KINDS.items() if needle in text}):
                 print('::error::Node probe failure kind=' + kind)
                 if identifier == 'unclassified':

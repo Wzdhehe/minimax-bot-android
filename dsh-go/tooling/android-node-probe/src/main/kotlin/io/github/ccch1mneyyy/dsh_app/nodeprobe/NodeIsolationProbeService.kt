@@ -13,6 +13,9 @@ import android.os.Messenger
 import android.os.ParcelFileDescriptor
 import android.os.Process
 import io.github.ccch1mneyyy.dsh_app.isolation.ModelRequestClient
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDatabaseFiles
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataCode
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -36,7 +39,10 @@ class NodeIsolationProbeService : Service() {
                 if (message.what == 1) runProbe(message)
                 else if (message.what == 3) {
                     val response = Message.obtain(null, 3)
-                    response.data = Bundle().apply { putString("code", "ready") }
+                    val denied = try { RuntimeDatabaseFiles.open(this).close(); false }
+                        catch (error: RuntimeDataFailure) { error.code == RuntimeDataCode.OWNER_ONLY }
+                        catch (_: Exception) { false }
+                    response.data = Bundle().apply { putString("code", "ready"); putBoolean("database_owner_denied", denied) }
                     try { message.replyTo?.send(response) } catch (_: Exception) { }
                 }
             }
