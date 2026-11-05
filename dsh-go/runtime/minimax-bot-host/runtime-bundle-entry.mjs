@@ -4,6 +4,7 @@
 import { createWebuiRuntimeHost } from '@mcode-runtime/assembly';
 import { createBotRuntimeSession } from './runtime-host-session.mjs';
 import { catalogFromDescriptor, readRuntimeDescriptor, readRuntimeDescriptorFd } from './runtime-descriptor.mjs';
+import { startBotRuntimeFromFd } from './bot-runtime-start.mjs';
 export { createWebuiRuntimeHost };
 
 // The guest reads the descriptor the Android host wrote into its own private
@@ -21,6 +22,13 @@ export { readRuntimeDescriptor, readRuntimeDescriptorFd };
 export function createBuiltinBotRuntime({ dataDir, appVersion, signal, descriptor = null, probe = null, nativeBinding = null }) {
   return createBotRuntimeSession({ dataDir, signal, catalog: catalogFromDescriptor(descriptor), probe, nativeBinding, startHost: ({ dataDir: root }) =>
     createWebuiRuntimeHost({ dataDir: root, appVersion, mcodeToolsRequested: false }) });
+}
+
+// Explicit trusted startup, not an import side effect. Native must assemble
+// the independent-UID process/files/SQLite first. A caller cannot replace the
+// pinned factory by adding startRuntime to options.
+export function startBuiltinBotRuntimeFromFd(options) {
+  return startBotRuntimeFromFd({ ...options, startRuntime: createBuiltinBotRuntime });
 }
 export { createBotAgentPort } from './agent-port.mjs';
 export { startBotService } from './service.mjs';
