@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Parcel
 import android.os.ParcelFileDescriptor
 import android.os.Process
+import android.system.Os
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataCode
@@ -14,6 +15,7 @@ import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitClient
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitHost
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitWire
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimePrivateDirectory
 import io.github.ccch1mneyyy.dsh_app.isolation.readBoundedRequestPipe
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimePublicationResult
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDeletionResult
@@ -223,6 +225,38 @@ class RuntimeFileCommitHostTest {
             try { survivor?.closeAsync()?.get(5, TimeUnit.SECONDS) } catch (_: Exception) { }
             root.deleteRecursively(); otherRoot.deleteRecursively()
         }
+    }
+
+    @Test fun botStateCleanupRejectsSymlinksAndKeepsDurableFiles() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val scope = "bot-cleanup-${UUID.randomUUID()}"
+        val root = File(context.noBackupFilesDir, "minimax-bot-runtime/bot-state/$scope")
+        RuntimePrivateDirectory.open(context, listOf("bot-state", scope)).use { }
+        val stage = File(root, "bot-memory-stage-${"a".repeat(64)}.bin")
+        val native = File(root, ".native-publish-123e4567-e89b-12d3-a456-426614174000.tmp")
+        val durable = File(root, "bot-memory-${"c".repeat(64)}.bin")
+        val suspect = File(root, "bot-memory-stage-${"b".repeat(64)}.bin")
+        try {
+            for (file in listOf(stage, native, durable)) {
+                file.writeText(if (file == durable) "durable" else "temporary")
+                Os.chmod(file.path, 384) // 0600
+            }
+            Os.symlink(durable.path, suspect.path)
+            ProbeConnection(context).use { peer ->
+                val identity = peer.identity().get(10, TimeUnit.SECONDS)
+                expectFailure(RuntimeDataCode.UNAVAILABLE) {
+                    RuntimeFileCommitHost.openBotState(context, scope, identity.uid, peer.peerBinder()).close()
+                }
+                assertTrue(stage.exists())
+                assertTrue(native.exists())
+                assertEquals("durable", durable.readText())
+                assertTrue(suspect.delete())
+                RuntimeFileCommitHost.openBotState(context, scope, identity.uid, peer.peerBinder()).use { }
+                assertFalse(stage.exists())
+                assertFalse(native.exists())
+                assertEquals("durable", durable.readText())
+            }
+        } finally { root.deleteRecursively() }
     }
 
     @Test fun abandonedSnapshotOutputsReleaseTheirSlotsOnCloseAndDeadline() {

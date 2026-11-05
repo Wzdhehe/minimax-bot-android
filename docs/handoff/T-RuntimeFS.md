@@ -3,9 +3,11 @@
 
 ## 官方Bot Store受控持久化候选（Android验收接线，设备未验证）
 
+获得Bot数据独占锁后、新guest获得能力之前，native候选只清理严格格式的记忆stage及原子发布stage；扫描/批次有上限，验证私有单链接普通文件后删除并sync，异常项拒绝而不跟随。已接受事务从持久pending记录恢复，宿主分别验证恢复与生产C++清理原语；Android设备及二者联合恢复未执行。旧`bot-memory-<摘要>.bin`可能是持久数据，不得清理；详细限制和实测见[NEXT-AGENT](NEXT-AGENT.md)。
+
 `RuntimeFileCommitHost.openBotState`现为Bot Store提供专用目录上的非阻塞内核协作锁；每次独立打开目录FD争锁，publisher/reader复制同一已锁FD，在途请求与输出排空后关闭所有副本，竞争返回`runtime_data_busy`。原通用文件broker在另一子树，验收脚本已换到新入口。Linux对实际锁原语的跨进程竞争、进程死亡释放与dup生命周期测试通过，双ABI本地交叉编译及验收APK编译通过；**Android设备尚未运行**。锁不能约束未参与协议的同UID写者、移动/替换目录或SQLite；产品launcher、可信写者统一入口和孤儿stage处理仍须完成，详见[NEXT-AGENT](NEXT-AGENT.md)。
 
-后续增加`bot-memory-filesystem.mjs`，在同一个JS文件会话上适配官方MemoryStore的团队/单Bot记忆、pending、journal、备份和archive；原版备份硬链接变成受控读快照+独占publish复制，要求单一可信runtime写者。宿主验证未知提交重启恢复、operationId日志去重、旧字节备份及无物理Bot目录的HTTP记忆读写；Android验收脚本已接入并编译，**设备尚未执行，产品启动器尚未接入**。1MiB单文件、整文件追加成本、native排他候选的设备验证和pending前失败的孤儿stage清理均未解决，详见[NEXT-AGENT](NEXT-AGENT.md)。
+后续增加`bot-memory-filesystem.mjs`，在同一个JS文件会话上适配官方MemoryStore的团队/单Bot记忆、pending、journal、备份和archive；原版备份硬链接变成受控读快照+独占publish复制，要求单一可信runtime写者。宿主验证未知提交重启恢复、operationId日志去重、旧字节备份及无物理Bot目录的HTTP记忆读写；Android验收脚本已接入并编译，**设备尚未执行，产品启动器尚未接入**。1MiB单文件、整文件追加成本、native排他和stage清理候选的设备验证以及旧格式不可辨认的孤儿均未解决，详见[NEXT-AGENT](NEXT-AGENT.md)。
 
 Store与MemoryStore共享`bot-file-lease.mjs`：同一会话有界串行写、复制入队数据，任何结果未知使共享方失效，在途读不再返回旧结果；明确的publish已存在及rename/remove不存在保留原语义。该JS对象本身不提供跨进程排他；native候选见上段，正式launcher仍须接入并验证进程回收。
 

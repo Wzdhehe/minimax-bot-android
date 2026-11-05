@@ -248,6 +248,14 @@ internal class RuntimeFileCommitHost private constructor(
                 val result = held.withDescriptor { NativeRuntimePublication.tryDirectoryLease(it) }
                 if (result == OsConstants.EAGAIN) throw RuntimeDataFailure(RuntimeDataCode.BUSY)
                 if (result != 0) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+                // Cleanup runs only while this scope is locked and before any
+                // file capability is handed to the guest. At most four bounded
+                // batches run per opening; retrying later resumes safely.
+                var cleanup = OsConstants.EAGAIN
+                repeat(4) {
+                    if (cleanup == OsConstants.EAGAIN) cleanup = held.withDescriptor { NativeRuntimePublication.cleanupBotStages(it) }
+                }
+                if (cleanup != 0) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
                 val writer = RuntimeAtomicPublisher.openForHeldDirectory(held)
                 publisher = writer
                 val read = held.duplicate()

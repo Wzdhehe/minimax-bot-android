@@ -11,6 +11,8 @@ internal object NativeRuntimePublication : RuntimePublicationKernel {
     override external fun replace(directory: Int, source: String, target: String): Int
     /** Main-only nonblocking advisory lease on an independently opened directory FD. */
     external fun tryDirectoryLease(directory: Int): Int
+    /** Main-only bounded cleanup, after acquiring the exclusive Bot directory lease. */
+    external fun cleanupBotStages(directory: Int): Int
     /** Main-only owned file FD or negative errno, never parcelled to Agent. */
     external fun openRead(directory: Int, name: String): Int
     /** Main-only private child directory FD or negative errno; never parcelled. */
