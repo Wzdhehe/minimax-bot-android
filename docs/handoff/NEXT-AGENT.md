@@ -182,6 +182,25 @@ runtime-host-probe固定40个直接依赖版本（核原pnpm-lock），transitiv
 
 ## 4. 接手第一项：先核对这些CI，不扩新功能
 
+> **2026-11-05 实查（Windows 侧，用 gh API 逐个 run 查 annotations）：从 `71365da` 起的每一个 workflow run 都是同一个失败原因，任务根本没启动——**
+>
+> ```text
+> The job was not started because recent account payments have failed or your
+> spending limit needs to be increased. Please check the 'Billing & plans' section in your settings
+> ```
+>
+> 受影响的 run：41981683344 / 41982566651 / 41983281162 / 41984495268 / 41985118453 等（覆盖 Documentation、Bot fork scope、Bot host and protocol checks、Native model broker boundary、Isolated Android Node candidate、Android broker emulator verification 全部工作流，逐个查过 annotation 文本一致）。
+>
+> **因此：`71365da`…`96905e6` 这批提交的代码一次都没有被检验过，workflow 显示 failure 不等于代码失败。** 接手第一件事是恢复 Actions 额度（`Billing & plans`），或明确接受"这批提交尚未验证"；不要去追这个红灯，也不要把旧 success 结论套到新提交上。
+>
+> 该批提交共 8 个、105 文件、+11344 行，做的是 Bot 业务接文件能力的实活：官方 `store.mjs`/`memory.mjs` 事务迁到共享文件能力、独占 native 目录 lease、可恢复 stage 文件、新增 `dsh-go/tooling/runtime-host-probe/`（真启动钉住的 WebUI/local-runtime-v2 工厂 + 官方 Bot JSON 服务，不注入替身）、把真实 Bot 服务打进 probe APK（`bundle-bot-service.mjs`）。
+>
+> 额度不可用期间能做的本地替代检查（**Windows 本机，2026-11-05 实跑**）：文档链接检查器 36 份 **0 问题** ✓；文档单测 39 项 **3 错**（全是 `os.symlink` 的 Windows 权限 EPERM `WinError 1314`：两个 symlink 扫描用例 + `test_symlink_escaping_the_root_is_refused`）；probe Python 单测 39 项 **全过**（6 跳，全是 `test_directory_lease.py`，理由 "requires Linux and a C++ compiler"）；host Node 测试（service/workspace/runtime-descriptor/upstream-pin）48 项 **34 过 / 14 错**，14 项全是 EPERM（symlink 权限 + POSIX 权限位语义：chmod 0600 后 rename-over 被 Windows 拒）；`runtime-host-probe` **跑不了**（设计只支持 Linux x64 + Node ABI137 原生 SQLite，缺 `.build/host-probe.json`）。
+>
+> 结论：本地能跑的都跑了，红灯全部是 Windows 平台差异或 Linux-only 工具链；**真正需要 Linux 的部分（native host 测试、真实 runtime host probe、模拟器矩阵）只能等额度恢复**，本轮没有这些的证据。
+
+
+
 > **2026-11-04 20:54 更新：本节末段的「下一项」已完成。** a2c17d5只把android-node-probe.yml的既有`PINNED_SOURCE_RUN_ID`填为41826964330（未动五个producer权威输入、未放宽任何校验、未编造SHA），**41831847047整体success**：API26/35两job均success，Node probe counts **tests=49 failures=0 errors=0 skipped=0**；结果artifact 13324805400(api-26-t49-f0-e0-s0-passed-l0)、13322759984(api-35-t49-f0-e0-s0-passed-l0)。本轮prepare用的是钉住的full-ICU源包：`prepare-probe.py`核对config.gypi后拒绝非ICU源并把`requiresIntl`置真，设备侧`IsolatedNodeModelTest`在该标志为真时**实际断言**`intlAvailable`、`zh-CN` locale与`Asia/Shanghai`时区，因此这是ICU分支的执行证据，不只是「同样49项」。仍**没有**真实provider/模型turn、产品APK、ARM64或真机结论。
 
 | run / 对应代码 | 收尾时状态与边界 |
