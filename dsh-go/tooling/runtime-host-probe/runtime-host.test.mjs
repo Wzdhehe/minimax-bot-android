@@ -77,7 +77,7 @@ test('the bound FD starter boots the actual runtime and authenticates Bot reques
   await once(child, 'spawn');
   closeSync(descriptorFd); descriptorFd = undefined;
   peers.forEach((socket) => socket.destroy());
-  assert.equal((await Promise.race([ready, exited.then(() => { throw Error('real FD startup failed'); })]))[0].toString(), 'R');
+  assert.equal((await Promise.race([ready, exited.then(() => { throw Error(`real FD startup failed: ${stderr}`); })]))[0].toString(), 'R');
   for (let index = 0; index < owners.length; index++) {
     const owner = owners[index];
     let body = '';
@@ -94,6 +94,7 @@ test('the bound FD starter boots the actual runtime and authenticates Bot reques
   const [code] = await exited;
   assert.equal(code, 0, stderr);
   assert.match(stdout, /PASS: real pinned runtime FD startup/);
+  assert.match(stdout, /PASS: real runtime migrations through explicit SQLite capability/);
   assert.ok(!stdout.includes('native-broker-placeholder'));
   assert.equal(stderr, '');
 });

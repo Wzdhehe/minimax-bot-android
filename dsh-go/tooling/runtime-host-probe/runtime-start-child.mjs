@@ -5,10 +5,33 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createInterface } from 'node:readline';
-import { closeSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, writeSync } from 'node:fs';
+import { createRequire } from 'node:module';
 
 const [bundle, root] = process.argv.slice(2);
 const { startBuiltinBotRuntimeFromFd } = await import(pathToFileURL(join(bundle, 'runtime-host.partial.mjs')).href);
+// This host constructor stands in for the native-owned FD mapping. Ordinary
+// host FS preserves upstream chmod/stat/backup identity behavior. It is not
+// Android, virtual filesystem or FD VFS execution evidence.
+const Database = createRequire(import.meta.url)('better-sqlite3');
+const physicalDatabase = join(root, 'v2/sqlite/runtime-state.sqlite');
+const databases = [];
+const backupMethods = new WeakMap();
+const nativeSqlite = { open(options) {
+  assert.equal(this, nativeSqlite);
+  assert.equal(arguments.length, 1);
+  assert.equal(Object.isFrozen(options), true);
+  const database = new Database(physicalDatabase, options);
+  databases.push(database);
+  backupMethods.set(database, database.backup.bind(database));
+  return database;
+}, backup(database, { fileName }) {
+  return backupMethods.get(database)(join(root, 'v2/sqlite/backups', fileName));
+}, openBackup({ fileName, options }) {
+  const database = new Database(join(root, 'v2/sqlite/backups', fileName), options);
+  databases.push(database);
+  return database;
+} };
 const values = new Map();
 const missing = () => Object.assign(Error('runtime_data_not_found'), { code: 'runtime_data_not_found' });
 const files = {
@@ -29,7 +52,7 @@ let handle;
 try {
   handle = await startBuiltinBotRuntimeFromFd({ descriptorFd: 3, expectedOwnerUid: process.getuid(),
     runtimeDataDir: root, botDataDir: join(root, 'virtual-bot'), appVersion: 'host-fd-start-probe',
-    files, nativeBinding: { open() { nativeCalls++; throw Error('no_model_turn_expected'); }, cancel() {} },
+    files, nativeSqlite, nativeBinding: { open() { nativeCalls++; throw Error('no_model_turn_expected'); }, cancel() {} },
     connections: {
       next() { return requested++ < 2 ? requested + 3 : new Promise((_, reject) => { pending = reject; }); },
       cancel() { cancelCalls++; pending?.(Error('source_closed')); },
@@ -48,6 +71,11 @@ try {
   assert.equal(readyCalls, 1);
   assert.equal(cancelCalls, 1);
   assert.equal(nativeCalls, 0);
+  assert.ok(databases.length > 0, 'the real migrations must open the native capability');
+  assert.ok(databases.every((database) => !database.open), 'shutdown must close every real handle');
+  assert.equal(existsSync(physicalDatabase), true);
+  assert.ok(databases.length >= 3, 'both legacy and v2 connections plus snapshot integrity must use the capability');
+  process.stdout.write('PASS: real runtime migrations through explicit SQLite capability with native backup and integrity ports; host FS only\n');
   process.stdout.write('PASS: real pinned runtime FD startup and authenticated Bot, shared shutdown; no model turn or Android\n');
 } finally {
   await handle?.close();

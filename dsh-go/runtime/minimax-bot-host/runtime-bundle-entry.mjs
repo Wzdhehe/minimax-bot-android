@@ -5,6 +5,7 @@ import { createWebuiRuntimeHost } from '@mcode-runtime/assembly';
 import { createBotRuntimeSession } from './runtime-host-session.mjs';
 import { catalogFromDescriptor, readRuntimeDescriptor, readRuntimeDescriptorFd } from './runtime-descriptor.mjs';
 import { startBotRuntimeFromFd } from './bot-runtime-start.mjs';
+import { bindRuntimeSqlite } from './runtime-sqlite-binding.mjs';
 export { createWebuiRuntimeHost };
 
 // The guest reads the descriptor the Android host wrote into its own private
@@ -19,9 +20,36 @@ export { readRuntimeDescriptor, readRuntimeDescriptorFd };
 // separate argument: the descriptor is the trust boundary, so the guest
 // cannot be handed a catalog the host never wrote, and a descriptor that
 // breaks the field policy is refused before anything is projected.
-export function createBuiltinBotRuntime({ dataDir, appVersion, signal, descriptor = null, probe = null, nativeBinding = null }) {
-  return createBotRuntimeSession({ dataDir, signal, catalog: catalogFromDescriptor(descriptor), probe, nativeBinding, startHost: ({ dataDir: root }) =>
-    createWebuiRuntimeHost({ dataDir: root, appVersion, mcodeToolsRequested: false }) });
+export async function createBuiltinBotRuntime({ dataDir, appVersion, signal, descriptor = null, probe = null, nativeBinding = null, nativeSqlite = null }) {
+  const sqlite = nativeSqlite === null ? null : bindRuntimeSqlite({ dataDir,
+    open: typeof nativeSqlite?.open === 'function' ? nativeSqlite.open.bind(nativeSqlite) : null,
+    backup: typeof nativeSqlite?.backup === 'function' ? nativeSqlite.backup.bind(nativeSqlite) : nativeSqlite?.backup,
+    openBackup: typeof nativeSqlite?.openBackup === 'function' ? nativeSqlite.openBackup.bind(nativeSqlite) : nativeSqlite?.openBackup });
+  try {
+    const runtime = await createBotRuntimeSession({ dataDir, signal, catalog: catalogFromDescriptor(descriptor), probe, nativeBinding, startHost: ({ dataDir: root }) =>
+      createWebuiRuntimeHost({ dataDir: root, appVersion, mcodeToolsRequested: false }) });
+    if (!sqlite) return runtime;
+    let closing;
+    function close() {
+      if (closing) return closing;
+      sqlite.deactivate();
+      signal?.removeEventListener('abort', onAbort);
+      closing = Promise.resolve().then(() => runtime.close()).then((value) => {
+        sqlite.finish(true); return value;
+      }, (error) => { sqlite.finish(false); throw error; });
+      return closing;
+    }
+    function onAbort() { void close().catch(() => {}); }
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) {
+      await close();
+      throw Object.assign(new Error('REQUEST_CANCELLED'), { code: 'REQUEST_CANCELLED' });
+    }
+    return Object.freeze({ ...runtime, close });
+  } catch (error) {
+    sqlite?.finish(false);
+    throw error;
+  }
 }
 
 // Explicit trusted startup, not an import side effect. Native must assemble

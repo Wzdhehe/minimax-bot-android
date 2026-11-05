@@ -15,7 +15,7 @@ const failure = (code) => Object.assign(new Error(code), { code });
  * Bot persistence uses only files; no workspace/media access or guest listener.
  */
 export async function startBotRuntimeFromFd({ descriptorFd, expectedOwnerUid, runtimeDataDir, botDataDir,
-  appVersion, nativeBinding, files, connections, onReady, signal, logger, startRuntime } = {}) {
+  appVersion, nativeBinding, nativeSqlite, files, connections, onReady, signal, logger, startRuntime } = {}) {
   const descriptor = readRuntimeDescriptorFd({ fd: descriptorFd, expectedOwnerUid });
   if (descriptor.broker !== null ||
       typeof runtimeDataDir !== 'string' || !isAbsolute(runtimeDataDir) || runtimeDataDir.includes('\0') ||
@@ -81,7 +81,7 @@ export async function startBotRuntimeFromFd({ descriptorFd, expectedOwnerUid, ru
   if (signal?.aborted) onAbort();
   try {
     ensureLive();
-    runtime = await startRuntime({ dataDir: runtimeDataDir, appVersion, descriptor, nativeBinding, signal: controller.signal });
+    runtime = await startRuntime({ dataDir: runtimeDataDir, appVersion, descriptor, nativeBinding, nativeSqlite, signal: controller.signal });
     if (!runtime || typeof runtime.close !== 'function' ||
         ['run', 'models', 'reply', 'answer'].some((name) => typeof runtime.agent?.[name] !== 'function')) {
       throw failure('runtime_start_invalid');

@@ -82,8 +82,11 @@ try {
   ]) {
     if (!upstreamInputs.includes(required)) throw new Error(`Real runtime input missing: ${required}`);
   }
-  if (!Object.hasOwn(metafile.inputs, join(here, 'runtime-miniapp-index.mjs'))) {
-    throw new Error('Pinned RuntimeServices no longer reaches the trusted Bot gateway seam');
+  for (const adaptation of wiring.adaptations) {
+    const input = metafile.inputs[join(source, adaptation.importer)];
+    if (!input?.imports.some((entry) => resolve(source, entry.path) === join(here, adaptation.adapter))) {
+      throw new Error(`Pinned runtime no longer reaches reviewed adapter: ${adaptation.importer}`);
+    }
   }
   const imports = [...new Set(Object.values(metafile.outputs).flatMap((output) =>
     output.imports.filter((entry) => entry.external).map((entry) => entry.path)))].sort();
