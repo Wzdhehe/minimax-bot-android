@@ -27,3 +27,4 @@ export { startBotService } from './service.mjs';
 export { createBotFdTransport } from './bot-fd-transport.mjs';
 export { startBotFdIngress } from './bot-fd-ingress.mjs';
 export { createBotStorePersistence } from './bot-store-persistence.mjs';
+export { createBotFileLease } from './bot-file-lease.mjs';

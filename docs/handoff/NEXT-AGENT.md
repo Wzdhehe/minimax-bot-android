@@ -7,6 +7,8 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+新增`bot-file-lease.mjs`，将Bot Store和下一步MemoryStore需要的原生文件能力收敛到同一个可共享会话：文件名仅允许原生basename，最大1MiB，最多32个有界串行写入，写入参数入队时复制；publish的`already_exists`、rename/remove的明确`not_found`不伪称未知，其他不确定结果使共享会话失效，已排队操作及在途读取也不能继续返回旧状态。超限/排队满要求重载。`createBotStorePersistence`兼容原`files`参数，也可接宿主持有的`lease`；Android验收脚本的模块打包已纳入此依赖。**此JS对象不是native跨进程锁或终止机制**，宿主仍须保证每个数据目录同一时刻只有一个可信runtime，并在销毁后再重开；新增记忆适配时必须与Store传入同一lease，不得各自单独包装同一files。宿主完整106/106、钉点源码完整打包图4/4、精确验收脚本host 4/4、Python33/33，验收APK/仪器APK `BUILD SUCCESSFUL in 19s`；设备仍未执行。
+
 Android验收脚本现嵌入真实官方`Store`及生产`bot-store-persistence`，经既有`mbot_files_bridge`使用Main绑定的`node-state`私有文件能力；两个独立isolated Node进程顺序启动时，设备测试将验证同一Bot、聊天条数0→1→2、一个任务配置、用量turn只记录一次，并保留Key不进入报告/持久文件的断言。**脚本已接线并编译，Android执行未验证。** Pinned Bot i18n导入时需要Intl，脚本显式在无Intl时报告`available:false`，设备测试只在Intl可用时要求Store结果；正式full-ICU组合必须验该分支。验收asset随包包含官方Bot MIT LICENSE并校验。实际执行：精确APK脚本宿主4/4（Store块在两个独立host进程通过磁盘上的假文件能力恢复，另测无Intl跳过）、Python33/33，NDK/验收APK及仪器APK `BUILD SUCCESSFUL in 1m 1s`；本地release的`requiresIntl=false`/`requiresSqlite=false`。这不是MemoryStore、完整Bot业务或产品启动器，不能把宿主假能力说成Android Binder成功。
 
 新增`bot-store-persistence.mjs`：为真实官方Bot `Store`提供受控文件能力适配；`server.mjs`/`service.mjs`新增可选的仅宿主注入接缝，未注入时保留原filesystem行为。state和usage用固定文件名，聊天文件基于上游已规范化的basename作SHA-256映射到扁平名字；拒绝其它路径。每次读/写最多1MiB；不可悄悄截断或当空数据。写入经过有界串行队列（最多32项），底层返回未知或异常即污染该adapter，后续读写拒绝，须撤销旧lease并重启恢复，绝不自动重试；native明确的`too_large`发生在发布前，先返回明确超限错误，但也要求重载，因为Store调用save前可能已修改内存状态。只允许一个Store实例拥有一个native数据lease，**跨进程排他lease尚未实现**。官方`Store.readUsage`只把ENOENT当空账本，其他错误上抛；损坏JSON和无效UTF-8在适配器内归一化，不回显数据。`startBotService`同时前置校验signal/logger，防止宿主传漏时启动监听后抛错泄漏资源。

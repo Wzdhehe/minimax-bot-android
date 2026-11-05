@@ -38,7 +38,7 @@ jobs:
           sdk: stable
       - name: Test Bot runtime adapter
         working-directory: dsh-go
-        run: node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs runtime/minimax-bot-host/bot-fd-transport.test.mjs runtime/minimax-bot-host/bot-fd-ingress.test.mjs runtime/minimax-bot-host/bot-store-persistence.test.mjs runtime/minimax-bot-host/runtime-descriptor.test.mjs runtime/minimax-bot-host/workspace.test.mjs runtime/minimax-bot-host/provider-broker.test.mjs runtime/minimax-bot-host/usage-quota.test.mjs runtime/minimax-bot-host/schedule.test.mjs runtime/minimax-bot-host/model-catalog-projection.test.mjs runtime/minimax-bot-host/native-model-binding.test.mjs runtime/minimax-bot-host/native-model-runtime.test.mjs
+        run: node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs runtime/minimax-bot-host/bot-fd-transport.test.mjs runtime/minimax-bot-host/bot-fd-ingress.test.mjs runtime/minimax-bot-host/bot-file-lease.test.mjs runtime/minimax-bot-host/bot-store-persistence.test.mjs runtime/minimax-bot-host/runtime-descriptor.test.mjs runtime/minimax-bot-host/workspace.test.mjs runtime/minimax-bot-host/provider-broker.test.mjs runtime/minimax-bot-host/usage-quota.test.mjs runtime/minimax-bot-host/schedule.test.mjs runtime/minimax-bot-host/model-catalog-projection.test.mjs runtime/minimax-bot-host/native-model-binding.test.mjs runtime/minimax-bot-host/native-model-runtime.test.mjs
       - name: Test upstream Bot storage and usage regressions
         working-directory: dsh-go
         run: node --test runtime/vendor/minimax-bot/tests/storage-reliability.test.mjs runtime/vendor/minimax-bot/tests/usage-honest.test.mjs

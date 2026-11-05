@@ -6,6 +6,7 @@
 
 ## 当前已完成与未完成
 
+- 新增可在Bot状态与后续记忆适配器间共享的文件会话：写入有界串行，未知结果会让所有共享方拒绝后续读写；在途读若会话失效也不返回旧值。它不是跨进程锁，正式启动器仍须保证独占与退出回收。宿主106项通过，Android验收脚本已重新打包编译、设备未验证。
 - 官方Bot的`Store`现有可选受控持久化接缝：状态/聊天/定时任务配置/用量账本可经已绑定文件能力读写，不暴露主应用路径；聊天文件映射到固定前缀与摘要命名。写入结果未知时停用该次会话的后续写入，避免重试造成覆盖或重复记账；损坏数据和读取错误不再当空账本。真实Store与该适配器已接入Android**验收脚本**的文件broker并编译，设备仍未执行；MemoryStore、附件和完整runtime文件系统尚未适配。[NEXT-AGENT](handoff/NEXT-AGENT.md)记录1MiB限制与后续任务。
 - 新增可信Bot连接接收循环`startBotFdIngress`并导出到runtime bundle：顺序接收FD、关闭时立即停止，迟到的FD到达后关闭；验收APK已调用JNI cancel来唤醒底层队列等待，并编写明确断言。宿主用真实官方Bot验证鉴权、创建及SSE，全套宿主90项通过；**Android候选仅编译、设备未验证，产品启动器尚未接入**。详见[NEXT-AGENT](handoff/NEXT-AGENT.md)。
 - 验收工程已接出运行中动态交付Bot socket的候选链：Main经owner UID检查的Binder把socket交入有界队列；隔离Node经受限JNI异步取出，交生产FD transport。设备测试编写了Node启动后顺序交付两次、启动前拒绝并关闭、另一个isolated UID伪造交付时拒绝并关闭、原模型/Key边界等断言；**只完成本地构建，Android执行未验证，尚非产品launcher/真实Bot**。宿主精确脚本3项和Python33项通过；详见[NEXT-AGENT](handoff/NEXT-AGENT.md)。

@@ -38,7 +38,8 @@ def bundle(output_dir=None):
         'runtime-descriptor.mjs': ['runtime-catalog-policy.mjs'],
         'bot-fd-transport.mjs': [],
         'bot-fd-ingress.mjs': [],
-        'bot-store-persistence.mjs': [],
+        'bot-file-lease.mjs': [],
+        'bot-store-persistence.mjs': ['bot-file-lease.mjs'],
     }
     def module_url(name):
         if name not in urls:
