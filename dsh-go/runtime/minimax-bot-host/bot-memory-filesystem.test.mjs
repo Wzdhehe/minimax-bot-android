@@ -218,3 +218,58 @@ test('the real Bot JSON service can restore state and memory without a physical 
   assert.ok(JSON.stringify(await restored.json()).includes('持久记忆'));
   await assert.rejects(stat(dataDir), (error) => error.code === 'ENOENT');
 });
+
+test('restricted Bot service uses broker persistence and explicitly refuses unsupported file routes', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'mbot-restricted-service-'));
+  const dataDir = join(directory, 'virtual-bot');
+  let service;
+  t.after(async () => { if (service) await service.dispose(); await rm(directory, { recursive: true, force: true }); });
+  const listener = createServer();
+  await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(0, '127.0.0.1', resolve); });
+  const port = listener.address().port;
+  await new Promise((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()));
+  const files = fakeFiles();
+  const open = () => startBotService({ port, dataDir, fileMode: 'unavailable', signal: new AbortController().signal,
+    logger: { info() {}, warn() {}, error() {} }, ...createBotPersistence({ dataDir, files }) });
+  await assert.rejects(startBotService({ port, dataDir, fileMode: 'unavailable', signal: new AbortController().signal,
+    logger: { info() {}, warn() {}, error() {} } }), TypeError);
+  await assert.rejects(startBotService({ port, dataDir, fileMode: 'typo' }), TypeError);
+  service = await open();
+  assert.equal(service.workspace, null);
+  const request = (path, options = {}) => fetch(`${service.descriptor.baseUrl}${path}`, {
+    ...options, headers: { connection: 'close', ...service.descriptor.headers, ...options.headers },
+  });
+  const anonymous = await fetch(`${service.descriptor.baseUrl}/api/uploads`, { method: 'POST', headers: { connection: 'close' }, body: 'x' });
+  assert.equal(anonymous.status, 403);
+  await anonymous.text();
+  const create = await request('/api/bots', { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Restricted Bot' }) });
+  assert.equal(create.status, 200);
+  const { bot } = await create.json();
+  const blocked = [
+    ['/api/media?chat=bot:x&src=x', {}],
+    ['/api/uploads?name=test.txt', { method: 'POST', body: 'data' }],
+    ['/api/uploads/abcdef012345-test.txt', {}],
+    ['/api/avatars', {}],
+    ['/api/avatars', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ avatar: 'data:image/png;base64,AA==' }) }],
+    ['/api/avatars/avatar.png', {}],
+    ['/api/bots', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'No avatar', avatar: 'data:image/png;base64,AA==' }) }],
+    [`/api/chats/bot:${bot.id}/messages`, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'hello', attachments: ['abcdef012345-test.txt'] }) }],
+  ];
+  for (const [path, options] of blocked) {
+    const response = await request(path, options);
+    assert.equal(response.status, 503, path);
+    assert.equal((await response.json()).error, 'files_unavailable');
+  }
+  const client = await request('/');
+  assert.equal(client.status, 404);
+  await client.text();
+  await assert.rejects(stat(dataDir), (error) => error.code === 'ENOENT');
+  await service.dispose();
+  service = await open();
+  const state = await request('/api/state');
+  assert.equal(state.status, 200);
+  assert.ok((await state.json()).bots.some((entry) => entry.id === bot.id));
+  await assert.rejects(stat(dataDir), (error) => error.code === 'ENOENT');
+});

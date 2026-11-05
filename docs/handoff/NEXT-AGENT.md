@@ -7,6 +7,10 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+真实Bot服务新增显式`fileMode: 'unavailable'`候选：必须同时注入Store和MemoryStore能力，不解析或创建Main工作区，不依赖Bot的Mini App客户端目录；`workspace`返回null。vendored server在此模式拒绝静态客户端、媒体、上传和头像路由，`Engine.resolveAttachments`及`Team`头像方法也在文件访问前拒绝，明确返回`files_unavailable`/HTTP 503；普通Bot状态、创建、持久化仍走原业务，鉴权仍先于路由。默认`fileMode: 'workspace'`保留已有工作区行为，此候选**不实现附件、头像、Mini App或插件市场**。不能把受限模式暴露为完整功能或绕过未来的文件能力；其他runtime FS和安全边界仍须接好。
+
+宿主验证：真实Bot使用内存fake文件能力、FD transport与逐次授予的socket，鉴权/拒绝错误Host与Origin/创建Bot/SSE均通过且没有物理Bot数据或工作区目录；受限服务普通创建及重启恢复、8种文件/头像/附件请求明确拒绝、匿名请求403通过。真实服务经固定esbuild 0.28.2构建成`data:`内存模块后也能启动并响应JSON（1/1），不证明Android或mcode完整runtime。CI host选集116/116、上游存储/记忆/头像/HTTP回归61/61、scope4/4、钉点mcode bundle图4/4本机通过；`bot-host.yml`加入头像/HTTP回归与内存模块测试。首次完整host复跑为115/116，一项`fetch`报`UND_ERR_SOCKET`对端关闭；将该测试的连接设为短连接后单组连跑5次和完整选集复跑均通过，连接复用是否为根因未独立证实。**无Android设备执行、无真实provider、无产品APK。**
+
 Android验收脚本新增跨进程故障恢复联合用例：首个Node进程经真实Store/MemoryStore与文件broker写入记忆，再由**仅验收脚本内**的包装器在journal append实际返回published后模拟回执丢失，断言产生`memory_pending`；Main检查pending和一个临时stage存在，关闭并等待fileHost退役。第二进程取得同一scope时，先断言native清理已移除stage，MemoryStore再从pending恢复正确内容并验证journal无重复、备份及聊天/用量/Key边界。精确APK脚本用两个宿主进程和磁盘假文件能力通过4/4：它在两进程之间**由测试模拟删除stage**，不证明Android Binder或native清理；Python39/39，补pending文件存在/消失断言后的验收APK与仪器APK `BUILD SUCCESSFUL in 57s`。full-ICU时设备才执行上述业务分支，本地release无Intl；**API26/35设备未执行**，不能算联合验收通过。
 
 新增native临时文件清理候选：`openBotState`取得独占目录锁后、创建publisher/reader和授予guest之前调用`cleanupBotStages`，只识别严格格式的`bot-memory-stage-<64位小写摘要>.bin`和`.native-publish-<UUID>.tmp`。在held目录FD内逐批扫描，不递归、不向guest提供枚举能力；每批先验证全部待删项为当前UID拥有、私有权限、单链接普通文件，再unlink并fsync目录。匹配项若为软链接/硬链接/公开权限等则拒绝启动并保留该批；返回固定错误，不输出文件名或数据。每次扫描最多65536项、每批最多1024项、一次打开最多4批；超过4批时已安全清理部分后返回`runtime_data_unavailable`，之后可重试继续；扫描预算耗尽也拒绝，不伪称完成。它依赖下述协作锁及所有可信写者遵循同一scope，不约束绕开锁的同UID写者。

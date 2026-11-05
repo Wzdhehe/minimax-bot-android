@@ -110,7 +110,7 @@ function chatReferences(messages, src) {
 
 /**
  * @param {MiniAppContext} context
- * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean, resolveMediaPath?: (path: string) => Promise<string>, testProvider?: (id: string, model: string) => Promise<{ok: boolean, code?: string, status?: number}>, getUsageQuota?: (force: boolean) => Promise<object>, listenServer?: (server: import('node:http').Server) => Promise<void>, storePersistence?: { init: (path: string) => Promise<any>, readJson: (path: string, fallback: any) => Promise<any>, writeJsonAtomic: (path: string, value: any) => Promise<void>, appendUsage: (path: string, line: string) => Promise<void>, readUsage: (path: string) => Promise<string> }, memoryFilesystem?: any }} [hostOptions]
+ * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean, resolveMediaPath?: (path: string) => Promise<string>, testProvider?: (id: string, model: string) => Promise<{ok: boolean, code?: string, status?: number}>, getUsageQuota?: (force: boolean) => Promise<object>, listenServer?: (server: import('node:http').Server) => Promise<void>, storePersistence?: { init: (path: string) => Promise<any>, readJson: (path: string, fallback: any) => Promise<any>, writeJsonAtomic: (path: string, value: any) => Promise<void>, appendUsage: (path: string, line: string) => Promise<void>, readUsage: (path: string) => Promise<string> }, memoryFilesystem?: any, filesUnavailable?: boolean }} [hostOptions]
  * @returns {Promise<MiniAppLifecycle>}
  */
 export async function start(context, hostOptions = {}) {
@@ -134,8 +134,8 @@ export async function start(context, hostOptions = {}) {
     }
   };
 
-  const engine = new Engine({ store, memory, agent: context.agent, logger: context.logger, broadcast });
-  const team = new Team({ store, memory, engine, broadcast });
+  const engine = new Engine({ store, memory, agent: context.agent, logger: context.logger, broadcast, filesUnavailable: hostOptions.filesUnavailable });
+  const team = new Team({ store, memory, engine, broadcast, filesUnavailable: hostOptions.filesUnavailable });
   const handleMcp = createMcpHandler({ team, engine });
 
   const json = (response, status, value) => {
@@ -467,6 +467,7 @@ export async function start(context, hostOptions = {}) {
 
     const asset = method === 'GET' ? staticFile(path) : undefined;
     if (asset) {
+      if (hostOptions.filesUnavailable) return json(response, 404, { error: 'not_found', message: t('err.fileNotFound') });
       const [file, type] = asset;
       let content;
       try {
@@ -477,6 +478,14 @@ export async function start(context, hostOptions = {}) {
       response.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' });
       response.end(content);
       return;
+    }
+
+    if (hostOptions.filesUnavailable && ((method === 'GET' && path === '/api/media') ||
+        (method === 'POST' && path === '/api/uploads') ||
+        (method === 'GET' && /^\/api\/uploads\/[^/]+$/.test(path)) ||
+        (method === 'GET' && /^\/api\/avatars\/[a-zA-Z0-9_-]+\.(png|jpe?g|webp|gif)$/.test(path)))) {
+      if (method === 'POST') request.resume();
+      throw new EngineError('files_unavailable', 'Attachments and custom images are unavailable');
     }
 
     if (method === 'GET' && path === '/api/media') return serveMedia(request, response, url);
@@ -729,11 +738,13 @@ export async function start(context, hostOptions = {}) {
         ? 500
         : error.code === 'not_found'
           ? 404
-          : error.code === 'forbidden'
-            ? 403
-            : error.code === 'busy' || error.code === 'delivery_uncertain' || error.code === 'memory_conflict'
-              ? 409
-              : 400;
+          : error.code === 'files_unavailable'
+            ? 503
+            : error.code === 'forbidden'
+              ? 403
+              : error.code === 'busy' || error.code === 'delivery_uncertain' || error.code === 'memory_conflict'
+                ? 409
+                : 400;
       if (!known) context.logger.error('minimax_bot.request_failed', { path: (request.url ?? '').split('?')[0] });
       if (response.headersSent) {
         response.end();

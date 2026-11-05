@@ -167,12 +167,14 @@ export class Engine {
    *   agent: MiniAppAgentClient | undefined,
    *   logger: import('./miniapp-api.js').MiniAppLogger,
    *   broadcast: (event: Record<string, unknown>) => void,
+   *   filesUnavailable?: boolean,
    * }} deps
    */
   constructor(deps) {
     this.store = deps.store;
     this.memory = deps.memory;
     this.agent = deps.agent;
+    this.filesUnavailable = deps.filesUnavailable === true;
     this.logger = deps.logger;
     /** Waits before each automatic retry of a failed turn (tests shorten them). */
     this.retryDelays = deps.retryDelaysMs ?? TURN_RETRY_DELAYS_MS;
@@ -1074,6 +1076,7 @@ export class Engine {
     if (ids === undefined || ids === null) return [];
     if (!Array.isArray(ids)) throw new EngineError('invalid', t('err.badAttachment'));
     if (ids.length > MAX_ATTACHMENTS) throw new EngineError('invalid', t('err.tooManyAttachments', { n: MAX_ATTACHMENTS }));
+    if (ids.length && this.filesUnavailable) throw new EngineError('files_unavailable', 'Attachments are unavailable');
     const out = [];
     for (const raw of ids) {
       const id = String(raw ?? '');

@@ -3,6 +3,8 @@
 
 ## 官方Bot Store受控持久化候选（Android验收接线，设备未验证）
 
+`startBotService`可显式使用`fileMode: 'unavailable'`，不创建工作区并要求Store/Memory能力；直接文件相关路由与附件/自定义头像操作在访问filesystem前拒绝。真实Bot和FD socket通过宿主fake文件broker验证，另实测打包为data URL后启动；这为隔离启动准备接缝，不代表Android上已启动真实服务或附件已完成，见[NEXT-AGENT](NEXT-AGENT.md)。
+
 获得Bot数据独占锁后、新guest获得能力之前，native候选只清理严格格式的记忆stage及原子发布stage；扫描/批次有上限，验证私有单链接普通文件后删除并sync，异常项拒绝而不跟随。已接受事务从持久pending记录恢复，宿主分别验证恢复与生产C++清理原语；Android的清理后pending恢复联合用例已编写并编译，但设备未执行。旧`bot-memory-<摘要>.bin`可能是持久数据，不得清理；详细限制和实测见[NEXT-AGENT](NEXT-AGENT.md)。
 
 `RuntimeFileCommitHost.openBotState`现为Bot Store提供专用目录上的非阻塞内核协作锁；每次独立打开目录FD争锁，publisher/reader复制同一已锁FD，在途请求与输出排空后关闭所有副本，竞争返回`runtime_data_busy`。原通用文件broker在另一子树，验收脚本已换到新入口。Linux对实际锁原语的跨进程竞争、进程死亡释放与dup生命周期测试通过，双ABI本地交叉编译及验收APK编译通过；**Android设备尚未运行**。锁不能约束未参与协议的同UID写者、移动/替换目录或SQLite；产品launcher、可信写者统一入口和孤儿stage处理仍须完成，详见[NEXT-AGENT](NEXT-AGENT.md)。

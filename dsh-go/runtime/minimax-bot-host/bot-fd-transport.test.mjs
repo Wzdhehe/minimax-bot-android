@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { fstatSync, openSync } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { Agent, createServer as createHttpServer, request as httpRequest } from 'node:http';
 import { createServer, connect } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -151,5 +151,7 @@ test('the real Bot serves authenticated HTTP and SSE over granted FDs without op
   const [exitCode] = await exited;
   assert.equal(exitCode, 0, stderr);
   assert.equal(stderr, '');
+  await assert.rejects(stat(join(root, 'data')), (error) => error.code === 'ENOENT');
+  await assert.rejects(stat(join(root, 'workspace')), (error) => error.code === 'ENOENT');
   phase = 'done';
 });

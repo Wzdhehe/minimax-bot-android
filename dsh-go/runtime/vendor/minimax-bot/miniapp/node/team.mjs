@@ -67,13 +67,14 @@ function imageExt(buffer) {
 /** Caller is `undefined` for the user (page or the user's own MiniMax Code chat). */
 export class Team {
   /**
-   * @param {{ store: Store, memory: MemoryStore, engine: Engine, broadcast: (e: Record<string, unknown>) => void }} deps
+   * @param {{ store: Store, memory: MemoryStore, engine: Engine, broadcast: (e: Record<string, unknown>) => void, filesUnavailable?: boolean }} deps
    */
   constructor(deps) {
     this.store = deps.store;
     this.memory = deps.memory;
     this.engine = deps.engine;
     this.broadcast = deps.broadcast;
+    this.filesUnavailable = deps.filesUnavailable === true;
   }
 
   changed() {
@@ -232,6 +233,7 @@ export class Team {
     if (value === undefined || value === null) return undefined;
     const text = String(value).trim();
     if (!text || /^(default|none|默认)$/i.test(text)) return undefined;
+    if (this.filesUnavailable) throw new EngineError('files_unavailable', 'Custom images are unavailable');
     let buffer;
     let name;
     if (text.startsWith('data:')) {
@@ -258,6 +260,7 @@ export class Team {
 
   /** Existing per-Bot images are also gallery entries; switching/deleting a Bot keeps them. */
   async listAvatars() {
+    if (this.filesUnavailable) throw new EngineError('files_unavailable', 'Custom images are unavailable');
     const entries = await readdir(join(this.store.dir, 'avatars'), { withFileTypes: true }).catch((error) => {
       if (error.code === 'ENOENT') return [];
       throw error;
@@ -274,6 +277,7 @@ export class Team {
 
   /** Content-addressed, atomic files deduplicate repeated imports and survive interrupted writes. */
   async saveAvatar({ buffer, ext, name: existingName }) {
+    if (this.filesUnavailable) throw new EngineError('files_unavailable', 'Custom images are unavailable');
     if (existingName) return existingName;
     const dir = join(this.store.dir, 'avatars');
     await mkdir(dir, { recursive: true });
