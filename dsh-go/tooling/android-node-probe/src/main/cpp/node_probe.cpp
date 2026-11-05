@@ -14,6 +14,7 @@ jobject dispatcher = nullptr;
 jmethodID open_method = nullptr;
 jmethodID cancel_method = nullptr;
 jmethodID bot_connection_method = nullptr;
+jmethodID bot_connection_close_method = nullptr;
 jmethodID file_method = nullptr;
 jmethodID file_read_method = nullptr;
 jmethodID file_size_method = nullptr;
@@ -171,9 +172,18 @@ void NextBotConnection(const v8::FunctionCallbackInfo<v8::Value>& args) {
   }
 }
 
+void CancelBotConnections(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (args.Length() != 0) return;
+  JNIEnv* env = nullptr;
+  if (java_vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;
+  env->CallVoidMethod(dispatcher, bot_connection_close_method);
+  if (env->ExceptionCheck()) env->ExceptionClear();
+}
+
 void InitializeBotIngress(v8::Local<v8::Object> exports, v8::Local<v8::Value>, v8::Local<v8::Context> context, void*) {
   auto* isolate = context->GetIsolate();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "next"), v8::Function::New(context, NextBotConnection).ToLocalChecked()).Check();
+  exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "cancel"), v8::Function::New(context, CancelBotConnections).ToLocalChecked()).Check();
 }
 namespace bot_ingress_module_registration {
 NODE_MODULE_LINKED(mbot_bot_ingress, InitializeBotIngress)
@@ -413,13 +423,14 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   open_method = env->GetMethodID(type, "openModelFd", "(Ljava/lang/String;Ljava/lang/String;)I");
   cancel_method = env->GetMethodID(type, "cancelModelFd", "(Ljava/lang/String;)V");
   bot_connection_method = env->GetMethodID(type, "takeBotConnection", "()I");
+  bot_connection_close_method = env->GetMethodID(type, "closeBotConnections", "()V");
   file_method = env->GetMethodID(type, "commitRuntimeFile", "(Ljava/lang/String;[BZ)I");
   file_read_method = env->GetMethodID(type, "readRuntimeFile", "(Ljava/lang/String;)[B");
   file_size_method = env->GetMethodID(type, "sizeRuntimeFile", "(Ljava/lang/String;)J");
   file_move_method = env->GetMethodID(type, "moveRuntimeFile", "(Ljava/lang/String;Ljava/lang/String;Z)I");
   file_remove_method = env->GetMethodID(type, "removeRuntimeFile", "(Ljava/lang/String;)I");
   file_append_method = env->GetMethodID(type, "appendRuntimeFile", "(Ljava/lang/String;[B)I");
-  if (!open_method || !cancel_method || !bot_connection_method || !file_method || !file_read_method || !file_size_method || !file_move_method || !file_remove_method || !file_append_method) return JNI_ERR;
+  if (!open_method || !cancel_method || !bot_connection_method || !bot_connection_close_method || !file_method || !file_read_method || !file_size_method || !file_move_method || !file_remove_method || !file_append_method) return JNI_ERR;
   JNINativeMethod method{const_cast<char*>("start"),
       const_cast<char*>("(Ljava/lang/String;IIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;II[I)I"), reinterpret_cast<void*>(Start)};
   if (env->RegisterNatives(type, &method, 1) != JNI_OK) return JNI_ERR;

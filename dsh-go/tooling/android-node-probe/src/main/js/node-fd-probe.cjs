@@ -6,6 +6,7 @@ const nativeRouteModuleUrl = "__MBOT_NATIVE_ROUTE_MODULE_URL__";
 const nativeBindingModuleUrl = "__MBOT_NATIVE_BINDING_MODULE_URL__";
 const descriptorModuleUrl = "__MBOT_DESCRIPTOR_MODULE_URL__";
 const botTransportModuleUrl = "__MBOT_BOT_FD_TRANSPORT_MODULE_URL__";
+const botIngressModuleUrl = "__MBOT_BOT_FD_INGRESS_MODULE_URL__";
 const fs = require('node:fs');
 let probePhase = 'bootstrap';
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
@@ -132,18 +133,41 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       response.once('finish', () => { allValid &&= valid; if (++connections === 2) complete(allValid); });
       response.end(valid ? 'fd-ok' : 'fd-invalid');
     });
-    let timer;
+    let timer, ingress, pump, pendingNative, nativeCalls = 0;
     try {
       await botTransport.listenServer(server);
-      const ingress = process._linkedBinding('mbot_bot_ingress');
+      ingress = process._linkedBinding('mbot_bot_ingress');
+      const { startBotFdIngress } = await import(botIngressModuleUrl);
+      pump = startBotFdIngress({ transport: botTransport, next: () => {
+        nativeCalls++;
+        pendingNative = ingress.next();
+        return pendingNative;
+      } });
       // One private byte tells Main Node is running before it sends either FD.
       fs.writeSync(Number(result), 'R');
-      for (let index = 0; index < 2; index++) botTransport.accept(await ingress.next());
-      const request = await Promise.race([received, new Promise((_, reject) => {
-        timer = setTimeout(() => reject(Object.assign(new Error('bot_transport_timeout'), { code: 'bot_transport_timeout' })), 5000);
+      const request = await Promise.race([received, pump.done.then(() => { throw Object.assign(new Error('bot_transport_unavailable'), { code: 'bot_transport_unavailable' }); }), new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Object.assign(new Error('bot_transport_timeout'), { code: 'bot_transport_timeout' })), 45_000);
       })]);
       report.botFdTransport = { request, noListener: !server.listening, connections };
-    } finally { clearTimeout(timer); botTransport.close(); server.close(() => {}); }
+    } finally {
+      clearTimeout(timer);
+      let cancelledWait = false;
+      try {
+        if (ingress) ingress.cancel();
+        if (pump) await pump.close();
+        if (pendingNative && nativeCalls >= 3) {
+          let deadline;
+          try {
+            cancelledWait = await Promise.race([pendingNative.then(() => true, () => true), new Promise((resolve) => {
+              deadline = setTimeout(() => resolve(false), 10_000);
+            })]);
+          } finally { clearTimeout(deadline); }
+        }
+      } finally {
+        if (report.botFdTransport) report.botFdTransport.cancelledWait = cancelledWait;
+        botTransport.close(); server.close(() => {});
+      }
+    }
     probePhase = 'model_dynamic';
     const binding = process._linkedBinding('mbot_model_bridge');
     const request = JSON.stringify({ providerId, modelId: 'normal', messages: [{ role: 'user', content: 'Hi dynamic' }] });

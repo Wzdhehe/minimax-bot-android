@@ -344,6 +344,7 @@ class IsolatedNodeModelTest {
                                 assertTrue(botTransportReport.getBoolean("request"))
                                 assertTrue(botTransportReport.getBoolean("noListener"))
                                 assertEquals(2, botTransportReport.getInt("connections"))
+                                assertTrue(botTransportReport.getBoolean("cancelledWait"))
                                 assertEquals("done", report.getJSONObject("normal").getString("code"))
                                 assertEquals("hello", report.getJSONObject("normal").getJSONArray("events").getJSONObject(0).getString("delta"))
                                 assertEquals("broker_cancelled", report.getJSONObject("cancelled").getString("code"))

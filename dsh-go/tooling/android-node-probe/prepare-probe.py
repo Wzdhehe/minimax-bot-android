@@ -37,6 +37,7 @@ def bundle(output_dir=None):
         'runtime-catalog-policy.mjs': [],
         'runtime-descriptor.mjs': ['runtime-catalog-policy.mjs'],
         'bot-fd-transport.mjs': [],
+        'bot-fd-ingress.mjs': [],
     }
     def module_url(name):
         if name not in urls:
@@ -65,6 +66,9 @@ def bundle(output_dir=None):
     bot_transport_placeholder = '"__MBOT_BOT_FD_TRANSPORT_MODULE_URL__"'
     assert template.count(bot_transport_placeholder) == 1
     template = template.replace(bot_transport_placeholder, json.dumps(module_url('bot-fd-transport.mjs')))
+    bot_ingress_placeholder = '"__MBOT_BOT_FD_INGRESS_MODULE_URL__"'
+    assert template.count(bot_ingress_placeholder) == 1
+    template = template.replace(bot_ingress_placeholder, json.dumps(module_url('bot-fd-ingress.mjs')))
     (assets / 'node-fd-probe.cjs').write_text(template)
 
 

@@ -172,21 +172,27 @@ test('the packaged Bot transport block serves two granted duplex FDs without lis
   execFileSync('python3', [join(root, 'prepare-probe.py'), '--bundle-only', '--bundle-output', directory]);
   const script = await readFile(join(directory, 'node-fd-probe.cjs'), 'utf8');
   const moduleLine = /^const botTransportModuleUrl = (.+);$/m.exec(script);
+  const ingressLine = /^const botIngressModuleUrl = (.+);$/m.exec(script);
   assert.ok(moduleLine);
+  assert.ok(ingressLine);
   const moduleUrl = JSON.parse(moduleLine[1]);
+  const ingressUrl = JSON.parse(ingressLine[1]);
   const start = script.indexOf("    probePhase = 'bot_http_fd';");
   const end = script.indexOf("    probePhase = 'model_dynamic';", start);
   assert.ok(start >= 0 && end > start);
   const block = script.slice(start, end);
   const childScript = `
     const botTransportModuleUrl = ${JSON.stringify(moduleUrl)};
+    const botIngressModuleUrl = ${JSON.stringify(ingressUrl)};
     const fs = require('node:fs');
     const result = '5';
     let next = 3;
+    let cancelled = false, cancelPending;
     const control = new (require('node:net').Socket)({ fd: 5, readable: true, writable: true });
     process._linkedBinding = (name) => {
       if (name !== 'mbot_bot_ingress') throw Error('unexpected binding');
-      return { next: () => new Promise((resolve, reject) => {
+      return { cancel() { cancelled = true; cancelPending?.(); }, next: () => new Promise((resolve, reject) => {
+        cancelPending = () => reject(Error('cancelled'));
         control.once('data', (chunk) => chunk.toString() === 'A' ? resolve(next++) : reject(Error('bad grant')));
       }) };
     };
@@ -194,7 +200,7 @@ test('the packaged Bot transport block serves two granted duplex FDs without lis
     const report = {};
     (async () => { ${block}
       control.destroy();
-      process.stdout.write(JSON.stringify(report.botFdTransport));
+      process.stdout.write(JSON.stringify({ ...report.botFdTransport, cancelled }));
     })().catch(() => { process.exitCode = 1; });
   `;
   const peers = [], owners = [], responses = ['', ''];
@@ -232,7 +238,7 @@ test('the packaged Bot transport block serves two granted duplex FDs without lis
     const [code] = await exited;
     assert.equal(code, 0, stderr);
     assert.equal(stderr, '');
-    assert.deepEqual(JSON.parse(stdout), { request: true, noListener: true, connections: 2 });
+    assert.deepEqual(JSON.parse(stdout), { request: true, noListener: true, connections: 2, cancelledWait: true, cancelled: true });
     for (const response of responses) {
       assert.match(response, /^HTTP\/1\.1 200/);
       assert.ok(response.includes('fd-ok'));
