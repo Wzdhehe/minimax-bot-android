@@ -7,6 +7,8 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+用户最新分工优先：Codex负责地基（runtime、隔离、broker、存储恢复、Endpoint代次和launcher/桥的接口），M3.1 Flash负责边界固定后的UI/文案/定向验证和文档。先前派出的T-LocalEndpointLease收回给Codex；Flash当前仅执行[T-Flash-UIInventory](T-Flash-UIInventory.md)。历史分工与此冲突时以本段为准。Codex审查Flash交付后才进入主线，不以其自报测试替代必要核验。
+
 当前已快进合入远端`a8b895d`，包含本机agent的pin路径修复、Endpoint/Flutter transport与rootfs下载修复；没有回退或覆盖这些提交。以下续写覆盖上轮「只打包、未调用服务」：固定Android验收脚本在Intl可用时现调用真实`startBotService`，以descriptor中的Bot会话token鉴权、共享native文件broker、`fileMode: 'unavailable'`和FD transport启动；Main逐次授予两条socket，验证匿名403、授权/api/state 200、不回显Key/会话token、guest不listen及取消。无Intl分支只跑原基础HTTP夹具，不能算真实Bot通过。测试任务设为2100年的固定once任务，避免服务第二次启动时调度虚假测试任务。
 
 宿主精确脚本6/6，包含真实Bot与无Intl两分支，以及两个独立进程中先启动/停止真实服务、再运行状态/记忆恢复块（文件能力仍为fake，stage删除仍由宿主模拟）；Python39/39，本地验收APK与仪器APK `BUILD SUCCESSFUL in 1m 12s`。Android API26/35新用例尚未执行，本机release仍无Intl/SQLite，构建成功不能算真实服务设备通过；完整mcode、真实provider、正式launcher和产品APK未完成。

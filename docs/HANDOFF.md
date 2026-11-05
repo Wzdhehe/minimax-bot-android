@@ -4,9 +4,11 @@
 
 用户已要求继续开发。当前只在**feat/t-plugins**，阶段成果及时推送；不另起分支、不动main/dev/integration、不force、不PR、不发布APK。
 
+最新分工：Codex负责runtime、独立UID/文件/Key边界、broker、Endpoint及生命周期接口和集成审查；本机M3.1 Flash承担接口冻结后的界面实现、文案、定向验证和文档整理。此前Endpoint代次任务收回归Codex，本机当前任务见[Flash任务卡](handoff/T-Flash-UIInventory.md)。
+
 ## 当前已完成与未完成
 
-- 最新验收脚本在Intl可用时已调用真实官方Bot服务，经native文件能力启动并通过运行中授予的socket处理匿名403与授权状态200；缺Intl时明确只跑基础HTTP夹具。宿主精确脚本6/6、Python39/39，本地验收APK/仪器APK构建通过；**新Android设备用例未执行**。本机agent并行任务见[Endpoint代次任务卡](handoff/T-LocalEndpointLease.md)，不用等待rootfs，不另起PRoot runner。
+- 最新验收脚本在Intl可用时已调用真实官方Bot服务，经native文件能力启动并通过运行中授予的socket处理匿名403与授权状态200；缺Intl时明确只跑基础HTTP夹具。宿主精确脚本6/6、Python39/39，本地验收APK/仪器APK构建通过；**新Android设备用例未执行**。Endpoint代次保护由Codex负责，不用等待rootfs，不另起PRoot runner。
 - 真实官方Bot服务增加受限启动候选：不打开主应用工作区，以已授予的状态/记忆能力运行；附件、上传和自定义图片明确返回不可用，默认工作区模式不变。宿主用真实Bot、已连接FD和假文件broker验证HTTP/SSE与鉴权，并从内存模块启动服务；验收APK已打包该模块，**尚未在Android加载/启动真实服务**，也未接产品启动器。
 - Bot记忆的临时准备文件采用`bot-memory-stage-<摘要>.bin`命名，native候选在获取独占锁后、授予guest文件能力前清理这一命名空间及严格匹配的原子发布临时文件。宿主验证已接受事务在删除临时文件后仍可从pending恢复，清理会保留持久文件并拒绝软硬链接等异常；已写Android跨两次进程的「清理后恢复」联合验收，但设备未执行。旧版摘要孤儿无法安全辨认，不可批量删。
 - 新增Bot数据的native排他候选：可信Main通过`openBotState`在专用目录申请内核协作锁，同一目录的另一独立会话会得到`runtime_data_busy`；关闭或对端死亡后先排空在途操作再释放。Linux实测跨进程竞争和进程被杀后释放，Android验收工程已接入并编译，**设备尚未执行，产品启动器尚未接入**。它依赖所有可信写者遵循协议，不约束绕开该入口的同UID写者或SQLite；详细边界见[NEXT-AGENT](handoff/NEXT-AGENT.md)。
