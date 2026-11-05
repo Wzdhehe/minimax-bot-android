@@ -99,8 +99,8 @@ fetch() {
   if [[ -f "$dest" && -n "$want" && "$(sha256 "$dest")" == "$want" ]]; then return 0; fi
   if [[ -f "$dest" && -z "$want" ]]; then return 0; fi
   log "download $url"
-  curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 -sS -o "$dest.part" "$url"
-  mv "$dest.part" "$dest"
+  curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 -sS -o "$dest.part" "$url" || return 1
+  mv "$dest.part" "$dest" || return 1
   if [[ -n "$want" ]]; then
     local got; got="$(sha256 "$dest")"
     [[ "$got" == "$want" ]] || { rm -f "$dest"; die "sha256 mismatch for $dest: got $got want $want"; }
