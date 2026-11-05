@@ -31,6 +31,7 @@ import io.github.ccch1mneyyy.dsh_app.model.ProviderTransport
 import io.github.ccch1mneyyy.dsh_app.runtime.RuntimeDescriptor
 import io.github.ccch1mneyyy.dsh_app.runtime.BotLoopbackBridge
 import io.github.ccch1mneyyy.dsh_app.runtime.BotSocketConnection
+import io.github.ccch1mneyyy.dsh_app.runtime.BotConnectionGrants
 import io.github.ccch1mneyyy.dsh_app.runtime.RuntimeDescriptorSession
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -203,6 +204,13 @@ class IsolatedNodeModelTest {
                         val bridge = BotLoopbackBridge.bind {
                             BotSocketConnection.open(base) { fd -> checkNotNull(grant.get())(fd) }
                         }
+                        val admission = java.util.concurrent.atomic.AtomicReference<BotConnectionGrants?>()
+                        var watchedPeer: IBinder? = null
+                        val peerDeath = IBinder.DeathRecipient {
+                            admission.get()?.close()
+                            bridge.close()
+                            grant.set(null)
+                        }
                         try {
                             val descriptorSession = RuntimeDescriptorSession(
                                 "/runtime/probe.mjs", "97818b2890b4acae1c6bd1200a226ff506680628", bridge.port,
@@ -229,12 +237,12 @@ class IsolatedNodeModelTest {
                                 assertTrue(identity.data.getBoolean("database_owner_denied"))
                                 assertTrue(identity.data.getBoolean("publication_owner_denied"))
                                 assertTrue(identity.data.getBoolean("bot_connection_owner_denied"))
+                                val gate = BotConnectionGrants(identity.uid)
+                                admission.set(gate)
                                 grant.set { fd ->
-                                    val accepted = probe.offerBotConnection(fd).get(10, TimeUnit.SECONDS)
-                                    check(accepted.uid == identity.uid && accepted.data.getString("code") == "ok") {
-                                        "bot_grant_not_acknowledged"
-                                    }
+                                    gate.awaitAccepted { probe.offerBotReceipt(fd) }
                                 }
+                                watchedPeer = probe.peerBinder().also { it.linkToDeath(peerDeath, 0) }
                                 NativeModelRequestHost(identity.uid, providerId!!, "normal", probe.peerBinder(), channels::open, channels::close).use { host ->
                                 RuntimeFileCommitHost.openBotState(context, "node-state", identity.uid, probe.peerBinder()).let { fileHost ->
                                 try {
@@ -305,6 +313,7 @@ class IsolatedNodeModelTest {
                                         assertFalse(botResponse.contains(secret))
                                     }
                                 }
+                                admission.get()?.close()
                                 bridge.close()
                                 grant.set(null)
                                 val reply = completion.get(50, TimeUnit.SECONDS)
@@ -461,8 +470,10 @@ class IsolatedNodeModelTest {
                                 }
                             }
                         } finally {
+                            admission.getAndSet(null)?.close()
                             bridge.close()
                             grant.set(null)
+                            try { watchedPeer?.unlinkToDeath(peerDeath, 0) } catch (_: Exception) { }
                             try { descriptorFd?.close() } catch (_: Exception) { }
                             modelFds.forEach { try { it.close() } catch (_: Exception) { } }
                             resultPair.forEach { try { it.close() } catch (_: Exception) { } }

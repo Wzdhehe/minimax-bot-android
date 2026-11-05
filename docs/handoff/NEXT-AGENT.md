@@ -7,6 +7,10 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+当前新增[每代连接授予gate](T-BotConnectionGrants.md)：`awaitAccepted`限制并发与10秒截止，核对实际隔离UID，close撤销私有等待，迟到future不能重新授权。Android验收已经把它与桥组合、linkToDeath；另写真实Binder死亡+模拟未回回执的设备用例，尚未设备执行。JUnit69/Node56已实跑通过；生产launcher、完整生命周期与Endpoint发布仍缺，不能把本组件当成已完成启动器。
+
+Flash当前最新卡为[记忆管理](T-Flash-MemoryManage.md)（b59b9a3），覆盖单Bot新增/修订编辑/确认删除、冲突/未知结果与草稿保留，不改公共API或底层。用户约一小时后断电，卡要求40分钟后收束、留最后10分钟验证文档推送；不要按下文旧卡继续造第二套页面。
+
 Flash只读记忆页b36ade7已快进纳入且源码审查接受：BotProfile入口、只读memory(scope)、坏载荷拒绝、旧响应/异常和销毁守卫符合卡面，没有修改公共API或底层。Flash报告本机memory/profile相关widget22项、home/stream11项及analyze通过；云端无Flutter未复跑，未连真实服务/设备。见[T-Flash-BotMemoryRead](T-Flash-BotMemoryRead.md)。该卡结项，下一卡须另行明确，勿将下文旧分工当当前待办。
 
 最新阶段见[T-BotSocketConnection](T-BotSocketConnection.md)：生产Android socketpair适配器已加入，已有验收工程通过Main字节桥请求隔离Bot，grant等待核对既有Messenger的目标UID和接受回执，不再直接从Main手写socketpair请求。正式服务端口及Host取descriptor，返回旧FD读到的端口由Main核对代次。owner-only、双向/半关闭、流事件和关闭、失败回收测试已写，设备尚未执行；宿主精确脚本6/6、Python39/39通过。**目前只有验收代码组装，没有生产launcher、Binder死亡/等待授予撤销或Flutter Endpoint发布；Main桥实际设备行为仍未验证。**

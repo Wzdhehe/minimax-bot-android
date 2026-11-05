@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Main socketpair适配与桥接验收候选
 
+后续已有[授予等待截止与撤销](T-BotConnectionGrants.md)，把gate和Binder死亡回调接入同一验收工程；本文记录socketpair阶段的边界，正式launcher仍未完成，设备仍未验证。
+
 ## 本阶段范围
 
 接续[T-BotLoopbackBridge](T-BotLoopbackBridge.md)，新增生产`runtime/BotSocketConnection.kt`，并将其与字节桥组合到已有Android Node验收工程。仍不是正式launcher，不自动发布Flutter Endpoint，不恢复同UID PRoot执行。

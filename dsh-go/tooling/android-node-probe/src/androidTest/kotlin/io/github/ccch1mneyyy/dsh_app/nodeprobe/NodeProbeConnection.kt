@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.os.Message
 import android.os.Messenger
 import android.os.ParcelFileDescriptor
+import io.github.ccch1mneyyy.dsh_app.runtime.BotConnectionGrants
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -20,6 +21,7 @@ import java.util.concurrent.TimeUnit
 
 internal data class Reply(val uid: Int, val data: Bundle)
 internal class ProbeConnection(private val context: Context) : java.io.Closeable {
+    private val closed = java.util.concurrent.atomic.AtomicBoolean()
     private val connected = CompletableFuture<Messenger>()
     private val result = CompletableFuture<Reply>()
     private val identityResult = CompletableFuture<Reply>()
@@ -54,6 +56,7 @@ internal class ProbeConnection(private val context: Context) : java.io.Closeable
         val id = UUID.randomUUID().toString()
         val result = CompletableFuture<Reply>()
         offers[id] = result
+        result.whenComplete { _, _ -> offers.remove(id, result) }
         try {
             connected.get(10, TimeUnit.SECONDS).send(Message.obtain(null, 7).apply {
                 data = Bundle().apply { putString("id", id); putParcelable("bot_connection", fd) }
@@ -65,12 +68,23 @@ internal class ProbeConnection(private val context: Context) : java.io.Closeable
         }
         return result
     }
+    fun offerBotReceipt(fd: ParcelFileDescriptor): CompletableFuture<BotConnectionGrants.Receipt> {
+        val offered = offerBotConnection(fd)
+        val receipt = CompletableFuture<BotConnectionGrants.Receipt>()
+        offered.whenComplete { reply, error ->
+            if (error != null) receipt.completeExceptionally(IllegalStateException("node_probe_offer_unavailable"))
+            else receipt.complete(BotConnectionGrants.Receipt(reply.uid, reply.data.getString("code") == "ok"))
+        }
+        receipt.whenComplete { _, _ -> if (receipt.isCancelled) offered.cancel(false) }
+        return receipt
+    }
     private fun fail() {
         val error = IllegalStateException("node_probe_disconnected")
         connected.completeExceptionally(error); result.completeExceptionally(error); identityResult.completeExceptionally(error)
         offers.values.forEach { it.completeExceptionally(error) }; offers.clear()
     }
     override fun close() {
+        if (!closed.compareAndSet(false, true)) return
         val peer = try { connected.getNow(null)?.binder } catch (_: Exception) { null }
         val stopped = CountDownLatch(1)
         val death = IBinder.DeathRecipient { stopped.countDown() }

@@ -2,6 +2,7 @@
 package io.github.ccch1mneyyy.dsh_app.nodeprobe
 
 import android.os.ParcelFileDescriptor
+import android.os.IBinder
 import android.system.Os
 import android.system.OsConstants
 import android.system.StructTimeval
@@ -9,11 +10,14 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.ccch1mneyyy.dsh_app.runtime.BotLoopbackBridge
 import io.github.ccch1mneyyy.dsh_app.runtime.BotSocketConnection
+import io.github.ccch1mneyyy.dsh_app.runtime.BotConnectionGrants
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.InetAddress
 import java.net.Socket
 import java.util.concurrent.Executors
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.*
@@ -149,5 +153,59 @@ class BotSocketConnectionTest {
             assertFalse(offered!!.fileDescriptor.valid())
             assertEquals(0, Os.read(peer!!.fileDescriptor, ByteArray(1), 0, 1))
         } finally { peer?.close() }
+    }
+
+    @Test(timeout = 30_000) fun isolatedBinderDeathRevokesTheWaitAndClosesTheUnconfirmedSocket() {
+        val worker = Executors.newSingleThreadExecutor()
+        val offered = AtomicReference<ParcelFileDescriptor?>()
+        val peerSocket = AtomicReference<ParcelFileDescriptor?>()
+        val sent = CountDownLatch(1)
+        val remote = CompletableFuture<BotConnectionGrants.Receipt>()
+        val refusal = AtomicReference<String?>()
+        try {
+            ProbeConnection(context).use { probe ->
+                val identity = probe.identity().get(10, TimeUnit.SECONDS)
+                assertNotEquals(android.os.Process.myUid(), identity.uid)
+                BotConnectionGrants(identity.uid).use { gate ->
+                    val binder = probe.peerBinder()
+                    val death = IBinder.DeathRecipient { gate.close() }
+                    try {
+                        binder.linkToDeath(death, 0)
+                        val waiting = worker.submit {
+                            try {
+                                BotSocketConnection.open(context) { fd ->
+                                    offered.set(fd)
+                                    peerSocket.set(duplicate(fd))
+                                    // Simulate an acknowledgement that never arrives;
+                                    // Binder death, not the ten-second deadline, must wake it.
+                                    try { gate.awaitAccepted { sent.countDown(); remote } }
+                                    catch (error: IOException) { refusal.set(error.message); throw error }
+                                }.close()
+                                fail("stopped_grant_must_not_connect")
+                            } catch (error: IOException) {
+                                assertEquals("bot_connection_unavailable", error.message)
+                                assertNull(error.cause)
+                            }
+                        }
+                        assertTrue(sent.await(5, TimeUnit.SECONDS))
+                        probe.close()
+                        waiting.get(2, TimeUnit.SECONDS)
+                        // A plain deadline must not masquerade as death revocation.
+                        assertEquals("bot_grant_closed", refusal.get())
+                        assertTrue(remote.isCancelled)
+                        assertFalse(remote.complete(BotConnectionGrants.Receipt(identity.uid, true)))
+                        assertFalse(offered.get()!!.fileDescriptor.valid())
+                        assertEquals(0, Os.read(peerSocket.get()!!.fileDescriptor, ByteArray(1), 0, 1))
+                    } finally {
+                        gate.close()
+                        try { binder.unlinkToDeath(death, 0) } catch (_: Exception) { }
+                    }
+                }
+            }
+        } finally {
+            peerSocket.get()?.close()
+            worker.shutdownNow()
+            assertTrue(worker.awaitTermination(5, TimeUnit.SECONDS))
+        }
     }
 }
