@@ -57,12 +57,33 @@ $ cd dsh-go/app && flutter test --no-pub test/bots/minimax_bot_home_test.dart
 
 新增 5 个用例，原有的 1 个 controller 用例与 2 个 390/1024 宽度布局用例**原样保留**。
 
+用例断言的阶段：
+
+| 阶段 | 断言 |
+|---|---|
+| 对话框打开 | 入口关闭（`entryEnabled` 为 false）、空白名称时创建按钮禁用 |
+| 输入中 | 名字有效即启用、清空后再次禁用；群还需要至少一个成员 |
+| 取消 | 不发请求（`api.creates` 为空）、入口恢复 |
+| API 等待中 | 入口关闭，连续操作不产生第二次创建 |
+| 结束 | 入口恢复；失败只尝试一次，不自动重试 |
+
 ### 2.3 依赖同一文件的另一个测试文件
 
 `test/bots/bot_stream_performance_test.dart` 也 import 了 `bot_controller.dart`，一并跑：
 
 ```text
-$ cd dsh-go/app && flutter test --no-pub test/bots/bot_stream_performance_test.dart test/bots/minimax_bot_home_test.dart
+$ cd dsh-go/app && flutter test --no-pub test/bots/minimax_bot_home_test.dart test/bots/bot_stream_performance_test.dart
+00:00 +0: loading D:/mbotapp/dsh-go/app/test/bots/minimax_bot_home_test.dart
+00:00 +0: late history from a previous selection does not overwrite the current chat
+00:00 +1: creating a Bot needs a name before the button is usable
+00:00 +2: creating a Bot needs a name before the button is usable
+00:00 +3: creating a Bot needs a name before the button is usable
+00:01 +4: creating a group needs a member before the button is usable
+00:01 +5: cancelling the creation dialog asks the service for nothing
+00:01 +6: a waiting creation cannot be started twice and the entry comes back
+00:02 +7: a failed creation is not retried and the entry comes back
+00:02 +8: Bot conversation layout at width 390.0
+00:02 +9: Bot conversation layout at width 1024.0
 00:02 +10: All tests passed!
 ```
 

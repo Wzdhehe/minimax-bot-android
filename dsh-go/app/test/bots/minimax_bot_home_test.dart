@@ -138,6 +138,8 @@ void main() {
 
     await openDialog(tester, '创建 Bot');
 
+    // The flow owns the entry while the dialog is open.
+    expect(entryEnabled(tester), isFalse);
     // An empty name leaves the button unusable.
     expect(buttonOf(tester).onPressed, isNull);
     await tester.enterText(nameField(), '   ');
