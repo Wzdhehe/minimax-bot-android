@@ -1,9 +1,9 @@
 name: Bot settings integration
 on:
   push:
-    paths: ['packages/mbot_settings/**', 'dsh-go/app/lib/bot/**', 'dsh-go/app/lib/ui/settings/settings_screen.dart', 'dsh-go/app/test/bots/**', 'dsh-go/app/pubspec.*', '.github/workflows/bot-settings.yml']
+    paths: ['packages/mbot_settings/**', 'dsh-go/app/lib/bot/**', 'dsh-go/app/lib/dev/minimax_bot_main.dart', 'dsh-go/app/lib/ui/settings/settings_screen.dart', 'dsh-go/app/test/bots/**', 'dsh-go/app/pubspec.*', '.github/workflows/bot-settings.yml']
   pull_request:
-    paths: ['packages/mbot_settings/**', 'dsh-go/app/lib/bot/**', 'dsh-go/app/lib/ui/settings/settings_screen.dart', 'dsh-go/app/test/bots/**', 'dsh-go/app/pubspec.*', '.github/workflows/bot-settings.yml']
+    paths: ['packages/mbot_settings/**', 'dsh-go/app/lib/bot/**', 'dsh-go/app/lib/dev/minimax_bot_main.dart', 'dsh-go/app/lib/ui/settings/settings_screen.dart', 'dsh-go/app/test/bots/**', 'dsh-go/app/pubspec.*', '.github/workflows/bot-settings.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -33,5 +33,5 @@ jobs:
           DSH_TEST_FONT_DIR: /usr/share/fonts/opentype/noto
         run: |
           flutter pub get
-          flutter analyze --no-pub lib/bot lib/ui/settings/settings_screen.dart test/bots/bot_settings_hub_test.dart
-          flutter test --no-pub test/bots/minimax_bot_home_test.dart test/bots/bot_settings_hub_test.dart test/bots/bot_usage_test.dart test/bots/bot_profile_test.dart test/bots/bot_schedule_notifications_test.dart test/bots/bot_stream_performance_test.dart test/bots/bot_plugins_test.dart
+          flutter analyze --no-pub lib/bot lib/dev/minimax_bot_main.dart lib/ui/settings/settings_screen.dart test/bots/bot_settings_hub_test.dart test/bots/bot_runtime_endpoint_test.dart
+          flutter test --no-pub test/bots/minimax_bot_home_test.dart test/bots/bot_settings_hub_test.dart test/bots/bot_usage_test.dart test/bots/bot_profile_test.dart test/bots/bot_schedule_notifications_test.dart test/bots/bot_stream_performance_test.dart test/bots/bot_plugins_test.dart test/bots/bot_runtime_endpoint_test.dart
