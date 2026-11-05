@@ -285,6 +285,43 @@ void main() {
     expect(api.creates, hasLength(1));
   });
 
+  testWidgets('a page that leaves while the dialog closes does not create', (tester) async {
+    final api = _Api();
+    final controller = BotController(api);
+    var released = false;
+    addTearDown(() {
+      if (released) return;
+      controller.dispose();
+      api.close();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(),
+        home: BotHome(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await openDialog(tester, '创建 Bot');
+    await tester.enterText(nameField(), '研究助手');
+    await tester.pump();
+    await tester.tap(createButton());
+    // The dialog is on its way out and the user confirmed it.
+    await tester.pump();
+    // The page goes away before the dialog has finished leaving.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // A confirmation cannot start an operation for a page that is gone.
+    expect(api.creates, isEmpty);
+    expect(tester.takeException(), isNull);
+    // The controller is released once, and the release is clean.
+    controller.dispose();
+    api.close();
+    released = true;
+  });
+
   for (final width in [390.0, 1024.0]) {
     testWidgets('Bot conversation layout at width $width', (tester) async {
       tester.view.devicePixelRatio = 1;

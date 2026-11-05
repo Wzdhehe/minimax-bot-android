@@ -23,9 +23,23 @@
 - 入口（`PopupMenuButton`）用 `enabled: !_creating` 关闭；
 - 方法入口本身也防重入：`_create()` 开头 `if (_creating) return;` —— 不只依赖视觉禁用；
 - 取消（`accepted != true`）**不发任何网络请求**，直接返回；
+- 页面在对话框退出过渡结束前已经不在了（`!mounted`）时，**同样不发请求** —— 用户确认的是一个对话框，不是一个已经离开的页面；
 - `finally` 里恢复入口：`if (mounted) setState(() => _creating = false);`；取消、成功、异常三条路径都走到；
 - 异步之后更新 UI 全部先查 `mounted`（`if (!mounted) return;` 后才 `_composer.clear()`），两个 `TextEditingController` 仍在 `finally` 里释放；
 - **没有**加重试，**没有**把超时当成功，**没有**改请求体或服务端语义。
+
+### 1.3 生命周期守卫（Codex 源码审查后补）
+
+`await route.completed` 之前只判断 `accepted`，审查指出这会在页面已经消失后继续发创建请求。
+
+为什么这个窗口真实存在（读本机 Flutter SDK `packages/flutter/lib/src/widgets/`）：
+
+| 事实 | 位置 |
+|---|---|
+| `Navigator.push` 返回的 `popped` 在**弹出的瞬间**就完成 | `navigator.dart`：`Route.didPop` → `didComplete` → `_popCompleter.complete` |
+| `route.completed`（`_transitionCompleter`）**只在路由被 dispose 时**完成 | `routes.dart`：`TransitionRoute.dispose()` 里 `_transitionCompleter.complete(_result)` |
+
+也就是说 `accepted` 早就拿到了，但要等 `route.completed` 才继续；而这段退出过渡期间页面可以被移除（`State.dispose()` → `mounted` 变 false），此时若无守卫就会为一个已经不存在的页面发起创建。已恢复 `if (accepted != true || !mounted) return;`，后面的 `_composer.clear()` 与 `finally` 的 `mounted` 检查保持不变。
 
 ## 2. 实跑命令与输出
 
@@ -66,6 +80,7 @@ $ cd dsh-go/app && flutter test --no-pub test/bots/minimax_bot_home_test.dart
 | 取消 | 不发请求（`api.creates` 为空）、入口恢复 |
 | API 等待中 | 入口关闭，连续操作不产生第二次创建 |
 | 结束 | 入口恢复；失败只尝试一次，不自动重试 |
+| 对话框退出过渡中页面被移除 | 不发请求、无框架异常、controller 释放干净 |
 
 ### 2.3 依赖同一文件的另一个测试文件
 
@@ -100,7 +115,23 @@ Failing tests:
 
 三个新行为在旧代码上失败；「取消不发请求」「异常不自动重试」两条在旧代码上本来就成立，所以它们是回归护栏而不是新功能。
 
-### 2.5 文档链接检查
+### 2.5 生命周期守卫的回归用例同样能抓住被删掉的检查
+
+把 `if (accepted != true || !mounted) return;` 临时改回只有 `accepted`（改完立即还原）：
+
+```text
+This was caught by the test expectation on the following line:
+  file:///D:/mbotapp/dsh-go/app/test/bots/minimax_bot_home_test.dart line 317
+The test description was:
+  a page that leaves while the dialog closes does not create
+
+Failing tests:
+  D:/mbotapp/dsh-go/app/test/bots/minimax_bot_home_test.dart: a page that leaves while the dialog closes does not create
+```
+
+用例的做法：确认对话框（`accepted` 为 true）→ 一次 `pump` 让弹出的结果落地 → 在退出过渡结束前用 `pumpWidget(const SizedBox())` 把页面移除 → 再 pump 到过渡结束。此时 `route.completed` 由路由 dispose 完成，代码继续往下走，**没有 `mounted` 守卫就会发出创建请求**，第 317 行的 `expect(api.creates, isEmpty)` 因此失败。
+
+### 2.6 文档链接检查
 
 ```text
 $ cd <repo root> && python tooling/docs-links/check_links.py --root . docs/research/flash-bot-ui-inventory.md docs/research/flash-bot-create-forms.md

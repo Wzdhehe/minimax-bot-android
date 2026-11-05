@@ -110,8 +110,10 @@ class _BotHomeState extends State<BotHome> {
       );
       final accepted = await Navigator.of(context).push(route);
       await route.completed;
-      // Cancelling asks for nothing.
-      if (accepted != true) return;
+      // Cancelling asks for nothing. A page that is already gone does not
+      // start an operation either: the user confirmed a dialog, not a page
+      // that has left while the dialog was still closing.
+      if (accepted != true || !mounted) return;
       if (group) {
         await bot.createGroup(name.text, members.toList());
       } else {
