@@ -128,3 +128,17 @@ test('an invalid explicit launcher token is refused before creating workspace or
   }
   assert.deepEqual(await readdir(root), []);
 });
+
+test('an incomplete lifecycle contract is refused before creating files or a listener', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'bot-bad-lifecycle-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  let listens = 0;
+  const base = { port: 43117, dataDir: join(root, 'data'), filesDir: join(root, 'workspace'),
+    fdTransport: { listenServer() { listens++; }, close() {} } };
+  await assert.rejects(startBotService({ ...base, logger: { info() {}, warn() {}, error() {} } }),
+    (error) => error instanceof TypeError && error.message === 'A Bot lifecycle signal is required');
+  await assert.rejects(startBotService({ ...base, signal: new AbortController().signal }),
+    (error) => error instanceof TypeError && error.message === 'A Bot logger is required');
+  assert.equal(listens, 0);
+  assert.deepEqual(await readdir(root), []);
+});

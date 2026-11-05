@@ -7,6 +7,12 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+新增`bot-store-persistence.mjs`：为真实官方Bot `Store`提供受控文件能力适配；`server.mjs`/`service.mjs`新增可选的仅宿主注入接缝，未注入时保留原filesystem行为。state和usage用固定文件名，聊天文件基于上游已规范化的basename作SHA-256映射到扁平名字；拒绝其它路径。每次读/写最多1MiB；不可悄悄截断或当空数据。写入经过有界串行队列（最多32项），底层返回未知或异常即污染该adapter，后续读写拒绝，须撤销旧lease并重启恢复，绝不自动重试；native明确的`too_large`发生在发布前，先返回明确超限错误，但也要求重载，因为Store调用save前可能已修改内存状态。只允许一个Store实例拥有一个native数据lease，**跨进程排他lease尚未实现**。官方`Store.readUsage`只把ENOENT当空账本，其他错误上抛；损坏JSON和无效UTF-8在适配器内归一化，不回显数据。`startBotService`同时前置校验signal/logger，防止宿主传漏时启动监听后抛错泄漏资源。
+
+验收：真实官方Store通过假文件能力恢复Bot状态、两份聊天、定时任务配置和用量账本；真实Bot HTTP服务经注入接缝创建Bot、重启恢复；覆盖未知写入已生效、并发排队不得覆盖、账本不重复、损坏数据、队列满、路径和1MiB拒绝等。宿主全套101/101、官方存储/用量回归15/15、native JUnit46/Node56、scope4/4通过；真实钉点源码打包图4/4且断言包含适配器。另实际准备并运行钉点mcode真实factory + Linux SQLite + 官方Bot，冷启动/重开 **1/1通过**，该真实factory探针用的是默认filesystem存储，未接新adapter。新存储能力后端均是宿主假实现，**不是Android Binder或完整Bot在手机上的证明**；MemoryStore、媒体/上传、mcode文件系统、数据迁移、跨进程lease、超过1MiB的历史/账本、真实provider和设备结果均未完成。vendor改动及MIT来源已记录在[dsh-go runtime vendor说明](../../dsh-go/runtime/vendor/UPSTREAM.md)。
+
+下一步优先在`android-node-probe`内将**真实官方Store + 生产adapter**接现有`mbot_files_bridge`，用相同Main能力跨两次isolated Node启动验Bot/chat/schedule/usage恢复、Key不入报告与数据；full-ICU是Store前提（上游i18n在模块加载时直接使用Intl），default无Intl release须明确跳过且不能算通过。然后才逐项适配MemoryStore、媒体及mcode文件，并完成正式独立UID launcher/Flutter桥。设备CI因计费限制未启动，解决后须在当前提交重跑，不用宿主假能力冒充设备。
+
 新增`runtime/minimax-bot-host/bot-fd-ingress.mjs`并由`runtime-bundle-entry.mjs`导出：从可信、已经授权的`next(signal)`顺序取得独立拥有的FD，交给`bot-fd-transport`；停止不等待不合作的source，已挂回调负责关闭随后迟到的FD；source/transport失败只抛固定`bot_transport_unavailable`。每次只保留一个等待回调，不对每条连接在同一个永久Promise上累积监听；单测包括连续500次交付、取消竞态与真实FD关闭。宿主回归90/90通过；使用真实官方Bot的跨进程HTTP/SSE用例已改为经此循环，六个连接在Bot启动后按每次请求分别交付。以干净钉点`97818b2`及其esbuild 0.28.2运行完整源码打包图4/4通过，断言实际包含该文件。它**不是鉴权边界**：native源必须确保每次返回独立拥有的已授权FD；JS close不会自动结束忽略abort的底层线程，late-FD回调仅在进程存活至返回时执行。
 
 验收APK的固定脚本已使用上述生产连接循环；JNI `mbot_bot_ingress.cancel()`只调用隔离侧队列close来唤醒有界等待，关闭时先撤销native等待，再停止JS循环与transport。Node报告要求第三次等待在10秒内结束，设备测试断言`cancelledWait`，但设备测试**未实际执行**。本地NDK重新编译成功，javap核对`closeBotConnections()V`，最新验收APK及仪器APK `BUILD SUCCESSFUL in 1m 12s`，精确脚本host 3/3、Python33/33。首次将宿主测试与JNI编译同时运行时两个用例超时；分开重跑单个用例及整套均通过，根因未独立证实。验收仍用release Node，`requiresIntl=false`/`requiresSqlite=false`；API26/35仍须等GitHub计费限制解除或另有设备。产品launcher、完整Bot Android运行和Flutter连接仍未完成。

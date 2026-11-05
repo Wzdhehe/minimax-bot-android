@@ -139,6 +139,18 @@ async function readJson(path, fallback) {
   }
 }
 
+// Optional host-provided persistence uses these same Store-level operations;
+// direct upstream callers retain the original filesystem implementation.
+/** @typedef {{ init: (path: string) => Promise<any>, readJson: (path: string, fallback: any) => Promise<any>, writeJsonAtomic: (path: string, value: any) => Promise<void>, appendUsage: (path: string, line: string) => Promise<void>, readUsage: (path: string) => Promise<string> }} StorePersistence */
+/** @type {StorePersistence} */
+const filesystemPersistence = Object.freeze({
+  init: (messagesDir) => mkdir(messagesDir, { recursive: true }),
+  readJson,
+  writeJsonAtomic,
+  appendUsage: (path, line) => appendFile(path, line, 'utf8'),
+  readUsage: (path) => readFile(path, 'utf8'),
+});
+
 function defaultState() {
   return {
     version: 2,
@@ -213,9 +225,10 @@ function knownText(message) {
 }
 
 export class Store {
-  /** @param {string} dataDir */
-  constructor(dataDir) {
+  /** @param {string} dataDir @param {StorePersistence} [persistence] */
+  constructor(dataDir, persistence = filesystemPersistence) {
     this.dir = dataDir;
+    this.persistence = persistence;
     this.statePath = join(dataDir, 'state.json');
     this.messagesDir = join(dataDir, 'messages');
     this.usagePath = join(dataDir, 'usage.jsonl');
@@ -235,8 +248,8 @@ export class Store {
   }
 
   async init() {
-    await mkdir(this.messagesDir, { recursive: true });
-    this.state = { ...defaultState(), ...(await readJson(this.statePath, defaultState())) };
+    await this.persistence.init(this.messagesDir);
+    this.state = { ...defaultState(), ...(await this.persistence.readJson(this.statePath, defaultState())) };
     this.state.settings = { ...defaultState().settings, ...(this.state.settings ?? {}) };
     setLocale(resolveLocale(this.state));
     let migrated = false;
@@ -346,7 +359,7 @@ export class Store {
   }
 
   save() {
-    return this.enqueue(() => writeJsonAtomic(this.statePath, this.state));
+    return this.enqueue(() => this.persistence.writeJsonAtomic(this.statePath, this.state));
   }
 
   // ---------- bots ----------
@@ -410,7 +423,7 @@ export class Store {
   }
 
   async loadMessages(chatId) {
-    let list = await readJson(this.messagePath(chatId), []);
+    let list = await this.persistence.readJson(this.messagePath(chatId), []);
     // deleteChat() may have installed an empty list while the read was in flight; it wins.
     const installed = this.messageCache.get(chatId);
     if (installed) return installed;
@@ -472,7 +485,7 @@ export class Store {
     }
     // Only metadata compatibility is migrated. Text and tool ordering are historical
     // records: matching prefixes do not prove that two assistant messages are duplicates.
-    if (dirty) await this.enqueue(() => writeJsonAtomic(this.messagePath(chatId), list));
+    if (dirty) await this.enqueue(() => this.persistence.writeJsonAtomic(this.messagePath(chatId), list));
     this.messageCache.set(chatId, list);
     return list;
   }
@@ -509,7 +522,7 @@ export class Store {
       };
       // Retention is independent of the UI page size. A failed write must not publish a
       // message that the caller was told did not send, or consume its sequence number.
-      await writeJsonAtomic(this.messagePath(chatId), [...list, message]);
+      await this.persistence.writeJsonAtomic(this.messagePath(chatId), [...list, message]);
       list.push(message);
       this.messageCache.set(chatId, list);
       return message;
@@ -524,7 +537,7 @@ export class Store {
       if (!message) return undefined;
       const next = Object.hasOwn(patch, 'dispatchState') ? { ...patch, dispatchRevision: (message.dispatchRevision ?? 0) + 1 } : patch;
       if (persist) {
-        await writeJsonAtomic(this.messagePath(chatId), list.map((item) => item === message ? { ...item, ...next } : item));
+        await this.persistence.writeJsonAtomic(this.messagePath(chatId), list.map((item) => item === message ? { ...item, ...next } : item));
       }
       // Engine retains the object returned by appendMessage while streaming. Commit into
       // that object only after persistence, rather than replacing it with a detached clone.
@@ -543,14 +556,14 @@ export class Store {
       const selected = list.filter((message) => ids.has(message.id));
       const patches = new Map(selected.map((message) => [message.id, Object.hasOwn(patch, 'dispatchState')
         ? { ...patch, dispatchRevision: (message.dispatchRevision ?? 0) + 1 } : patch]));
-      await writeJsonAtomic(this.messagePath(chatId), list.map((message) => ids.has(message.id) ? { ...message, ...patches.get(message.id) } : message));
+      await this.persistence.writeJsonAtomic(this.messagePath(chatId), list.map((message) => ids.has(message.id) ? { ...message, ...patches.get(message.id) } : message));
       for (const message of selected) Object.assign(message, patches.get(message.id));
       return selected;
     });
   }
 
   persistMessages(chatId) {
-    return this.enqueue(() => writeJsonAtomic(this.messagePath(chatId), this.messageCache.get(chatId) ?? []));
+    return this.enqueue(() => this.persistence.writeJsonAtomic(this.messagePath(chatId), this.messageCache.get(chatId) ?? []));
   }
 
   /** Idempotent single selection; serialize writes so the last selection wins across windows. */
@@ -569,7 +582,7 @@ export class Store {
         reactionsRevision: (message.reactionsRevision ?? 0) + 1,
       };
       // Publish to memory only after a successful write; disk errors leave the old selection intact.
-      await writeJsonAtomic(this.messagePath(chatId), list.map((item) => item === message ? { ...item, ...patch } : item));
+      await this.persistence.writeJsonAtomic(this.messagePath(chatId), list.map((item) => item === message ? { ...item, ...patch } : item));
       // Reset/delete can run while the write is pending; never resurrect a removed message.
       if (this.messageCache.get(chatId) !== list || !list.includes(message)) {
         throw new ReactionError('not_found', 'err.reactionMessageGone');
@@ -582,7 +595,7 @@ export class Store {
   async deleteChat(chatId) {
     await this.getMessages(chatId);
     await this.enqueue(async () => {
-      await writeJsonAtomic(this.messagePath(chatId), []);
+      await this.persistence.writeJsonAtomic(this.messagePath(chatId), []);
       this.messageCache.set(chatId, []);
       delete this.state.sessions[chatId];
     });
@@ -620,7 +633,7 @@ export class Store {
   // ---------- usage ----------
   recordUsage(entry) {
     return this.enqueue(async () => {
-      await appendFile(this.usagePath, `${JSON.stringify(entry)}\n`, 'utf8');
+      await this.persistence.appendUsage(this.usagePath, `${JSON.stringify(entry)}\n`);
       if (entry.turnId) this.usageIds.add(entry.turnId);
     });
   }
@@ -650,9 +663,10 @@ export class Store {
   async readUsage(sinceTs) {
     let raw = '';
     try {
-      raw = await readFile(this.usagePath, 'utf8');
-    } catch {
-      return [];
+      raw = await this.persistence.readUsage(this.usagePath);
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return [];
+      throw error;
     }
     const rows = [];
     for (const line of raw.split('\n')) {

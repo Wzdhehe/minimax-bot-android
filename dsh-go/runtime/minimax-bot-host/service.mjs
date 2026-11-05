@@ -7,7 +7,7 @@ import { createProviderBroker } from './provider-broker.mjs';
 
 /** The descriptor belongs on a private Android host channel. This authenticates
  * HTTP requests; it does not isolate Agent code or provide model credentials. */
-export async function startBotService({ port, dataDir, filesDir, agent, modelBroker, getUsageQuota, signal, logger, authToken, fdTransport }) {
+export async function startBotService({ port, dataDir, filesDir, agent, modelBroker, getUsageQuota, signal, logger, authToken, fdTransport, storePersistence }) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError('A local port is required');
   // A trusted launcher may already have published this session in its private
   // descriptor. Validate before filesystem or listener side effects, and never
@@ -17,6 +17,17 @@ export async function startBotService({ port, dataDir, filesDir, agent, modelBro
   }
   if (fdTransport !== undefined && (typeof fdTransport?.listenServer !== 'function' || typeof fdTransport?.close !== 'function')) {
     throw new TypeError('A trusted Bot FD transport is required');
+  }
+  if (storePersistence !== undefined && ['init', 'readJson', 'writeJsonAtomic', 'appendUsage', 'readUsage'].some((name) => typeof storePersistence?.[name] !== 'function')) {
+    throw new TypeError('A trusted Bot store persistence capability is required');
+  }
+  // The upstream service uses both after it opens its server. Reject an
+  // incomplete host contract before creating files or leaving a listener open.
+  if (typeof signal?.addEventListener !== 'function' || typeof signal?.removeEventListener !== 'function' || typeof signal?.aborted !== 'boolean') {
+    throw new TypeError('A Bot lifecycle signal is required');
+  }
+  if (['info', 'warn', 'error'].some((name) => typeof logger?.[name] !== 'function')) {
+    throw new TypeError('A Bot logger is required');
   }
   const token = authToken ?? randomBytes(32).toString('hex');
   const workspace = await createHostWorkspace(filesDir);
@@ -31,6 +42,7 @@ export async function startBotService({ port, dataDir, filesDir, agent, modelBro
     dataDir, agent, signal, logger, listen: { host: '127.0.0.1', port },
   }, {
     listenServer: fdTransport?.listenServer,
+    storePersistence,
     resolveMediaPath: (path) => workspace.resolve(path),
     testProvider: providerBroker ? (id, model) => providerBroker.testProvider(id, model) : undefined,
     getUsageQuota: (forceRefresh) => readUsageQuota(getUsageQuota, forceRefresh),

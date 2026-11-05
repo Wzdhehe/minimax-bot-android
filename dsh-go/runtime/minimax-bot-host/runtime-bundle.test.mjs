@@ -49,6 +49,7 @@ test('the pinned full host and actual Bot graph compile without installing or la
   assert.ok(Object.hasOwn(metafile.inputs, resolve(here, '../vendor/minimax-bot/miniapp/node/server.mjs')));
   assert.ok(Object.hasOwn(metafile.inputs, join(here, 'bot-fd-transport.mjs')));
   assert.ok(Object.hasOwn(metafile.inputs, join(here, 'bot-fd-ingress.mjs')));
+  assert.ok(Object.hasOwn(metafile.inputs, join(here, 'bot-store-persistence.mjs')));
   const services = metafile.inputs[join(source, 'packages/local-runtime-v2/src/services.ts')];
   assert.ok(services.imports.some((entry) => resolve(source, entry.path) === join(here, 'runtime-miniapp-index.mjs')));
   assert.equal(manifest.hostAdaptations[0].importer, 'packages/local-runtime-v2/src/services.ts');
