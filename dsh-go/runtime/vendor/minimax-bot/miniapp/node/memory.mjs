@@ -6,6 +6,20 @@ import { join } from 'node:path';
 
 import { t } from './i18n.mjs';
 
+// Hosts may supply a restricted filesystem capability; default direct callers
+// retain the upstream Node filesystem operations.
+const nodeFilesystem = Object.freeze({
+  appendFile: (path, data, encoding) => appendFile(path, data, encoding),
+  copyFile: (source, target, flags) => copyFile(source, target, flags),
+  link: (source, target) => link(source, target),
+  mkdir: (path, options) => mkdir(path, options),
+  readFile: (path, encoding) => readFile(path, encoding),
+  rename: (source, target) => rename(source, target),
+  rm: (path, options) => rm(path, options),
+  stat: (path) => stat(path),
+  writeFile: (path, data, encoding) => writeFile(path, data, encoding),
+});
+
 export const ENTRY_MAX = 1200;
 export const STORAGE_MAX = 100000;
 export const MAX_ENTRIES = 1000;
@@ -126,9 +140,10 @@ function formatEntry(entry) {
 }
 
 export class MemoryStore {
-  /** @param {string} dataDir */
-  constructor(dataDir) {
+  /** @param {string} dataDir @param {any} [filesystem] */
+  constructor(dataDir, filesystem = nodeFilesystem) {
     this.dir = join(dataDir, 'memory');
+    this.filesystem = filesystem;
     this.journal = join(this.dir, 'journal.jsonl');
     this.pendingPath = join(this.dir, '.pending.json');
     /** rev per scope so Bot sessions know when to refresh their context */
@@ -137,8 +152,8 @@ export class MemoryStore {
   }
 
   async init() {
-    await mkdir(join(this.dir, 'bots'), { recursive: true });
-    await mkdir(join(this.dir, 'archive'), { recursive: true });
+    await this.filesystem.mkdir(join(this.dir, 'bots'), { recursive: true });
+    await this.filesystem.mkdir(join(this.dir, 'archive'), { recursive: true });
     await this.serialize(() => this.recover());
   }
 
@@ -163,7 +178,7 @@ export class MemoryStore {
   async readEntries(scope) {
     let raw = '';
     try {
-      raw = await readFile(this.pathFor(scope), 'utf8');
+      raw = await this.filesystem.readFile(this.pathFor(scope), 'utf8');
     } catch (error) {
       if (error?.code === 'ENOENT') return [];
       throw error;
@@ -187,28 +202,28 @@ export class MemoryStore {
     const backups = join(this.dir, 'backups');
     const staged = join(backups, `.${scope}.${randomBytes(16).toString('hex')}.tmp`);
     try {
-      await mkdir(backups, { recursive: true });
+      await this.filesystem.mkdir(backups, { recursive: true });
       const backup = join(backups, `${scope}.pre-storage-v2.md`);
       // A crash during copying can leave only a temporary file. Publish the complete
       // inode with an exclusive atomic link; a pre-existing backup is never replaced.
-      await copyFile(source, staged, constants.COPYFILE_EXCL);
+      await this.filesystem.copyFile(source, staged, constants.COPYFILE_EXCL);
       try {
-        await link(staged, backup);
+        await this.filesystem.link(staged, backup);
       } catch (error) {
-        if (error?.code === 'EEXIST' && (await stat(backup)).isFile()) return;
+        if (error?.code === 'EEXIST' && (await this.filesystem.stat(backup)).isFile()) return;
         throw error;
       }
     } catch (error) {
       // A new scope has no original document to preserve. Other failures reject the write.
       if (error?.code === 'ENOENT') {
-        try { await readFile(source); }
+        try { await this.filesystem.readFile(source); }
         catch (readError) { if (readError?.code === 'ENOENT') return; }
       }
       throw new MemoryError(t('memory.err.backup'), 'memory_backup_failed', {
         scope, retryable: true, ...(typeof error?.code === 'string' ? { causeCode: error.code } : {}),
       });
     } finally {
-      await rm(staged, { force: true }).catch(() => {});
+      await this.filesystem.rm(staged, { force: true }).catch(() => {});
     }
   }
 
@@ -225,11 +240,11 @@ export class MemoryStore {
     // Prepare in the destination directory before accepting the operation. Failures here
     // leave both the current document and its journal unchanged.
     try {
-      await writeFile(staged, transaction.content, 'utf8');
-      await writeFile(pendingTemp, JSON.stringify(transaction), 'utf8');
-      await rename(pendingTemp, this.pendingPath);
+      await this.filesystem.writeFile(staged, transaction.content, 'utf8');
+      await this.filesystem.writeFile(pendingTemp, JSON.stringify(transaction), 'utf8');
+      await this.filesystem.rename(pendingTemp, this.pendingPath);
     } catch (error) {
-      await Promise.all([rm(staged, { force: true }), rm(pendingTemp, { force: true })]).catch(() => {});
+      await Promise.all([this.filesystem.rm(staged, { force: true }), this.filesystem.rm(pendingTemp, { force: true })]).catch(() => {});
       throw error;
     }
     // The durable pending record is the acceptance point. Failures afterwards are explicitly
@@ -244,7 +259,7 @@ export class MemoryStore {
   async recover() {
     let transaction;
     try {
-      transaction = JSON.parse(await readFile(this.pendingPath, 'utf8'));
+      transaction = JSON.parse(await this.filesystem.readFile(this.pendingPath, 'utf8'));
     } catch (error) {
       if (error?.code === 'ENOENT') return;
       throw new MemoryError(t('memory.err.pending'), 'memory_pending', { retryable: true });
@@ -266,10 +281,10 @@ export class MemoryStore {
       await this.log(transaction.journal);
       const staged = this.stagedPath(transaction);
       // Also handles a crash after the earlier rename but before removing the pending record.
-      await writeFile(staged, transaction.content, 'utf8');
-      await rename(staged, this.pathFor(transaction.scope));
+      await this.filesystem.writeFile(staged, transaction.content, 'utf8');
+      await this.filesystem.rename(staged, this.pathFor(transaction.scope));
       this.revs.set(transaction.scope, this.rev(transaction.scope) + 1);
-      await rm(this.pendingPath);
+      await this.filesystem.rm(this.pendingPath);
     } catch (error) {
       throw new MemoryError(t('memory.err.pending'), 'memory_pending', {
         operationId: transaction.operationId, retryable: true,
@@ -279,7 +294,7 @@ export class MemoryStore {
   }
 
   async journalText() {
-    try { return await readFile(this.journal, 'utf8'); }
+    try { return await this.filesystem.readFile(this.journal, 'utf8'); }
     catch (error) {
       if (error?.code === 'ENOENT') return '';
       throw error;
@@ -430,7 +445,7 @@ export class MemoryStore {
       await this.recover();
       await this.backupScope(scope);
       try {
-        await rename(this.pathFor(scope), join(this.dir, 'archive', `${scope}-${Date.now()}.md`));
+        await this.filesystem.rename(this.pathFor(scope), join(this.dir, 'archive', `${scope}-${Date.now()}.md`));
       } catch (error) {
         if (error?.code !== 'ENOENT') throw error;
       }
@@ -442,6 +457,6 @@ export class MemoryStore {
     const raw = await this.journalText();
     if (entry.operationId && this.journalEntries(raw).some((row) => row?.operationId === entry.operationId)) return;
     const separator = raw && !raw.endsWith('\n') ? '\n' : '';
-    await appendFile(this.journal, `${separator}${JSON.stringify(entry)}\n`, 'utf8');
+    await this.filesystem.appendFile(this.journal, `${separator}${JSON.stringify(entry)}\n`, 'utf8');
   }
 }

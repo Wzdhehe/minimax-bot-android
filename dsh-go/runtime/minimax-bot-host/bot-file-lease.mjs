@@ -76,6 +76,7 @@ export function createBotFileLease(files) {
   return Object.freeze({
     healthy,
     invalidate,
+    supports(methods) { return Array.isArray(methods) && methods.every((method) => typeof files[method] === 'function'); },
     async read(filename) {
       const bytes = await query('read', filename);
       if (!(bytes instanceof Uint8Array) || bytes.byteLength > MAX_BYTES) throw failure('runtime_data_unavailable');

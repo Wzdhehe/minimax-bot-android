@@ -7,6 +7,12 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+新增`bot-memory-filesystem.mjs`和`bot-persistence.mjs`：后者一次建立同一`bot-file-lease`并同时产出Store/MemoryStore两个宿主适配器；前者只映射官方MemoryStore的team/bot文档、pending、journal、backup和archive虚拟路径到专用摘要basename。vendor `MemoryStore`新增可选filesystem接缝，默认仍用Node文件系统；现有事务、日志operationId去重和恢复流程保留。原版备份用copy+hardlink，受控实现使用只读快照+独占publish两次复制，依赖同一可信runtime单写者，不是POSIX hardlink或跨进程原子事务。`startBotService`可选接两个适配器，必须通过`createBotPersistence`共同创建；真实Bot JSON服务用假文件能力在**无物理Bot dataDir**的宿主创建/恢复记忆通过。
+
+记忆故障测试覆盖：旧文件BOM/CRLF逐字节备份且不覆盖、团队/单Bot隔离、忘记/归档、pending前写入结果未知不虚构提交、日志追加或文档rename已发生但回执丢失后重启恢复且journal不重复、未知错误使Store同lease失效。每个文件仍上限1MiB，scope名最多128字符，日志追加是受控整文件复制；未解决长期增长性能、超限后继续使用、跨进程独占、进程死亡后回收及失败时残留的临时文件。尤其pending前未知结果会留下不可枚举的孤儿stage：当前不宣称已清理。宿主后端是内存fake，**没有Android/真机或真实provider证据**。
+
+本轮宿主完整114/114，上游存储/用量/记忆CI选集40/40，另含AJV的原版记忆策略选集20/20；native Key边界回归JUnit46/Node56，scope4/4；钉住的真实mcode源码打包图4/4通过并断言记忆适配器进入bundle。补跑原版`memory-storage-context`时曾出现13/14：注入接缝把原Node `link`函数在模块加载时缓存，导致上游通过`syncBuiltinESMExports`注入故障的测试失效。默认文件系统改为调用时使用ESM live binding后该组14/14通过；CI也新增该回归。它是测试兼容修复，不证明Android执行。
+
 交接修正：`7cec627`提交共享lease时漏暂存了`bot-store-persistence.test.mjs`里一条队列满断言；本机106项是在**已修正的工作树**通过，单独检出7cec627会因旧断言失败。后续提交已补入该断言：队列满导致lease失效后，在途写即使返回published也要求重载，因此32项均不应报告成功。运行时源代码未丢失；以后核验以当前HEAD为准。
 
 新增`bot-file-lease.mjs`，将Bot Store和下一步MemoryStore需要的原生文件能力收敛到同一个可共享会话：文件名仅允许原生basename，最大1MiB，最多32个有界串行写入，写入参数入队时复制；publish的`already_exists`、rename/remove的明确`not_found`不伪称未知，其他不确定结果使共享会话失效，已排队操作及在途读取也不能继续返回旧状态。超限/排队满要求重载。`createBotStorePersistence`兼容原`files`参数，也可接宿主持有的`lease`；Android验收脚本的模块打包已纳入此依赖。**此JS对象不是native跨进程锁或终止机制**，宿主仍须保证每个数据目录同一时刻只有一个可信runtime，并在销毁后再重开；新增记忆适配时必须与Store传入同一lease，不得各自单独包装同一files。宿主完整106/106、钉点源码完整打包图4/4、精确验收脚本host 4/4、Python33/33，验收APK/仪器APK `BUILD SUCCESSFUL in 19s`；设备仍未执行。
@@ -28,6 +34,8 @@ Android验收脚本现嵌入真实官方`Store`及生产`bot-store-persistence`�
 本次本地：重新获取Google repository XML所列platform36/build-tools36/CMake3.22.1/NDK27d并按其SHA1校验，Temurin JDK21和Gradle9.3.1按各自发布SHA256校验；本地已有1101个Node头按既存metadata逐一校验、libnode与release pin匹配。实际NDK编译JNI成功，验收APK及仪器APK首次 `BUILD SUCCESSFUL in 1m 34s`，补诊断代码重编 `BUILD SUCCESSFUL in 49s`，新增外来UID负例后重编 `BUILD SUCCESSFUL in 1m 26s`；`javap`确认`takeBotConnection()I`和新`start(...II[I)I`与JNI匹配；本地release `requiresIntl=false`、`requiresSqlite=false`。精确脚本host 3/3（控制信号在首个HTTP响应后才授予第二个FD，host仍以stub代替Binder/JNI）、Python33/33、生产transport host 2/2通过。**新增设备测试尚未运行**，不能引用fd80f3b的模拟器结果冒充。
 
 GitHub计费阻塞：76f3dcc触发的`Isolated Android Node candidate` **41943645851**、`Documentation relative links` **41943645872**、`Bot fork scope checks` **41943645845**、`Android broker emulator verification` **41943646295**和`Native model broker boundary` **41943645860**都在开始前failure，job没有任何step。b69e112的Node **41945356635**、docs **41945356517**、scope **41945356516**也未启动；1c6e91d的Node **41945915609**和5997ca2的host **41947024929**实查均0步。check-run 126976101150、126970353514、126981660423的failure annotation同为：`The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings`。不要因0步失败去改源码或宣称测试失败/通过；账户限制解除后，在最新提交触发/重跑当前workflow，核API26/35实际执行和XML/artifact。此前成功的fd80f3b/41864552047只证明启动时传一条FD的旧版。
+
+本轮实跑`verify-source-run.py 41826964330`通过，确认source producer和五项权威输入一致；artifact元数据仍显示未过期，但本地`gh run download`失败，因此本机没有获得full-ICU源码产物。未输出包含临时授权参数的下载地址；本地构建仍只能采用已校验的release候选，不能宣称full-ICU本地验证。
 
 接下来：1）对动态链在API26/35实际执行新测试（含已写的外来UID负例），补队列满/关闭、isolated进程死亡和在途FD回收等设备边界；2）将已验证的能力及真实官方Bot服务合入正式独立UID launcher和Flutter桥；3）测试真实provider、ARM64和物理设备。若继续生产化，须设计持续长轮询/取消，不能直接把验收用的30秒单次等待包装为完整服务。临时工具链在`/tmp/mbot-{jdk21,gradle,android-sdk,ndk}`，可能随环境重建消失；full-ICU producer 41826964330的artifact查询时尚未过期（2026-11-11 12:13:11Z到期），复用前仍须原五输入authority验证。
 

@@ -3,6 +3,8 @@
 
 ## 官方Bot Store受控持久化候选（Android验收接线，设备未验证）
 
+后续增加`bot-memory-filesystem.mjs`，在同一个JS文件会话上适配官方MemoryStore的团队/单Bot记忆、pending、journal、备份和archive；原版备份硬链接变成受控读快照+独占publish复制，要求单一可信runtime写者。宿主验证未知提交重启恢复、operationId日志去重、旧字节备份及无物理Bot目录的HTTP记忆读写；Android尚未接入此部分。1MiB单文件、整文件追加成本、跨进程独占和pending前失败的孤儿stage清理均未解决，详见[NEXT-AGENT](NEXT-AGENT.md)。
+
 Store现可与未来MemoryStore共享`bot-file-lease.mjs`：同一会话有界串行写、复制入队数据，任何结果未知使共享方失效，在途读不再返回旧结果；明确的publish已存在及rename/remove不存在保留原语义。该对象不提供跨进程排他，正式launcher须负责真实native数据lease和进程回收。
 
 真实官方Store和生产adapter已嵌入Android固定验收脚本、连接`mbot_files_bridge`；计划在两个独立isolated进程通过Main文件broker检验聊天、定时任务配置和用量恢复，以及随机Key不入报告/文件。Node候选的验收APK和仪器APK本地构建通过；带Intl的精确脚本在两个宿主进程以磁盘假能力实跑通过，无Intl分支明确跳过。**Android设备/模拟器尚未执行**，GitHub计费问题及复现见[NEXT-AGENT](NEXT-AGENT.md)。

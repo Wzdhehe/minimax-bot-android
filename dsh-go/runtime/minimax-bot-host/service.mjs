@@ -7,7 +7,7 @@ import { createProviderBroker } from './provider-broker.mjs';
 
 /** The descriptor belongs on a private Android host channel. This authenticates
  * HTTP requests; it does not isolate Agent code or provide model credentials. */
-export async function startBotService({ port, dataDir, filesDir, agent, modelBroker, getUsageQuota, signal, logger, authToken, fdTransport, storePersistence }) {
+export async function startBotService({ port, dataDir, filesDir, agent, modelBroker, getUsageQuota, signal, logger, authToken, fdTransport, storePersistence, memoryFilesystem }) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError('A local port is required');
   // A trusted launcher may already have published this session in its private
   // descriptor. Validate before filesystem or listener side effects, and never
@@ -20,6 +20,9 @@ export async function startBotService({ port, dataDir, filesDir, agent, modelBro
   }
   if (storePersistence !== undefined && ['init', 'readJson', 'writeJsonAtomic', 'appendUsage', 'readUsage'].some((name) => typeof storePersistence?.[name] !== 'function')) {
     throw new TypeError('A trusted Bot store persistence capability is required');
+  }
+  if (memoryFilesystem !== undefined && ['appendFile', 'copyFile', 'link', 'mkdir', 'readFile', 'rename', 'rm', 'stat', 'writeFile'].some((name) => typeof memoryFilesystem?.[name] !== 'function')) {
+    throw new TypeError('A trusted Bot memory filesystem capability is required');
   }
   // The upstream service uses both after it opens its server. Reject an
   // incomplete host contract before creating files or leaving a listener open.
@@ -43,6 +46,7 @@ export async function startBotService({ port, dataDir, filesDir, agent, modelBro
   }, {
     listenServer: fdTransport?.listenServer,
     storePersistence,
+    memoryFilesystem,
     resolveMediaPath: (path) => workspace.resolve(path),
     testProvider: providerBroker ? (id, model) => providerBroker.testProvider(id, model) : undefined,
     getUsageQuota: (forceRefresh) => readUsageQuota(getUsageQuota, forceRefresh),

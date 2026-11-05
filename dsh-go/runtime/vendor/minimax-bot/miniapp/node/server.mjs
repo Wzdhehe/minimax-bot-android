@@ -110,13 +110,13 @@ function chatReferences(messages, src) {
 
 /**
  * @param {MiniAppContext} context
- * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean, resolveMediaPath?: (path: string) => Promise<string>, testProvider?: (id: string, model: string) => Promise<{ok: boolean, code?: string, status?: number}>, getUsageQuota?: (force: boolean) => Promise<object>, listenServer?: (server: import('node:http').Server) => Promise<void>, storePersistence?: { init: (path: string) => Promise<any>, readJson: (path: string, fallback: any) => Promise<any>, writeJsonAtomic: (path: string, value: any) => Promise<void>, appendUsage: (path: string, line: string) => Promise<void>, readUsage: (path: string) => Promise<string> } }} [hostOptions]
+ * @param {{ authorizeRequest?: (request: import('node:http').IncomingMessage) => boolean, resolveMediaPath?: (path: string) => Promise<string>, testProvider?: (id: string, model: string) => Promise<{ok: boolean, code?: string, status?: number}>, getUsageQuota?: (force: boolean) => Promise<object>, listenServer?: (server: import('node:http').Server) => Promise<void>, storePersistence?: { init: (path: string) => Promise<any>, readJson: (path: string, fallback: any) => Promise<any>, writeJsonAtomic: (path: string, value: any) => Promise<void>, appendUsage: (path: string, line: string) => Promise<void>, readUsage: (path: string) => Promise<string> }, memoryFilesystem?: any }} [hostOptions]
  * @returns {Promise<MiniAppLifecycle>}
  */
 export async function start(context, hostOptions = {}) {
   const clientDir = join(context.pluginRoot, 'miniapp/client');
   const store = new Store(context.dataDir, hostOptions.storePersistence);
-  const memory = new MemoryStore(context.dataDir);
+  const memory = new MemoryStore(context.dataDir, hostOptions.memoryFilesystem);
   await store.init();
   await memory.init();
   const systemUserName = (await osUserName()).slice(0, USER_NAME_MAX);
