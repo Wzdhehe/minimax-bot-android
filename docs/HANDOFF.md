@@ -10,6 +10,8 @@ Flash首卡`ff363bc/5c44d43`及第二卡`5afbd76/0fc0315/16f6ba3`已纳入；接
 
 ## 当前已完成与未完成
 
+最新本机设备结果：用户转述Flash在47a2efc完成Windows准备/构建并在API35 x86_64实际跑6项，终态OK (6 tests)，0失败/错误/跳过；含Main桥半关闭/流式关闭、失败FD回收、真实Binder死亡的bot_grant_closed及原Node模型/Key路径。默认包无Intl/SQLite，第6项仅基础HTTP夹具，不能称完整Bot通过。详情及APK摘要见[原API35卡的结果记录](handoff/T-Flash-API35Probe.md)，云端未直接读取本机日志。JDK17.0.10在该环境实际构建通过。用户已断电要求不再派本机任务；报告和APK不入库。新增运行代次管理代码需独立验证，不能沿用这6项结论。
+
 最新：Flash审查修复09bc6bb已快进纳入，Codex复核上下文代次、统一读写准入及memory_pending未知结果分类，R1/R2/R3源码审查接受。Flash自报45+11项widget及analyze/l10n通过，云端无Flutter未复跑。本机下一步可按[API35验收卡](handoff/T-Flash-API35Probe.md)构建独立验收包、仅跑6项；默认无Intl包不是完整Bot。记忆页「手动刷新失败时草稿暂不可复制」作为非阻断后续已记录在原卡，不宣称UI全部边界已验完。
 
 - Windows Node验收准备候选已接出：同pin/NDK27d、原Linux编译命令不变，Windows直接clang++.exe固定Android26 x86_64目标，UTF-8资产和正斜杠header inventory。Linux实际native准备、Python45/45、host6/6通过；Windows构建和设备未验证。本机执行卡见[T-Flash-API35Probe](handoff/T-Flash-API35Probe.md)，先修记忆管理审查项，再有时间执行6项定向设备测试。JDK21是已有验证基线；此前将默认17直接视为不满足构建的表述过强，源码target17，17是否可用须实际构建确认，不改依赖/target绕过。

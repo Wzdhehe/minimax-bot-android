@@ -1,6 +1,56 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 本机Windows：API35定向验收卡
 
+## 已收到本机交付，停止派活
+
+用户已转述本机agent在**47a2efc**的执行结果：准备、构建与下述6项均通过，用户随后要求断电、不再给本机派任务。本卡完成；下面原执行说明保留作复现合同，**不得据其开新任务或要求本机继续跑**。
+
+证据来源为用户转述的本机执行报告，云端没有直接读取D盘日志或复跑设备；本机报告`D:\mbotapp\docs\research\flash-api35-probe.md`和记忆管理报告按要求均未提交。不是GitHub Actions结果，没有产品APK/Release发布。
+
+实际环境：Windows、API35/x86_64/emulator-5554已启动；Node24.14.0/npm11.9.0、Python3.13.5、**JDK17.0.10**、Gradle9.3.1；SDK D:/android-sdk，platform/target36、min26、build-tools36.0.0、NDK27.3.13750724、CMake3.22.1。JDK17已获这套本机构建的实测，未改依赖/编译target；旧文档中「必须21」不能作为17无法构建的结论。此结论不扩展到其它工程或工具版本。
+
+最初Node归档为截断旧缓存54,426,495字节，zipfile不能解析；正确的pin SHA检查报Node archive digest mismatch，未绕过。重新从原官方release地址经本机代理下载并核对后为89,751,551字节，SHA256 `cde938a9e45ebd3f53d11fbb5f3875df92b4069431677dd5827b68acfaa01847`，与仓库pin相同，准备成功。Windows host选择单元检查另跑6项OK。
+
+构建原文摘要：
+
+```text
+Prepared pinned Node 24.22.2 x86_64 and JNI verification glue
+BUILD SUCCESSFUL in 2m 26s
+71 actionable tasks: 71 executed
+```
+
+默认Node验证资产为`requiresIntl=false/sourceArchiveSha256=null/requiresSqlite=false`。本机两包仅在本地安装，不入Git、不上传：
+
+| APK | bytes | SHA256 |
+| --- | ---: | --- |
+| isolated-node-verification-debug.apk | 31596775 | df2db29b09206a31105519f5ad02cf2c6e5a123606dee31af1166dad98a07b71 |
+| isolated-node-verification-debug-androidTest.apk | 999511 | 54caac98f64709531ba08deea8738c9f96c28402d7fd870fe5cc5d74d7adcadc |
+
+两包install均Success；实际runner为`io.github.ccch1mneyyy.dsh_app.nodeprobe.test/androidx.test.runner.AndroidJUnitRunner`，target为nodeprobe。全部操作显式选该模拟器，没有wipe、清用户数据或操作其它设备。
+
+6项各`INSTRUMENTATION_STATUS_CODE: 0`，numtests=6，报告0失败/0错误/0跳过：
+
+- BotSocketConnectionTest.socketpairPreservesBinaryRequestHalfCloseAndResponse
+- BotSocketConnectionTest.streamingDoesNotWaitForRequestEofAndCloseWakesBothPeers
+- BotSocketConnectionTest.failedGrantClosesBothLocalCopiesAndReturnsOnlyStableError
+- BotSocketConnectionTest.isolatedBinderDeathRevokesTheWaitAndClosesTheUnconfirmedSocket
+- IsolatedNodeModelTest.connectionOfferedBeforeNodeStartsIsRejectedAndClosed
+- IsolatedNodeModelTest.isolatedNodeUsesNativeOnlyKeysForStreamingCancellationAndEchoRefusal
+
+终态原文：
+
+```text
+Time: 3.685
+OK (6 tests)
+INSTRUMENTATION_CODE: -1
+```
+
+这里-1是instrumentation正常完成码，不按其字面负数判失败。死亡用例通过也包含`assertEquals("bot_grant_closed", refusal.get())`断言，因此未用普通deadline冒充撤销。
+
+**只验证上述47a2efc的6项。** 最后一项在这个无Intl包仅运行基础HTTP夹具；没有官方Bot/mcode/full-ICU/SQLite/真实provider、ARM64/API26/真机或产品App的证明。随后云端新增的运行代次管理器及新用例不在本轮筛选里，不得把本结果扩展给尚未执行的代码。
+
+## 以下为当时执行说明（历史，不继续派活）
+
 先完成记忆管理卡R1/R2/R3并推送，再做本卡。若断电前不足15分钟，只回报时间/阻塞，不开大下载或留未交接的改动。你在用户本机，有API35/x86_64的emulator-5554；云端和本机不共享文件，不能使用云端/tmp路径。
 
 ## 本卡性质与写入范围

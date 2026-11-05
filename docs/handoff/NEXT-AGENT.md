@@ -7,6 +7,8 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+**用户已要求断电，不再给本机Flash派任务。** 本机在47a2efc的设备交付已回报：Windows用JDK17.0.10/Gradle9.3.1/NDK27d编译通过，API35 x86_64的原卡6项OK，含真正Binder死亡撤销的closed断言。来源为用户转述，云端没有直接读取D盘报告；具体用例/终态/APK SHA见[T-Flash-API35Probe结果](T-Flash-API35Probe.md)。默认Node无Intl/SQLite，只证明基础夹具/选中native链，非完整Bot/mcode/真实provider；API26/ARM64/真机未验证。此后新增运行代次管理器/测试不在该筛选，必须单列未验证。下文「本机未运行/下一步执行卡」为旧状态，不能据此继续派活。
+
 最新已纳入Flash修复09bc6bb，R1/R2/R3源码复核通过：代次从打开流程开始、上下文切换使其失效，finally不解锁新scope，只有读取成功且无待核对状态才准入写，memory_pending按unknown处理。Flash自报45+11项widget/analyze/l10n通过，云端无Flutter未复跑。以下「尚未接受、先修R1—R3」已过时，保留为历史。当前本机执行[T-Flash-API35Probe](T-Flash-API35Probe.md)的6项设备验收；UI有一处非阻断后续（手动刷新失败时错误页隐藏保留草稿），已记录原卡，之后再明确派修。
 
 Windows准备候选及完整本机命令见[T-Flash-API35Probe](T-Flash-API35Probe.md)：prepare-probe支持NDK Windows exe固定Android26/x86_64目标，文本UTF-8、头inventory正斜杠。Linux实际重新编译JNI、Python45/45、host6/6已过，Windows和设备未执行。先让Flash修记忆管理R1—R3，之后够时间才执行本卡6项设备测试，默认无Intl/SQLite包仅基础夹具，不宣称真实Bot。JDK21为已验证基线，target17；当前默认JDK17还没实跑，不能仅凭版本就断言完全无法构建。
