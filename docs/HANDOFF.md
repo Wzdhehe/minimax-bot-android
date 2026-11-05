@@ -4,7 +4,7 @@
 
 用户已要求继续开发。当前只在**feat/t-plugins**，阶段成果及时推送；不另起分支、不动main/dev/integration、不force、不PR、不发布APK。
 
-最新分工：Codex负责runtime、独立UID/文件/Key边界、broker、Endpoint及生命周期接口和集成审查；本机M3.1 Flash承担接口冻结后的界面实现、文案、定向验证和文档整理。此前Endpoint代次任务收回归Codex；创建表单与编辑表单卡已交付、源码审查接受，本机当前任务见[Bot只读记忆页任务卡](handoff/T-Flash-BotMemoryRead.md)。
+最新分工：Codex负责runtime、独立UID/文件/Key边界、broker、Endpoint及生命周期接口和集成审查；本机M3.1 Flash承担接口冻结后的界面实现、文案、定向验证和文档整理。此前Endpoint代次任务收回归Codex；创建表单、编辑表单及b36ade7的[Bot只读记忆页](handoff/T-Flash-BotMemoryRead.md)均已交付、源码审查接受。记忆页仅有读取，真实服务/设备未验证；Flash下一卡另行明确，不自动扩展记忆写入或底层。
 
 Flash首卡`ff363bc/5c44d43`及第二卡`5afbd76/0fc0315/16f6ba3`已纳入；接口报告已纠正，现有创建表单加入校验与单次提交流程。Codex审出关闭过渡后mounted守卫被删，Flash在`82343ad`恢复并补特定回归用例；源码已复核，本机Flash自报analyze与相关widget11项通过，云端无Flutter未复跑，设备未验证。见[创建表单任务卡](handoff/T-Flash-CreateForms.md)和[本机报告](research/flash-bot-create-forms.md)。双方写入范围不重叠。
 
