@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <fcntl.h>
 #include <string>
+#include "runtime_directory_lease.h"
 
 namespace {
 std::string basename(JNIEnv* env, jstring input) {
@@ -46,6 +47,9 @@ jint Publish(JNIEnv* env, jobject, jint directory, jstring source, jstring targe
 }
 jint Replace(JNIEnv* env, jobject, jint directory, jstring source, jstring target) {
   return Commit(env, directory, source, target, 0U);
+}
+jint TryDirectoryLease(JNIEnv*, jobject, jint directory) {
+  return try_runtime_directory_lease(directory);
 }
 jint OpenRead(JNIEnv* env, jobject, jint directory, jstring name) {
   const auto file = basename(env, name);
@@ -112,6 +116,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   JNINativeMethod methods[] = {
     {const_cast<char*>("publishNoReplace"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Publish)},
     {const_cast<char*>("replace"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Replace)},
+    {const_cast<char*>("tryDirectoryLease"), const_cast<char*>("(I)I"), reinterpret_cast<void*>(TryDirectoryLease)},
     {const_cast<char*>("openRead"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(OpenRead)},
     {const_cast<char*>("openChildDirectory"), const_cast<char*>("(ILjava/lang/String;Z)I"), reinterpret_cast<void*>(OpenChildDirectory)},
     {const_cast<char*>("openStage"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(OpenStage)},

@@ -221,7 +221,8 @@ class IsolatedNodeModelTest {
                                 assertTrue(identity.data.getBoolean("database_owner_denied"))
                                 assertTrue(identity.data.getBoolean("publication_owner_denied"))
                                 NativeModelRequestHost(identity.uid, providerId!!, "normal", probe.peerBinder(), channels::open, channels::close).use { host ->
-                                RuntimeFileCommitHost.open(context, "node-state", identity.uid, probe.peerBinder(), allowReplace = true, allowRead = true, allowMove = true, allowRemove = true, allowAppend = true).use { fileHost ->
+                                RuntimeFileCommitHost.openBotState(context, "node-state", identity.uid, probe.peerBinder()).let { fileHost ->
+                                try {
                                 val id = UUID.randomUUID().toString()
                                 val data = Bundle().apply {
                                     putString("id", id)
@@ -409,7 +410,7 @@ class IsolatedNodeModelTest {
                                 for (name in listOf("binary", "overLimit", "unchanged", "invalid")) assertTrue(appends.getBoolean(name))
                                 assertEquals(0, appends.getInt("emptySize"))
                                 for (name in listOf("removed", "emptyRemoved")) assertEquals("removed", appends.getString(name))
-                                val committed = File(dataDirectory, "minimax-bot-runtime/files/node-state")
+                                val committed = File(dataDirectory, "minimax-bot-runtime/bot-state/node-state")
                                 val names = committed.list()!!.sorted()
                                 val expectedNames = mutableListOf("node-empty.bin", "node-snapshot.bin", "node-state.bin")
                                 if (report.getBoolean("intlAvailable")) {
@@ -428,6 +429,7 @@ class IsolatedNodeModelTest {
                                 assertEquals(8, headersInjected.get())
                                 assertFalse(store.catalog().toString().contains(secret))
                                 assertFalse(logs.any { it.contains(secret) })
+                                } finally { fileHost.closeAsync().get(5, TimeUnit.SECONDS) }
                                 }
                                 }
                             }

@@ -120,11 +120,11 @@ class RuntimeFileCommitHostTest {
     @Test fun closeDrainsAnAdmittedIncompleteRequestWhileThePeerStaysAlive() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val scope = "drain-test-${UUID.randomUUID()}"
-        val root = File(context.noBackupFilesDir, "minimax-bot-runtime/files/$scope")
+        val root = File(context.noBackupFilesDir, "minimax-bot-runtime/bot-state/$scope")
         try {
             ProbeConnection(context).use { peer ->
                 val identity = peer.identity().get(10, TimeUnit.SECONDS)
-                RuntimeFileCommitHost.open(context, scope, identity.uid, peer.peerBinder(), readTimeoutMs = 10_000).use { host ->
+                RuntimeFileCommitHost.openBotState(context, scope, identity.uid, peer.peerBinder(), readTimeoutMs = 10_000).use { host ->
                     val completion = peer.run(Bundle().apply {
                         putString("id", UUID.randomUUID().toString())
                         putBinder("state_host", host); putString("state_session", host.session)
@@ -132,6 +132,9 @@ class RuntimeFileCommitHostTest {
                     val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
                     while (host.inFlightOperations == 0 && System.nanoTime() < deadline) Thread.sleep(5)
                     assertEquals(1, host.inFlightOperations)
+                    expectFailure(RuntimeDataCode.BUSY) {
+                        RuntimeFileCommitHost.openBotState(context, scope, identity.uid, peer.peerBinder()).close()
+                    }
                     // Less than the read timeout: retirement must be caused by
                     // close cancellation, not by waiting for the natural deadline.
                     host.closeAsync().get(3, TimeUnit.SECONDS)
@@ -141,6 +144,7 @@ class RuntimeFileCommitHostTest {
                     assertEquals(0, host.inFlightOperations)
                     assertTrue(peer.peerBinder().isBinderAlive)
                     assertTrue(root.list().isNullOrEmpty())
+                    RuntimeFileCommitHost.openBotState(context, scope, identity.uid, peer.peerBinder()).use { }
                 }
             }
         } finally { root.deleteRecursively() }
@@ -151,8 +155,10 @@ class RuntimeFileCommitHostTest {
         val name = "invalid-test-${UUID.randomUUID()}"
         val root = File(context.noBackupFilesDir, "minimax-bot-runtime/files/$name")
         expectFailure(RuntimeDataCode.INVALID) { RuntimeFileCommitHost.open(context, name, Process.myUid(), Binder()) }
+        expectFailure(RuntimeDataCode.INVALID) { RuntimeFileCommitHost.openBotState(context, name, Process.myUid(), Binder()) }
         for (scope in listOf("../outside", "/absolute", ".", "..")) {
             expectFailure(RuntimeDataCode.INVALID) { RuntimeFileCommitHost.open(context, scope, Process.myUid() + 1, Binder()) }
+            expectFailure(RuntimeDataCode.INVALID) { RuntimeFileCommitHost.openBotState(context, scope, Process.myUid() + 1, Binder()) }
         }
         assertFalse(root.exists())
         val calls = AtomicInteger()
@@ -172,6 +178,51 @@ class RuntimeFileCommitHostTest {
         }
         assertEquals(RuntimeDataCode.WORKER_REQUIRED, result.get())
         assertEquals(0, calls.get())
+    }
+
+    @Test fun botStateLeaseExcludesAnotherHostUntilCloseOrPeerDeath() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val scope = "bot-lease-${UUID.randomUUID()}"
+        val otherScope = "$scope-other"
+        val root = File(context.noBackupFilesDir, "minimax-bot-runtime/bot-state/$scope")
+        val otherRoot = File(context.noBackupFilesDir, "minimax-bot-runtime/bot-state/$otherScope")
+        var survivor: RuntimeFileCommitHost? = null
+        var deadPeer: android.os.IBinder? = null
+        var deadUid = 0
+        try {
+            ProbeConnection(context).use { peer ->
+                val identity = peer.identity().get(10, TimeUnit.SECONDS)
+                deadPeer = peer.peerBinder()
+                deadUid = identity.uid
+                val first = RuntimeFileCommitHost.openBotState(context, scope, identity.uid, peer.peerBinder())
+                try {
+                    expectFailure(RuntimeDataCode.BUSY) {
+                        RuntimeFileCommitHost.openBotState(context, scope, identity.uid, peer.peerBinder()).close()
+                    }
+                    // Independent scopes do not block one another.
+                    RuntimeFileCommitHost.openBotState(context, otherScope, identity.uid, peer.peerBinder()).use { }
+                    assertEquals(0, first.inFlightOperations)
+                } finally { first.closeAsync().get(5, TimeUnit.SECONDS) }
+                survivor = RuntimeFileCommitHost.openBotState(context, scope, identity.uid, peer.peerBinder())
+                expectFailure(RuntimeDataCode.BUSY) {
+                    RuntimeFileCommitHost.openBotState(context, scope, identity.uid, peer.peerBinder()).close()
+                }
+                // Closing the peer kills the isolated process; its death must
+                // retire the host and release the same directory lease.
+            }
+            survivor!!.whenRetired().get(5, TimeUnit.SECONDS)
+            assertFalse(deadPeer!!.isBinderAlive)
+            // A dead peer can fail after the directory lock was acquired. The
+            // factory must release that lock on its construction error path.
+            expectFailure(RuntimeDataCode.UNAVAILABLE) { RuntimeFileCommitHost.openBotState(context, scope, deadUid, deadPeer!!).close() }
+            ProbeConnection(context).use { peer ->
+                val identity = peer.identity().get(10, TimeUnit.SECONDS)
+                RuntimeFileCommitHost.openBotState(context, scope, identity.uid, peer.peerBinder()).use { }
+            }
+        } finally {
+            try { survivor?.closeAsync()?.get(5, TimeUnit.SECONDS) } catch (_: Exception) { }
+            root.deleteRecursively(); otherRoot.deleteRecursively()
+        }
     }
 
     @Test fun abandonedSnapshotOutputsReleaseTheirSlotsOnCloseAndDeadline() {

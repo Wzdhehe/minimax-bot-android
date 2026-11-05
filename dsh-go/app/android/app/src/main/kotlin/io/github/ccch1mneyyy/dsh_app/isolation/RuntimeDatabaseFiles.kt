@@ -15,7 +15,7 @@ internal enum class RuntimeDataCode(val wire: String) {
     UNAVAILABLE("runtime_data_unavailable"), CLOSED("runtime_data_closed"),
     INVALID("runtime_data_invalid"),
     DENIED("runtime_data_denied"),
-    NOT_FOUND("runtime_data_not_found"), TOO_LARGE("runtime_data_too_large"),
+    NOT_FOUND("runtime_data_not_found"), TOO_LARGE("runtime_data_too_large"), BUSY("runtime_data_busy"),
 }
 
 internal class RuntimeDataFailure(val code: RuntimeDataCode) : IOException(code.wire) {

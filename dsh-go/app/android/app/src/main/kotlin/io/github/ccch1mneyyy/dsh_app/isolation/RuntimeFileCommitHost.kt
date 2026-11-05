@@ -35,6 +35,7 @@ internal class RuntimeFileCommitHost private constructor(
     private val allowMove: Boolean,
     private val allowRemove: Boolean,
     private val allowAppend: Boolean,
+    private val exclusiveDirectory: RuntimePrivateDirectory? = null,
 ) : Binder(), Closeable {
     val session = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
     private val lock = Any()
@@ -190,6 +191,10 @@ internal class RuntimeFileCommitHost private constructor(
         var failed = false
         try { publisher.close() } catch (_: Exception) { failed = true }
         try { readDirectory?.close() } catch (_: Exception) { failed = true }
+        // The directory lease remains held until admission is closed and every
+        // admitted operation and outgoing response has drained. Never unlock it
+        // explicitly: any leaked duplicate must keep the kernel lock alive.
+        try { exclusiveDirectory?.close() } catch (_: Exception) { failed = true }
         if (failed) drained.completeExceptionally(RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)) else drained.complete(Unit)
     }
     override fun toString() = "RuntimeFileCommitHost(REDACTED)"
@@ -216,6 +221,50 @@ internal class RuntimeFileCommitHost private constructor(
                 try { publisher.close() } catch (_: Exception) { }
                 try { reader?.close() } catch (_: Exception) { }
                 throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+            }
+        }
+
+        /** A dedicated subtree for Bot data; only this factory should grant it.
+         * Independent launches acquire independent directory descriptions so
+         * the nonblocking kernel lease excludes cooperating processes too.
+         * The trusted launcher must not re-resolve, move or directly mutate this
+         * scope while leased, and must wait for closeAsync before starting again.
+         * This advisory lease does not constrain unrelated same-UID writers or
+         * revoke descriptors granted by other subsystems (e.g. SQLite). */
+        fun openBotState(context: Context, scopeId: String, isolatedUid: Int, peer: IBinder,
+                         readTimeoutMs: Long = 5_000): RuntimeFileCommitHost {
+            RuntimePrivateDirectory.requireOwnerWorker(context)
+            if (!RuntimePrivateDirectory.validName(scopeId) || isolatedUid <= 0 || isolatedUid == Process.myUid() || readTimeoutMs !in 100..10_000) {
+                throw RuntimeDataFailure(RuntimeDataCode.INVALID)
+            }
+            var directory: RuntimePrivateDirectory? = null
+            var publisher: RuntimeAtomicPublisher? = null
+            var reader: RuntimePrivateDirectory? = null
+            try {
+                // Each call opens a fresh file description; a dup would share an
+                // existing flock and therefore could not detect contention.
+                val held = RuntimePrivateDirectory.open(context, listOf("bot-state", scopeId))
+                directory = held
+                val result = held.withDescriptor { NativeRuntimePublication.tryDirectoryLease(it) }
+                if (result == OsConstants.EAGAIN) throw RuntimeDataFailure(RuntimeDataCode.BUSY)
+                if (result != 0) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+                val writer = RuntimeAtomicPublisher.openForHeldDirectory(held)
+                publisher = writer
+                val read = held.duplicate()
+                reader = read
+                val host = RuntimeFileCommitHost(writer, isolatedUid, peer, true, readTimeoutMs, read,
+                    allowMove = true, allowRemove = true, allowAppend = true, exclusiveDirectory = held)
+                directory = null; publisher = null; reader = null
+                return host
+            } catch (error: Exception) {
+                if (error is RuntimeDataFailure) throw error
+                throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+            } catch (_: LinkageError) {
+                throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+            } finally {
+                try { publisher?.close() } catch (_: Exception) { }
+                try { reader?.close() } catch (_: Exception) { }
+                try { directory?.close() } catch (_: Exception) { }
             }
         }
     }
