@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Flash任务：完善已有Bot/群创建表单
 
-状态：待本机执行。前卡执行位修复和接口报告已收到；Codex已实查mode变化与文档链接。Endpoint代次保护已由Codex完成，不修改它。请同步最新feat/t-plugins后按本卡工作。
+状态：收到5afbd76/0fc0315/16f6ba3，已快进合入；源码审查有一项生命周期回归待本机修复，见文末。Flash自报的Windows测试尚未在云端复跑。Endpoint代次保护已由Codex完成，不修改它。
 
 ## 先修正接口报告（独立文档提交）
 
@@ -50,3 +50,11 @@ python tooling/docs-links/check_links.py --root . docs/research/flash-bot-ui-inv
 Flutter命令在dsh-go/app执行，链接检查在仓库根执行；若需pub get，避免提交lockfile/生成物变动。不跑全量golden。没有模拟器/真机执行就写未验证，widget测试不能写成已验证产品APK。
 
 仍用feat/t-plugins，开工/推送前fetch，只暂存允许路径。自己的未推送提交可rebase至最新远端；不force、不覆盖卡外冲突、不动main/dev/integration、不建PR、不发布APK。回报两个提交完整SHA、远端确认、实际输出；完成后等Codex审查，不自行开U1—U12。
+
+## Codex源码审查：当前只修这一项
+
+`BotHome._create`在`await route.completed`之后，原来的`if (accepted != true || !mounted) return;`被改成了仅检查accepted。若用户已确认，但BotHome在对话框退出过渡结束前被移除，后续仍会尝试访问页面的widget/controller并进入创建流程。需要恢复此处的mounted检查；后面清空输入和finally的mounted检查要保留。用户显式确认不代表已销毁的页面还应继续发起尚未开始的操作。
+
+补一项定向widget回归：确认对话框后，在route.completed尚未结束时移除BotHome，验证不发create请求、无框架异常且controller安全释放。不要只测未确认时关闭页面；尽量证明测试能抓住本次被删的检查。沿用本卡允许的两个源码/测试文件及本机创建表单报告，不改共享交接或此卡。
+
+运行原定向analyze、创建表单与流式性能测试，记录实际输出；单独一个修复提交推送后回报。云端仍在做BotLoopbackBridge，勿碰runtime/Endpoint或其测试/脚本。
