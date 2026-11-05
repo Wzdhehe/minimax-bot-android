@@ -7,6 +7,8 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+交接修正：`7cec627`提交共享lease时漏暂存了`bot-store-persistence.test.mjs`里一条队列满断言；本机106项是在**已修正的工作树**通过，单独检出7cec627会因旧断言失败。后续提交已补入该断言：队列满导致lease失效后，在途写即使返回published也要求重载，因此32项均不应报告成功。运行时源代码未丢失；以后核验以当前HEAD为准。
+
 新增`bot-file-lease.mjs`，将Bot Store和下一步MemoryStore需要的原生文件能力收敛到同一个可共享会话：文件名仅允许原生basename，最大1MiB，最多32个有界串行写入，写入参数入队时复制；publish的`already_exists`、rename/remove的明确`not_found`不伪称未知，其他不确定结果使共享会话失效，已排队操作及在途读取也不能继续返回旧状态。超限/排队满要求重载。`createBotStorePersistence`兼容原`files`参数，也可接宿主持有的`lease`；Android验收脚本的模块打包已纳入此依赖。**此JS对象不是native跨进程锁或终止机制**，宿主仍须保证每个数据目录同一时刻只有一个可信runtime，并在销毁后再重开；新增记忆适配时必须与Store传入同一lease，不得各自单独包装同一files。宿主完整106/106、钉点源码完整打包图4/4、精确验收脚本host 4/4、Python33/33，验收APK/仪器APK `BUILD SUCCESSFUL in 19s`；设备仍未执行。
 
 Android验收脚本现嵌入真实官方`Store`及生产`bot-store-persistence`，经既有`mbot_files_bridge`使用Main绑定的`node-state`私有文件能力；两个独立isolated Node进程顺序启动时，设备测试将验证同一Bot、聊天条数0→1→2、一个任务配置、用量turn只记录一次，并保留Key不进入报告/持久文件的断言。**脚本已接线并编译，Android执行未验证。** Pinned Bot i18n导入时需要Intl，脚本显式在无Intl时报告`available:false`，设备测试只在Intl可用时要求Store结果；正式full-ICU组合必须验该分支。验收asset随包包含官方Bot MIT LICENSE并校验。实际执行：精确APK脚本宿主4/4（Store块在两个独立host进程通过磁盘上的假文件能力恢复，另测无Intl跳过）、Python33/33，NDK/验收APK及仪器APK `BUILD SUCCESSFUL in 1m 1s`；本地release的`requiresIntl=false`/`requiresSqlite=false`。这不是MemoryStore、完整Bot业务或产品启动器，不能把宿主假能力说成Android Binder成功。

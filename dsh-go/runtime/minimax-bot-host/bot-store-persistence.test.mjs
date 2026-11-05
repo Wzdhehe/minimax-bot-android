@@ -166,7 +166,7 @@ test('a full mutation queue refuses more work and invalidates later writes', asy
   finish('published');
   const settled = await results;
   assert.equal(calls, 1);
-  assert.equal(settled.filter((item) => item.status === 'fulfilled').length, 1);
+  assert.equal(settled.filter((item) => item.status === 'fulfilled').length, 0);
   assert.ok(settled.filter((item) => item.status === 'rejected').every((item) => item.reason.code === 'runtime_data_reload_required'));
 });
 
