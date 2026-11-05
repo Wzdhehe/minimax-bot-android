@@ -40,6 +40,8 @@ def bundle(output_dir=None):
         'bot-fd-ingress.mjs': [],
         'bot-file-lease.mjs': [],
         'bot-store-persistence.mjs': ['bot-file-lease.mjs'],
+        'bot-memory-filesystem.mjs': [],
+        'bot-persistence.mjs': ['bot-file-lease.mjs', 'bot-memory-filesystem.mjs', 'bot-store-persistence.mjs'],
     }
     def module_url(name):
         if name not in urls:
@@ -59,6 +61,7 @@ def bundle(output_dir=None):
         'i18n.mjs': ('node/i18n.mjs', [('./strings.mjs', 'strings.mjs')]),
         'reactions.mjs': ('node/reactions.mjs', [('../client/emoji-data.js', 'emoji-data.js'), ('./i18n.mjs', 'i18n.mjs')]),
         'store.mjs': ('node/store.mjs', [('../client/emoji-data.js', 'emoji-data.js'), ('./i18n.mjs', 'i18n.mjs'), ('./reactions.mjs', 'reactions.mjs')]),
+        'memory.mjs': ('node/memory.mjs', [('./i18n.mjs', 'i18n.mjs')]),
     }
     vendor_urls = {}
     def vendor_module_url(name):
@@ -95,9 +98,12 @@ def bundle(output_dir=None):
     bot_store_placeholder = '"__MBOT_BOT_STORE_MODULE_URL__"'
     assert template.count(bot_store_placeholder) == 1
     template = template.replace(bot_store_placeholder, json.dumps(vendor_module_url('store.mjs')))
-    store_persistence_placeholder = '"__MBOT_BOT_STORE_PERSISTENCE_MODULE_URL__"'
-    assert template.count(store_persistence_placeholder) == 1
-    template = template.replace(store_persistence_placeholder, json.dumps(module_url('bot-store-persistence.mjs')))
+    bot_memory_placeholder = '"__MBOT_BOT_MEMORY_MODULE_URL__"'
+    assert template.count(bot_memory_placeholder) == 1
+    template = template.replace(bot_memory_placeholder, json.dumps(vendor_module_url('memory.mjs')))
+    bot_persistence_placeholder = '"__MBOT_BOT_PERSISTENCE_MODULE_URL__"'
+    assert template.count(bot_persistence_placeholder) == 1
+    template = template.replace(bot_persistence_placeholder, json.dumps(module_url('bot-persistence.mjs')))
     (assets / 'node-fd-probe.cjs').write_text(template)
     bot_notice = assets / 'third_party/minimax-bot'
     bot_notice.mkdir(parents=True, exist_ok=True)

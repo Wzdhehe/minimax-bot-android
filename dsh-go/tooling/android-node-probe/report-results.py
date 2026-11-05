@@ -8,7 +8,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 PHASE = r'bootstrap|sqlite_load|sqlite_memory|vfs_register|vfs_open|vfs_wal|vfs_verify|vfs_write|vfs_reopen|model_streams|descriptor_transfer|bot_http_fd|model_dynamic|sdk_route|scoped_model_route|file_commit|file_read|file_mutation|file_append|bot_store|unknown'
-CODE = r'SQLITE_CANTOPEN|SQLITE_IOERR_SHMOPEN|SQLITE_IOERR|SQLITE_BUSY|SQLITE_READONLY|SQLITE_ERROR|SQLITE_PERM|SQLITE_MISUSE|SQLITE_NOTFOUND|fd_vfs_unavailable|fd_vfs_input_invalid|sqlite_parent_missing|runtime_data_invalid|runtime_data_denied|runtime_data_closed|runtime_data_unavailable|runtime_data_not_found|runtime_data_too_large|runtime_data_outcome_unknown|runtime_data_reload_required|descriptor_invalid|descriptor_permissions|descriptor_not_a_regular_file|bot_transport_timeout|bot_transport_invalid|bot_transport_unavailable|unknown'
+CODE = r'SQLITE_CANTOPEN|SQLITE_IOERR_SHMOPEN|SQLITE_IOERR|SQLITE_BUSY|SQLITE_READONLY|SQLITE_ERROR|SQLITE_PERM|SQLITE_MISUSE|SQLITE_NOTFOUND|fd_vfs_unavailable|fd_vfs_input_invalid|sqlite_parent_missing|runtime_data_invalid|runtime_data_denied|runtime_data_closed|runtime_data_unavailable|runtime_data_not_found|runtime_data_too_large|runtime_data_outcome_unknown|runtime_data_reload_required|descriptor_invalid|descriptor_permissions|descriptor_not_a_regular_file|bot_transport_timeout|bot_transport_invalid|bot_transport_unavailable|memory_pending|memory_backup_failed|unknown'
 FAILURE = re.compile(r'node_probe_failed_at_(' + PHASE + r')_code_(' + CODE + r')(?:\b|$)')
 TEST_PREFIX = {'IsolatedNodeModelTest': '', 'RuntimeDatabaseFilesTest': 'd',
     'FilePublicationProbeTest': 'p', 'RuntimeAtomicPublisherTest': 'a',

@@ -3,13 +3,13 @@
 
 ## 官方Bot Store受控持久化候选（Android验收接线，设备未验证）
 
-后续增加`bot-memory-filesystem.mjs`，在同一个JS文件会话上适配官方MemoryStore的团队/单Bot记忆、pending、journal、备份和archive；原版备份硬链接变成受控读快照+独占publish复制，要求单一可信runtime写者。宿主验证未知提交重启恢复、operationId日志去重、旧字节备份及无物理Bot目录的HTTP记忆读写；Android尚未接入此部分。1MiB单文件、整文件追加成本、跨进程独占和pending前失败的孤儿stage清理均未解决，详见[NEXT-AGENT](NEXT-AGENT.md)。
+后续增加`bot-memory-filesystem.mjs`，在同一个JS文件会话上适配官方MemoryStore的团队/单Bot记忆、pending、journal、备份和archive；原版备份硬链接变成受控读快照+独占publish复制，要求单一可信runtime写者。宿主验证未知提交重启恢复、operationId日志去重、旧字节备份及无物理Bot目录的HTTP记忆读写；Android验收脚本已接入并编译，**设备尚未执行，产品启动器尚未接入**。1MiB单文件、整文件追加成本、跨进程独占和pending前失败的孤儿stage清理均未解决，详见[NEXT-AGENT](NEXT-AGENT.md)。
 
 Store现可与未来MemoryStore共享`bot-file-lease.mjs`：同一会话有界串行写、复制入队数据，任何结果未知使共享方失效，在途读不再返回旧结果；明确的publish已存在及rename/remove不存在保留原语义。该对象不提供跨进程排他，正式launcher须负责真实native数据lease和进程回收。
 
-真实官方Store和生产adapter已嵌入Android固定验收脚本、连接`mbot_files_bridge`；计划在两个独立isolated进程通过Main文件broker检验聊天、定时任务配置和用量恢复，以及随机Key不入报告/文件。Node候选的验收APK和仪器APK本地构建通过；带Intl的精确脚本在两个宿主进程以磁盘假能力实跑通过，无Intl分支明确跳过。**Android设备/模拟器尚未执行**，GitHub计费问题及复现见[NEXT-AGENT](NEXT-AGENT.md)。
+真实官方Store和MemoryStore与生产adapter已嵌入Android固定验收脚本、连接`mbot_files_bridge`并共用同一JS lease；计划在两个独立isolated进程通过Main文件broker检验聊天、定时任务配置、用量、记忆、journal及备份恢复，以及随机Key不入报告/文件。Node候选的验收APK和仪器APK本地构建通过（`BUILD SUCCESSFUL in 58s`）；带Intl的精确脚本在两个宿主进程以磁盘假能力实跑通过（4/4），无Intl分支明确跳过；Python验收工具33/33。**Android设备/模拟器尚未执行**，GitHub计费问题及复现见[NEXT-AGENT](NEXT-AGENT.md)。
 
-真实`Store`现可经宿主注入`bot-store-persistence.mjs`，将state、上游规范化chat JSON和usage ledger映射到已绑定文件能力的固定/摘要basename，保留原Store业务及默认filesystem分支；定时任务配置随state持久化。最多1MiB，写入经最多32项的串行队列，未知结果污染会话并拒绝后续操作，重启回读，不重试或伪称失败未落盘。已知超限虽未发布，也要重载，因为Store可能在保存前已修改内存。`Store.readUsage`现在仅ENOENT为空，其他读错误上抛。宿主使用假文件能力与真实Bot Store/HTTP验证冷重开、聊天隔离、计划配置、未知结果及损坏/上限；不能证明Android文件链路运行成功。MemoryStore、媒体、mcode FS、跨进程独占lease及超1MiB增长均未解决；完整验收与下一步见[NEXT-AGENT](NEXT-AGENT.md)。
+真实`Store`现可经宿主注入`bot-store-persistence.mjs`，将state、上游规范化chat JSON和usage ledger映射到已绑定文件能力的固定/摘要basename，保留原Store业务及默认filesystem分支；定时任务配置随state持久化。最多1MiB，写入经最多32项的串行队列，未知结果污染会话并拒绝后续操作，重启回读，不重试或伪称失败未落盘。已知超限虽未发布，也要重载，因为Store可能在保存前已修改内存。`Store.readUsage`现在仅ENOENT为空，其他读错误上抛。宿主使用假文件能力与真实Bot Store/HTTP验证冷重开、聊天隔离、计划配置、未知结果及损坏/上限；不能证明Android文件链路运行成功。媒体、mcode FS、跨进程独占lease及超1MiB增长均未解决；完整验收与下一步见[NEXT-AGENT](NEXT-AGENT.md)。
 
 **尚未实现完整runtime FS。** 当前WAL/两进程读取、Main四文件owner已有各自设备证据，不能代替本卡。Mini App可视化程序仍不适配；下述官方Bot的miniapp/node目录是复用其业务后端，不新增Mini App浏览器。
 

@@ -7,6 +7,10 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+Android验收脚本现同时打包真实官方`Store`、`MemoryStore`和生产`createBotPersistence`，经`mbot_files_bridge`共用同一JS文件lease。设备用例已写：两次独立isolated Node进程应依次恢复同一Bot、聊天、任务配置、去重用量、团队记忆、日志和初始内容备份，并检查随机Key不进入报告或已授权持久文件；宿主的精确脚本使用磁盘假文件能力确实跑过两个独立进程。官方Bot MIT LICENSE随验收asset打包。执行结果：`node --test --test-reporter=tap dsh-go/tooling/android-node-probe/probe-bundle.test.mjs` 4/4；`python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_*.py'` 33/33；本地验收APK与仪器APK `BUILD SUCCESSFUL in 58s`。本地Node release的`requiresIntl=false`和`requiresSqlite=false`，无Intl时脚本明确报告`available:false`并跳过业务断言。**API26/35设备新用例未执行；本地编译和假能力不能证明Android Binder、full-ICU分支或产品运行成功。**
+
+后续先在账户计费限制解除后对最新提交运行设备workflow，核对API26/35实际执行、full-ICU分支和XML/artifact；另行设计并验证native跨进程数据独占lease及进程退出回收、pending前未知写入留下的孤儿stage清理、1MiB上限和账本增长，再推进附件/媒体、mcode完整FS、正式独立UID launcher与Flutter桥。随后验证真实provider、ARM64/物理设备和官方插件市场；不得以同UID shell或放宽Key边界绕过隔离。产品APK尚不可用。
+
 新增`bot-memory-filesystem.mjs`和`bot-persistence.mjs`：后者一次建立同一`bot-file-lease`并同时产出Store/MemoryStore两个宿主适配器；前者只映射官方MemoryStore的team/bot文档、pending、journal、backup和archive虚拟路径到专用摘要basename。vendor `MemoryStore`新增可选filesystem接缝，默认仍用Node文件系统；现有事务、日志operationId去重和恢复流程保留。原版备份用copy+hardlink，受控实现使用只读快照+独占publish两次复制，依赖同一可信runtime单写者，不是POSIX hardlink或跨进程原子事务。`startBotService`可选接两个适配器，必须通过`createBotPersistence`共同创建；真实Bot JSON服务用假文件能力在**无物理Bot dataDir**的宿主创建/恢复记忆通过。
 
 记忆故障测试覆盖：旧文件BOM/CRLF逐字节备份且不覆盖、团队/单Bot隔离、忘记/归档、pending前写入结果未知不虚构提交、日志追加或文档rename已发生但回执丢失后重启恢复且journal不重复、未知错误使Store同lease失效。每个文件仍上限1MiB，scope名最多128字符，日志追加是受控整文件复制；未解决长期增长性能、超限后继续使用、跨进程独占、进程死亡后回收及失败时残留的临时文件。尤其pending前未知结果会留下不可枚举的孤儿stage：当前不宣称已清理。宿主后端是内存fake，**没有Android/真机或真实provider证据**。
@@ -17,13 +21,13 @@
 
 新增`bot-file-lease.mjs`，将Bot Store和下一步MemoryStore需要的原生文件能力收敛到同一个可共享会话：文件名仅允许原生basename，最大1MiB，最多32个有界串行写入，写入参数入队时复制；publish的`already_exists`、rename/remove的明确`not_found`不伪称未知，其他不确定结果使共享会话失效，已排队操作及在途读取也不能继续返回旧状态。超限/排队满要求重载。`createBotStorePersistence`兼容原`files`参数，也可接宿主持有的`lease`；Android验收脚本的模块打包已纳入此依赖。**此JS对象不是native跨进程锁或终止机制**，宿主仍须保证每个数据目录同一时刻只有一个可信runtime，并在销毁后再重开；新增记忆适配时必须与Store传入同一lease，不得各自单独包装同一files。宿主完整106/106、钉点源码完整打包图4/4、精确验收脚本host 4/4、Python33/33，验收APK/仪器APK `BUILD SUCCESSFUL in 19s`；设备仍未执行。
 
-Android验收脚本现嵌入真实官方`Store`及生产`bot-store-persistence`，经既有`mbot_files_bridge`使用Main绑定的`node-state`私有文件能力；两个独立isolated Node进程顺序启动时，设备测试将验证同一Bot、聊天条数0→1→2、一个任务配置、用量turn只记录一次，并保留Key不进入报告/持久文件的断言。**脚本已接线并编译，Android执行未验证。** Pinned Bot i18n导入时需要Intl，脚本显式在无Intl时报告`available:false`，设备测试只在Intl可用时要求Store结果；正式full-ICU组合必须验该分支。验收asset随包包含官方Bot MIT LICENSE并校验。实际执行：精确APK脚本宿主4/4（Store块在两个独立host进程通过磁盘上的假文件能力恢复，另测无Intl跳过）、Python33/33，NDK/验收APK及仪器APK `BUILD SUCCESSFUL in 1m 1s`；本地release的`requiresIntl=false`/`requiresSqlite=false`。这不是MemoryStore、完整Bot业务或产品启动器，不能把宿主假能力说成Android Binder成功。
+上一阶段Android验收脚本已嵌入真实官方`Store`及生产`bot-store-persistence`，经既有`mbot_files_bridge`使用Main绑定的`node-state`私有文件能力；后续已扩展MemoryStore，见本节首段。Pinned Bot i18n导入时需要Intl，脚本显式在无Intl时报告`available:false`；正式full-ICU组合必须验业务分支。验收asset随包包含官方Bot MIT LICENSE并校验。上一阶段精确APK脚本宿主4/4、Python33/33，NDK/验收APK及仪器APK `BUILD SUCCESSFUL in 1m 1s`；本地release的`requiresIntl=false`/`requiresSqlite=false`。这不是完整Bot业务或产品启动器，不能把宿主假能力说成Android Binder成功。
 
 新增`bot-store-persistence.mjs`：为真实官方Bot `Store`提供受控文件能力适配；`server.mjs`/`service.mjs`新增可选的仅宿主注入接缝，未注入时保留原filesystem行为。state和usage用固定文件名，聊天文件基于上游已规范化的basename作SHA-256映射到扁平名字；拒绝其它路径。每次读/写最多1MiB；不可悄悄截断或当空数据。写入经过有界串行队列（最多32项），底层返回未知或异常即污染该adapter，后续读写拒绝，须撤销旧lease并重启恢复，绝不自动重试；native明确的`too_large`发生在发布前，先返回明确超限错误，但也要求重载，因为Store调用save前可能已修改内存状态。只允许一个Store实例拥有一个native数据lease，**跨进程排他lease尚未实现**。官方`Store.readUsage`只把ENOENT当空账本，其他错误上抛；损坏JSON和无效UTF-8在适配器内归一化，不回显数据。`startBotService`同时前置校验signal/logger，防止宿主传漏时启动监听后抛错泄漏资源。
 
 验收：真实官方Store通过假文件能力恢复Bot状态、两份聊天、定时任务配置和用量账本；真实Bot HTTP服务经注入接缝创建Bot、重启恢复；覆盖未知写入已生效、并发排队不得覆盖、账本不重复、损坏数据、队列满、路径和1MiB拒绝等。宿主全套101/101、官方存储/用量回归15/15、native JUnit46/Node56、scope4/4通过；真实钉点源码打包图4/4且断言包含适配器。另实际准备并运行钉点mcode真实factory + Linux SQLite + 官方Bot，冷启动/重开 **1/1通过**，该真实factory探针用的是默认filesystem存储，未接新adapter。已执行的新存储能力验证使用宿主假实现，**不是Android Binder或完整Bot在手机上的证明**；MemoryStore、媒体/上传、mcode文件系统、数据迁移、跨进程lease、超过1MiB的历史/账本、真实provider和设备结果均未完成。vendor改动及MIT来源已记录在[dsh-go runtime vendor说明](../../dsh-go/runtime/vendor/UPSTREAM.md)。
 
-下一步优先在API26/35设备实际运行上述**真实官方Store + 生产adapter + mbot_files_bridge**组合，核对full-ICU分支、两次进程恢复、Key边界与结果artifact；无Intl跳过不能算通过。随后逐项适配MemoryStore、媒体及mcode文件，并完成正式独立UID launcher/Flutter桥。设备CI因计费限制未启动，解决后须在当前提交重跑，不用宿主假能力冒充设备。
+下一步优先在API26/35设备实际运行上述**真实官方Store和MemoryStore + 生产adapter + mbot_files_bridge**组合，核对full-ICU分支、两次进程恢复、Key边界与结果artifact；无Intl跳过不能算通过。随后逐项适配媒体及mcode文件，并完成正式独立UID launcher/Flutter桥。设备CI因计费限制未启动，解决后须在当前提交重跑，不用宿主假能力冒充设备。
 
 新增`runtime/minimax-bot-host/bot-fd-ingress.mjs`并由`runtime-bundle-entry.mjs`导出：从可信、已经授权的`next(signal)`顺序取得独立拥有的FD，交给`bot-fd-transport`；停止不等待不合作的source，已挂回调负责关闭随后迟到的FD；source/transport失败只抛固定`bot_transport_unavailable`。每次只保留一个等待回调，不对每条连接在同一个永久Promise上累积监听；单测包括连续500次交付、取消竞态与真实FD关闭。宿主回归90/90通过；使用真实官方Bot的跨进程HTTP/SSE用例已改为经此循环，六个连接在Bot启动后按每次请求分别交付。以干净钉点`97818b2`及其esbuild 0.28.2运行完整源码打包图4/4通过，断言实际包含该文件。它**不是鉴权边界**：native源必须确保每次返回独立拥有的已授权FD；JS close不会自动结束忽略abort的底层线程，late-FD回调仅在进程存活至返回时执行。
 

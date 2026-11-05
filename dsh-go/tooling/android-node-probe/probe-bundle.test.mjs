@@ -5,7 +5,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer, connect } from 'node:net';
 import { once } from 'node:events';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -257,15 +257,17 @@ test('the exact packaged Bot Store block survives two host processes using a fak
     await readFile(join(root, '../../runtime/vendor/minimax-bot/LICENSE')));
   const script = await readFile(join(directory, 'node-fd-probe.cjs'), 'utf8');
   const storeLine = /^const botStoreModuleUrl = (.+);$/m.exec(script);
-  const adapterLine = /^const botStorePersistenceModuleUrl = (.+);$/m.exec(script);
-  assert.ok(storeLine && adapterLine);
+  const memoryLine = /^const botMemoryModuleUrl = (.+);$/m.exec(script);
+  const adapterLine = /^const botPersistenceModuleUrl = (.+);$/m.exec(script);
+  assert.ok(storeLine && memoryLine && adapterLine);
   const start = script.indexOf("    probePhase = 'bot_store';");
   const end = script.indexOf('\n  }\n  // Owner inspects', start);
   assert.ok(start >= 0 && end > start);
   const block = script.slice(start, end);
   const childScript = `
     const botStoreModuleUrl = ${storeLine[1]};
-    const botStorePersistenceModuleUrl = ${adapterLine[1]};
+    const botMemoryModuleUrl = ${memoryLine[1]};
+    const botPersistenceModuleUrl = ${adapterLine[1]};
     const fsp = require('node:fs/promises');
     const path = require('node:path');
     const directory = ${JSON.stringify(directory)};
@@ -283,6 +285,22 @@ test('the exact packaged Bot Store block survives two host processes using a fak
         await fsp.writeFile(temporary, bytes); await fsp.rename(temporary, destination); return 'published';
       },
       async append(name, bytes) { await fsp.appendFile(target(name), bytes); return 'published'; },
+      async publish(name, bytes) {
+        try { await fsp.writeFile(target(name), bytes, { flag: 'wx' }); return 'published'; }
+        catch (error) { if (error.code === 'EEXIST') return 'already_exists'; throw error; }
+      },
+      async size(name) {
+        try { return (await fsp.stat(target(name))).size; }
+        catch (error) { if (error.code === 'ENOENT') error.code = 'runtime_data_not_found'; throw error; }
+      },
+      async rename(source, destination) {
+        try { await fsp.rename(target(source), target(destination)); return 'published'; }
+        catch (error) { if (error.code === 'ENOENT') error.code = 'runtime_data_not_found'; throw error; }
+      },
+      async remove(name) {
+        try { await fsp.unlink(target(name)); return 'removed'; }
+        catch (error) { if (error.code === 'ENOENT') error.code = 'runtime_data_not_found'; throw error; }
+      },
     };
     let probePhase;
     const report = {};
@@ -304,7 +322,11 @@ test('the exact packaged Bot Store block survives two host processes using a fak
     assert.equal(stderr, '');
     return JSON.parse(stdout);
   }
-  assert.deepEqual(await run(), { available: true, before: 0, after: 1, schedules: 1, usage: 1, recorded: true });
-  assert.deepEqual(await run(), { available: true, before: 1, after: 2, schedules: 1, usage: 1, recorded: false });
+  assert.deepEqual(await run(), { available: true, before: 0, after: 1, schedules: 1, usage: 1, recorded: true,
+    memoryBefore: 0, memoryAfter: 1, memoryJournal: 1, memoryBackup: true });
+  assert.equal((await readdir(directory)).filter((name) => /^bot-memory-[a-f0-9]{64}\.bin$/.test(name)).length, 2);
+  assert.deepEqual(await run(), { available: true, before: 1, after: 2, schedules: 1, usage: 1, recorded: false,
+    memoryBefore: 1, memoryAfter: 1, memoryJournal: 2, memoryBackup: true });
+  assert.equal((await readdir(directory)).filter((name) => /^bot-memory-[a-f0-9]{64}\.bin$/.test(name)).length, 3);
   assert.deepEqual(await run(true), { available: false });
 });

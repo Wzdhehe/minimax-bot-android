@@ -140,7 +140,8 @@ class ResultReportingTest(unittest.TestCase):
     def test_node_file_bridge_diagnostics_never_include_native_capabilities(self):
         for phase, failure in [('file_commit', 'runtime_data_unavailable'), ('file_read', 'runtime_data_not_found'),
                                ('file_mutation', 'runtime_data_denied'), ('file_append', 'runtime_data_too_large'),
-                               ('bot_store', 'runtime_data_outcome_unknown'), ('bot_store', 'runtime_data_reload_required')]:
+                               ('bot_store', 'runtime_data_outcome_unknown'), ('bot_store', 'runtime_data_reload_required'),
+                               ('bot_store', 'memory_pending'), ('bot_store', 'memory_backup_failed')]:
             with self.subTest(phase=phase):
                 code, output = self.run_report('private-capability-marker '
                     f'node_probe_failed_at_{phase}_code_{failure} at x(IsolatedNodeModelTest.kt:161)')

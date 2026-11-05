@@ -110,7 +110,7 @@ class IsolatedNodeModelTest {
         val codes = setOf("SQLITE_CANTOPEN", "SQLITE_IOERR", "SQLITE_IOERR_SHMOPEN", "SQLITE_BUSY", "SQLITE_READONLY",
             "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "sqlite_parent_missing",
             "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable", "runtime_data_not_found", "runtime_data_too_large", "runtime_data_outcome_unknown", "runtime_data_reload_required",
-            "descriptor_invalid", "descriptor_permissions", "descriptor_not_a_regular_file", "bot_transport_timeout", "bot_transport_invalid", "bot_transport_unavailable")
+            "descriptor_invalid", "descriptor_permissions", "descriptor_not_a_regular_file", "bot_transport_timeout", "bot_transport_invalid", "bot_transport_unavailable", "memory_pending", "memory_backup_failed")
         val phase = report.optString("failedPhase").takeIf { it in phases } ?: "unknown"
         val code = report.optString("failureCode").takeIf { it in codes } ?: "unknown"
         return AssertionError("node_probe_failed_at_${phase}_code_${code}")
@@ -318,6 +318,10 @@ class IsolatedNodeModelTest {
                                     assertEquals(1, botStore.getInt("schedules"))
                                     assertEquals(1, botStore.getInt("usage"))
                                     assertEquals(attempt == 0, botStore.getBoolean("recorded"))
+                                    assertEquals(attempt, botStore.getInt("memoryBefore"))
+                                    assertEquals(1, botStore.getInt("memoryAfter"))
+                                    assertEquals(attempt + 1, botStore.getInt("memoryJournal"))
+                                    assertTrue(botStore.getBoolean("memoryBackup"))
                                 } else assertFalse(botStore.getBoolean("available"))
                                 if (expected.optBoolean("requiresSqlite")) {
                                     val sqlite = report.getJSONObject("sqlite")
@@ -412,6 +416,9 @@ class IsolatedNodeModelTest {
                                     val chatFiles = names.filter { it.matches(Regex("bot-chat-[a-f0-9]{64}\\.json")) }
                                     assertEquals(1, chatFiles.size)
                                     expectedNames.addAll(listOf("bot-state.json", "bot-usage.jsonl", chatFiles.single()))
+                                    val memoryFiles = names.filter { it.matches(Regex("bot-memory-[a-f0-9]{64}\\.bin")) }
+                                    assertEquals(if (attempt == 0) 2 else 3, memoryFiles.size)
+                                    expectedNames.addAll(memoryFiles)
                                 }
                                 assertEquals(expectedNames.sorted(), names)
                                 assertTrue(fileProbeBytes(false).contentEquals(File(committed, "node-snapshot.bin").readBytes()))
