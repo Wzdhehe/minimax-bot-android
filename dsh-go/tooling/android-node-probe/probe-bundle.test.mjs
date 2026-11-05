@@ -249,6 +249,22 @@ test('the packaged Bot transport block serves two granted duplex FDs without lis
   }
 });
 
+test('the packaged real Bot service module loads without filesystem-relative imports', { timeout: 15_000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'mbot-node-bot-module-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  execFileSync('python3', [join(root, 'prepare-probe.py'), '--bundle-only', '--bundle-output', directory]);
+  const script = await readFile(join(directory, 'node-fd-probe.cjs'), 'utf8');
+  const line = /^const botServiceModuleUrl = (.+);$/m.exec(script);
+  assert.ok(line);
+  const moduleUrl = JSON.parse(line[1]);
+  assert.ok(moduleUrl.startsWith('data:text/javascript;base64,'));
+  assert.equal(typeof (await import(moduleUrl)).startBotService, 'function');
+  assert.deepEqual(await readFile(join(directory, 'third_party/minimax-bot/LICENSE')),
+    await readFile(join(root, '../../runtime/vendor/minimax-bot/LICENSE')));
+  assert.deepEqual(await readFile(join(directory, 'third_party/mbot-workspace-guard/LICENSE')),
+    await readFile(join(root, '../../../packages/mbot-workspace-guard/LICENSE')));
+});
+
 test('the exact packaged Bot Store block survives two host processes using a fake file capability', { timeout: 15_000 }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'mbot-node-bot-store-'));
   t.after(() => rm(directory, { recursive: true, force: true }));

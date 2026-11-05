@@ -104,10 +104,19 @@ def bundle(output_dir=None):
     bot_persistence_placeholder = '"__MBOT_BOT_PERSISTENCE_MODULE_URL__"'
     assert template.count(bot_persistence_placeholder) == 1
     template = template.replace(bot_persistence_placeholder, json.dumps(module_url('bot-persistence.mjs')))
+    bot_service_placeholder = '"__MBOT_BOT_SERVICE_MODULE_URL__"'
+    assert template.count(bot_service_placeholder) == 1
+    bot_service = subprocess.run(['node', str(ROOT / 'bundle-bot-service.mjs')], capture_output=True, text=True, check=True).stdout
+    if not bot_service.startswith('data:text/javascript;base64,') or len(bot_service) > 3 * 1024 * 1024:
+        raise RuntimeError('Unexpected verification Bot service bundle')
+    template = template.replace(bot_service_placeholder, json.dumps(bot_service))
     (assets / 'node-fd-probe.cjs').write_text(template)
     bot_notice = assets / 'third_party/minimax-bot'
     bot_notice.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(DSH / 'runtime/vendor/minimax-bot/LICENSE', bot_notice / 'LICENSE')
+    guard_notice = assets / 'third_party/mbot-workspace-guard'
+    guard_notice.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(DSH.parent / 'packages/mbot-workspace-guard/LICENSE', guard_notice / 'LICENSE')
 
 
 def prepare(ndk, archive, source_sha=None):

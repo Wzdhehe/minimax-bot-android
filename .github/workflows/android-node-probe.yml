@@ -20,6 +20,11 @@ on:
       - 'dsh-go/runtime/minimax-bot-host/bot-file-lease.mjs'
       - 'dsh-go/runtime/minimax-bot-host/bot-memory-filesystem.mjs'
       - 'dsh-go/runtime/minimax-bot-host/bot-persistence.mjs'
+      - 'dsh-go/runtime/minimax-bot-host/service.mjs'
+      - 'dsh-go/runtime/minimax-bot-host/workspace.mjs'
+      - 'dsh-go/runtime/minimax-bot-host/provider-broker.mjs'
+      - 'dsh-go/runtime/minimax-bot-host/usage-quota.mjs'
+      - 'packages/mbot-workspace-guard/**'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
       - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/RuntimeDescriptor*.kt'
       - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/model/**'
@@ -59,6 +64,11 @@ on:
       - 'dsh-go/runtime/minimax-bot-host/bot-file-lease.mjs'
       - 'dsh-go/runtime/minimax-bot-host/bot-memory-filesystem.mjs'
       - 'dsh-go/runtime/minimax-bot-host/bot-persistence.mjs'
+      - 'dsh-go/runtime/minimax-bot-host/service.mjs'
+      - 'dsh-go/runtime/minimax-bot-host/workspace.mjs'
+      - 'dsh-go/runtime/minimax-bot-host/provider-broker.mjs'
+      - 'dsh-go/runtime/minimax-bot-host/usage-quota.mjs'
+      - 'packages/mbot-workspace-guard/**'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
       - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/RuntimeDescriptor*.kt'
       - 'dsh-go/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/model/**'
@@ -140,6 +150,8 @@ jobs:
           run-id: ${{ steps.source_input.outputs.run_id }}
           name: node-full-icu-verification-input
           path: ${{ runner.temp }}/authorized-node-source
+      - name: Install locked verification bundler dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix dsh-go/tooling/model-sdk-probe
       - name: Prepare pinned Node candidate and verification JNI
         env:
           SOURCE_RUN_ID: ${{ steps.source_input.outputs.run_id }}
@@ -161,7 +173,6 @@ jobs:
             --cmake "$ANDROID_HOME/cmake/3.22.1/bin/cmake"
       - name: Build pinned SQLite addon and explicit data FD VFS
         run: |
-          npm ci --ignore-scripts --no-audit --no-fund --prefix dsh-go/tooling/model-sdk-probe
           python3 dsh-go/tooling/android-node-probe/prepare-sqlite.py \
             --ndk "$ANDROID_HOME/ndk/27.3.13750724" \
             --esbuild dsh-go/tooling/model-sdk-probe/node_modules/.bin/esbuild

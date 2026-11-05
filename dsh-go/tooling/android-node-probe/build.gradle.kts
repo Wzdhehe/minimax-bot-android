@@ -51,6 +51,7 @@ val verifyPreparedInputs by tasks.registering {
         check(file("build/verified-assets/third_party/nodejs-mobile/LICENSE-nodejs-mobile").isFile)
         check(file("build/verified-assets/third_party/ndk/NOTICE").isFile)
         check(file("build/verified-assets/third_party/minimax-bot/LICENSE").isFile)
+        check(file("build/verified-assets/third_party/mbot-workspace-guard/LICENSE").isFile)
     }
 }
 android {

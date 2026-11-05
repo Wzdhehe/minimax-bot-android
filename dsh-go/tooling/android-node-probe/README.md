@@ -21,8 +21,10 @@ private scope and replacement rights; no directory, real root or session is
 exposed to JS. It checks an 84KiB offset-view snapshot, exclusive publication,
 replacement, empty files and rejection of shared/resizable/detached buffers.
 The owner verifies exact files across both Node PIDs and extends Key assertions
-to these files and the file capability. This is still not a complete `node:fs`
-adapter or the official Bot backend. Device results for this revision must be
+to these files and the file capability. Real Bot Store and MemoryStore are
+also exercised by the fixed script; a bundled Bot service has not yet been
+started there. This is still not a complete `node:fs` adapter or runtime.
+Device results for this revision must be
 checked separately from the earlier 25-test Kotlin-only run41769936256.
 
 The authoritative candidate source/version/archive/binary digests are in
@@ -51,7 +53,12 @@ python3 dsh-go/tooling/android-node-probe/check-native-files.py \
 This is ARM64 **compilation** evidence only, not Node/Bot/device execution.
 Omit `--archive` to download the exact pinned HTTPS archive and verify its digest.
 `--bundle-only` builds just the fixed JS asset for host checks; Gradle refuses to
-build a target without the prepared native libraries and notices.
+build a target without the prepared native libraries and notices. Preparation
+also bundles the real Bot service into a fixed verification-only data URL; this
+does not yet mean it is started on Android. Install the locked esbuild input
+first using `npm ci --ignore-scripts --no-audit --no-fund --prefix
+dsh-go/tooling/model-sdk-probe`. The exact Bot and workspace-guard MIT notices
+are included in the verification assets.
 
 The release candidate has **no Intl**, which the official Bot i18n module needs.
 This probe therefore cannot establish full Bot/mcode compatibility. With the

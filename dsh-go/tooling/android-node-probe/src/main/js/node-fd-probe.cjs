@@ -10,6 +10,7 @@ const botIngressModuleUrl = "__MBOT_BOT_FD_INGRESS_MODULE_URL__";
 const botStoreModuleUrl = "__MBOT_BOT_STORE_MODULE_URL__";
 const botMemoryModuleUrl = "__MBOT_BOT_MEMORY_MODULE_URL__";
 const botPersistenceModuleUrl = "__MBOT_BOT_PERSISTENCE_MODULE_URL__";
+const botServiceModuleUrl = "__MBOT_BOT_SERVICE_MODULE_URL__";
 const fs = require('node:fs');
 let probePhase = 'bootstrap';
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";

@@ -7,6 +7,8 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+Android验收资产现包含真实Bot服务的固定data URL：`bundle-bot-service.mjs`用锁定的esbuild 0.28.2打包`service.mjs`，校验所有源输入属于宿主、vendor Bot或workspace guard树，外部依赖只能是Node内建模块，并限制产物体积；`prepare-probe.py`把模块放入固定脚本并随包复制Bot和workspace guard的MIT LICENSE。CI已将锁定的`model-sdk-probe`依赖安装移到准备资产之前，服务及其输入变化也触发Node工作流。宿主精确脚本5/5（新增从生成asset导入真实服务）、Python39/39、验收APK与仪器APK `BUILD SUCCESSFUL in 44s`。生成模块后首跑曾因`.map(realpathSync)`把数组索引误传给options而失败，改成单参数回调后通过。**目前只打包/宿主导入，固定Android脚本尚未调用该服务；Android仍未启动真实Bot。** 本机先执行`npm ci --ignore-scripts --no-audit --no-fund --prefix dsh-go/tooling/model-sdk-probe`再准备资产；本机release仍无Intl/SQLite。
+
 真实Bot服务新增显式`fileMode: 'unavailable'`候选：必须同时注入Store和MemoryStore能力，不解析或创建Main工作区，不依赖Bot的Mini App客户端目录；`workspace`返回null。vendored server在此模式拒绝静态客户端、媒体、上传和头像路由，`Engine.resolveAttachments`及`Team`头像方法也在文件访问前拒绝，明确返回`files_unavailable`/HTTP 503；普通Bot状态、创建、持久化仍走原业务，鉴权仍先于路由。默认`fileMode: 'workspace'`保留已有工作区行为，此候选**不实现附件、头像、Mini App或插件市场**。不能把受限模式暴露为完整功能或绕过未来的文件能力；其他runtime FS和安全边界仍须接好。
 
 宿主验证：真实Bot使用内存fake文件能力、FD transport与逐次授予的socket，鉴权/拒绝错误Host与Origin/创建Bot/SSE均通过且没有物理Bot数据或工作区目录；受限服务普通创建及重启恢复、8种文件/头像/附件请求明确拒绝、匿名请求403通过。真实服务经固定esbuild 0.28.2构建成`data:`内存模块后也能启动并响应JSON（1/1），不证明Android或mcode完整runtime。CI host选集116/116、上游存储/记忆/头像/HTTP回归61/61、scope4/4、钉点mcode bundle图4/4本机通过；`bot-host.yml`加入头像/HTTP回归与内存模块测试。首次完整host复跑为115/116，一项`fetch`报`UND_ERR_SOCKET`对端关闭；将该测试的连接设为短连接后单组连跑5次和完整选集复跑均通过，连接复用是否为根因未独立证实。**无Android设备执行、无真实provider、无产品APK。**
