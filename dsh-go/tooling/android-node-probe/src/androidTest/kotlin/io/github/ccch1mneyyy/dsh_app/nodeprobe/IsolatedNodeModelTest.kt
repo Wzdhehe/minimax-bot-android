@@ -106,10 +106,10 @@ class IsolatedNodeModelTest {
         // Failure messages include only finite allowlisted codes, never a raw
         // report, provider response, path, session token or generated Key.
         val phases = setOf("bootstrap", "sqlite_load", "sqlite_memory", "vfs_register", "vfs_open", "vfs_wal",
-            "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "descriptor_transfer", "bot_http_fd", "model_dynamic", "sdk_route", "scoped_model_route", "file_commit", "file_read", "file_mutation", "file_append")
+            "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "descriptor_transfer", "bot_http_fd", "model_dynamic", "sdk_route", "scoped_model_route", "file_commit", "file_read", "file_mutation", "file_append", "bot_store")
         val codes = setOf("SQLITE_CANTOPEN", "SQLITE_IOERR", "SQLITE_IOERR_SHMOPEN", "SQLITE_BUSY", "SQLITE_READONLY",
             "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "sqlite_parent_missing",
-            "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable", "runtime_data_not_found", "runtime_data_too_large",
+            "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable", "runtime_data_not_found", "runtime_data_too_large", "runtime_data_outcome_unknown", "runtime_data_reload_required",
             "descriptor_invalid", "descriptor_permissions", "descriptor_not_a_regular_file", "bot_transport_timeout", "bot_transport_invalid", "bot_transport_unavailable")
         val phase = report.optString("failedPhase").takeIf { it in phases } ?: "unknown"
         val code = report.optString("failureCode").takeIf { it in codes } ?: "unknown"
@@ -310,6 +310,15 @@ class IsolatedNodeModelTest {
                                     assertEquals("zh-CN", report.getJSONObject("intlSmoke").getString("locale"))
                                     assertEquals("Asia/Shanghai", report.getJSONObject("intlSmoke").getString("timeZone"))
                                 }
+                                val botStore = report.getJSONObject("botStore")
+                                if (report.getBoolean("intlAvailable")) {
+                                    assertTrue(botStore.getBoolean("available"))
+                                    assertEquals(attempt, botStore.getInt("before"))
+                                    assertEquals(attempt + 1, botStore.getInt("after"))
+                                    assertEquals(1, botStore.getInt("schedules"))
+                                    assertEquals(1, botStore.getInt("usage"))
+                                    assertEquals(attempt == 0, botStore.getBoolean("recorded"))
+                                } else assertFalse(botStore.getBoolean("available"))
                                 if (expected.optBoolean("requiresSqlite")) {
                                     val sqlite = report.getJSONObject("sqlite")
                                     assertEquals(expected.getString("sqliteEngineVersion"), sqlite.getString("version"))
@@ -397,7 +406,14 @@ class IsolatedNodeModelTest {
                                 assertEquals(0, appends.getInt("emptySize"))
                                 for (name in listOf("removed", "emptyRemoved")) assertEquals("removed", appends.getString(name))
                                 val committed = File(dataDirectory, "minimax-bot-runtime/files/node-state")
-                                assertEquals(listOf("node-empty.bin", "node-snapshot.bin", "node-state.bin"), committed.list()!!.sorted())
+                                val names = committed.list()!!.sorted()
+                                val expectedNames = mutableListOf("node-empty.bin", "node-snapshot.bin", "node-state.bin")
+                                if (report.getBoolean("intlAvailable")) {
+                                    val chatFiles = names.filter { it.matches(Regex("bot-chat-[a-f0-9]{64}\\.json")) }
+                                    assertEquals(1, chatFiles.size)
+                                    expectedNames.addAll(listOf("bot-state.json", "bot-usage.jsonl", chatFiles.single()))
+                                }
+                                assertEquals(expectedNames.sorted(), names)
                                 assertTrue(fileProbeBytes(false).contentEquals(File(committed, "node-snapshot.bin").readBytes()))
                                 assertTrue(fileProbeBytes(true).contentEquals(File(committed, "node-state.bin").readBytes()))
                                 assertEquals(0L, File(committed, "node-empty.bin").length())

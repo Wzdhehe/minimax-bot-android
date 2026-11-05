@@ -248,3 +248,63 @@ test('the packaged Bot transport block serves two granted duplex FDs without lis
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('the exact packaged Bot Store block survives two host processes using a fake file capability', { timeout: 15_000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'mbot-node-bot-store-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  execFileSync('python3', [join(root, 'prepare-probe.py'), '--bundle-only', '--bundle-output', directory]);
+  assert.deepEqual(await readFile(join(directory, 'third_party/minimax-bot/LICENSE')),
+    await readFile(join(root, '../../runtime/vendor/minimax-bot/LICENSE')));
+  const script = await readFile(join(directory, 'node-fd-probe.cjs'), 'utf8');
+  const storeLine = /^const botStoreModuleUrl = (.+);$/m.exec(script);
+  const adapterLine = /^const botStorePersistenceModuleUrl = (.+);$/m.exec(script);
+  assert.ok(storeLine && adapterLine);
+  const start = script.indexOf("    probePhase = 'bot_store';");
+  const end = script.indexOf('\n  }\n  // Owner inspects', start);
+  assert.ok(start >= 0 && end > start);
+  const block = script.slice(start, end);
+  const childScript = `
+    const botStoreModuleUrl = ${storeLine[1]};
+    const botStorePersistenceModuleUrl = ${adapterLine[1]};
+    const fsp = require('node:fs/promises');
+    const path = require('node:path');
+    const directory = ${JSON.stringify(directory)};
+    const target = (name) => {
+      if (!/^[A-Za-z0-9._-]{1,128}$/.test(name)) throw Error('invalid name');
+      return path.join(directory, name);
+    };
+    const files = {
+      async read(name) {
+        try { return await fsp.readFile(target(name)); }
+        catch (error) { if (error.code === 'ENOENT') error.code = 'runtime_data_not_found'; throw error; }
+      },
+      async replace(name, bytes) {
+        const destination = target(name), temporary = destination + '.tmp';
+        await fsp.writeFile(temporary, bytes); await fsp.rename(temporary, destination); return 'published';
+      },
+      async append(name, bytes) { await fsp.appendFile(target(name), bytes); return 'published'; },
+    };
+    let probePhase;
+    const report = {};
+    (async () => { ${block}
+      process.stdout.write(JSON.stringify(report.botStore));
+    })().catch(() => { process.exitCode = 1; });
+  `;
+  async function run(withoutIntl = false) {
+    const child = spawn(process.execPath, ['--no-warnings', '-e', "eval(require('node:fs').readFileSync(0, 'utf8'))"], {
+      stdio: ['pipe', 'pipe', 'pipe'], env: buildRuntimeEnv(process.env),
+    });
+    const exited = once(child, 'exit');
+    let stdout = '', stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
+    child.stdin.end((withoutIntl ? 'const Intl = undefined;\n' : '') + childScript);
+    const [code] = await exited;
+    assert.equal(code, 0, stderr);
+    assert.equal(stderr, '');
+    return JSON.parse(stdout);
+  }
+  assert.deepEqual(await run(), { available: true, before: 0, after: 1, schedules: 1, usage: 1, recorded: true });
+  assert.deepEqual(await run(), { available: true, before: 1, after: 2, schedules: 1, usage: 1, recorded: false });
+  assert.deepEqual(await run(true), { available: false });
+});

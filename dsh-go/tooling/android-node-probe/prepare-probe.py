@@ -38,6 +38,7 @@ def bundle(output_dir=None):
         'runtime-descriptor.mjs': ['runtime-catalog-policy.mjs'],
         'bot-fd-transport.mjs': [],
         'bot-fd-ingress.mjs': [],
+        'bot-store-persistence.mjs': [],
     }
     def module_url(name):
         if name not in urls:
@@ -48,6 +49,27 @@ def bundle(output_dir=None):
                 text = text.replace(specifier, json.dumps(module_url(dependency)))
             urls[name] = 'data:text/javascript;base64,' + base64.b64encode(text.encode()).decode()
         return urls[name]
+    # Exact vendored Store and its transitive local imports; Node builtins stay
+    # native. This is a fixed verification script, never user-supplied code.
+    vendor_root = DSH / 'runtime/vendor/minimax-bot/miniapp'
+    vendor_sources = {
+        'emoji-data.js': ('client/emoji-data.js', []),
+        'strings.mjs': ('node/strings.mjs', []),
+        'i18n.mjs': ('node/i18n.mjs', [('./strings.mjs', 'strings.mjs')]),
+        'reactions.mjs': ('node/reactions.mjs', [('../client/emoji-data.js', 'emoji-data.js'), ('./i18n.mjs', 'i18n.mjs')]),
+        'store.mjs': ('node/store.mjs', [('../client/emoji-data.js', 'emoji-data.js'), ('./i18n.mjs', 'i18n.mjs'), ('./reactions.mjs', 'reactions.mjs')]),
+    }
+    vendor_urls = {}
+    def vendor_module_url(name):
+        if name not in vendor_urls:
+            path, dependencies = vendor_sources[name]
+            content = (vendor_root / path).read_text()
+            for specifier, dependency in dependencies:
+                quoted = "'" + specifier + "'"
+                assert content.count(quoted) == 1
+                content = content.replace(quoted, json.dumps(vendor_module_url(dependency)))
+            vendor_urls[name] = 'data:text/javascript;base64,' + base64.b64encode(content.encode()).decode()
+        return vendor_urls[name]
     template = (ROOT / 'src/main/js/node-fd-probe.cjs').read_text()
     placeholder = '"__MBOT_FD_MODULE_URL__"'
     assert template.count(placeholder) == 1
@@ -69,7 +91,16 @@ def bundle(output_dir=None):
     bot_ingress_placeholder = '"__MBOT_BOT_FD_INGRESS_MODULE_URL__"'
     assert template.count(bot_ingress_placeholder) == 1
     template = template.replace(bot_ingress_placeholder, json.dumps(module_url('bot-fd-ingress.mjs')))
+    bot_store_placeholder = '"__MBOT_BOT_STORE_MODULE_URL__"'
+    assert template.count(bot_store_placeholder) == 1
+    template = template.replace(bot_store_placeholder, json.dumps(vendor_module_url('store.mjs')))
+    store_persistence_placeholder = '"__MBOT_BOT_STORE_PERSISTENCE_MODULE_URL__"'
+    assert template.count(store_persistence_placeholder) == 1
+    template = template.replace(store_persistence_placeholder, json.dumps(module_url('bot-store-persistence.mjs')))
     (assets / 'node-fd-probe.cjs').write_text(template)
+    bot_notice = assets / 'third_party/minimax-bot'
+    bot_notice.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(DSH / 'runtime/vendor/minimax-bot/LICENSE', bot_notice / 'LICENSE')
 
 
 def prepare(ndk, archive, source_sha=None):

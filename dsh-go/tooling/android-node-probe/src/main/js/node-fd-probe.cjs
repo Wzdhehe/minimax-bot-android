@@ -7,6 +7,8 @@ const nativeBindingModuleUrl = "__MBOT_NATIVE_BINDING_MODULE_URL__";
 const descriptorModuleUrl = "__MBOT_DESCRIPTOR_MODULE_URL__";
 const botTransportModuleUrl = "__MBOT_BOT_FD_TRANSPORT_MODULE_URL__";
 const botIngressModuleUrl = "__MBOT_BOT_FD_INGRESS_MODULE_URL__";
+const botStoreModuleUrl = "__MBOT_BOT_STORE_MODULE_URL__";
+const botStorePersistenceModuleUrl = "__MBOT_BOT_STORE_PERSISTENCE_MODULE_URL__";
 const fs = require('node:fs');
 let probePhase = 'bootstrap';
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
@@ -304,6 +306,34 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       invalid: await mutationRefused('append', ['../outside', new Uint8Array()], 'runtime_data_invalid'),
       removed: await files.remove('node-append.jsonl'), emptyRemoved: await files.remove('node-append-empty.bin'),
     };
+    probePhase = 'bot_store';
+    if (typeof Intl === 'undefined') {
+      // The pinned Bot i18n module accesses Intl at import time. The release
+      // candidate without ICU cannot exercise this branch.
+      report.botStore = { available: false };
+    } else {
+      const { Store } = await import(botStoreModuleUrl);
+      const { createBotStorePersistence } = await import(botStorePersistenceModuleUrl);
+      const root = '/mbot-bot-store'; // virtual name; no directory is opened.
+      const store = new Store(root, createBotStorePersistence({ dataDir: root, files }));
+      await store.init();
+      const chief = store.state.bots.find((bot) => bot.isMain);
+      if (!chief) throw Object.assign(new Error('runtime_data_invalid'), { code: 'runtime_data_invalid' });
+      const chat = `bot:${chief.id}`;
+      const before = (await store.getMessages(chat)).filter((message) => message.kind === 'node-probe').length;
+      await store.appendMessage(chat, { role: 'user', text: 'node-store-probe', kind: 'node-probe' });
+      if (!store.state.schedules.some((schedule) => schedule.id === 'schedule_node_probe')) {
+        store.state.schedules.push({ id: 'schedule_node_probe', botId: chief.id, prompt: 'probe', enabled: true });
+        await store.save();
+      }
+      const recorded = await store.recordUsageOnce({ ts: 123, turnId: 'node-store-turn', botId: chief.id });
+      const usage = await store.readUsage(0);
+      report.botStore = {
+        available: true, before, after: (await store.getMessages(chat)).filter((message) => message.kind === 'node-probe').length,
+        schedules: store.state.schedules.filter((schedule) => schedule.id === 'schedule_node_probe').length,
+        usage: usage.filter((row) => row.turnId === 'node-store-turn').length, recorded,
+      };
+    }
   }
   // Owner inspects the bounded result privately. No console/log response dump.
   fs.writeSync(Number(result), JSON.stringify(report));
@@ -312,7 +342,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
   const codes = new Set(['SQLITE_CANTOPEN', 'SQLITE_IOERR', 'SQLITE_IOERR_SHMOPEN', 'SQLITE_BUSY', 'SQLITE_READONLY',
     'SQLITE_ERROR', 'SQLITE_PERM', 'SQLITE_MISUSE', 'SQLITE_NOTFOUND', 'fd_vfs_unavailable', 'fd_vfs_input_invalid',
     'runtime_data_invalid', 'runtime_data_denied', 'runtime_data_closed', 'runtime_data_unavailable',
-    'runtime_data_not_found', 'runtime_data_too_large', 'descriptor_invalid', 'descriptor_permissions',
+    'runtime_data_not_found', 'runtime_data_too_large', 'runtime_data_outcome_unknown', 'runtime_data_reload_required', 'descriptor_invalid', 'descriptor_permissions',
     'descriptor_not_a_regular_file', 'bot_transport_timeout', 'bot_transport_invalid', 'bot_transport_unavailable']);
   const code = codes.has(error?.code) ? error.code : codes.has(error?.message) ? error.message :
     error?.message === 'Cannot open database because the directory does not exist' ? 'sqlite_parent_missing' : 'unknown';

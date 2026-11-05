@@ -1,9 +1,11 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-RuntimeFS：完整文件适配前的契约与原子发布组件（2026-11-04）
 
-## 官方Bot Store受控持久化候选（宿主验证，Android未接线）
+## 官方Bot Store受控持久化候选（Android验收接线，设备未验证）
 
-真实`Store`现可经宿主注入`bot-store-persistence.mjs`，将state、上游规范化chat JSON和usage ledger映射到已绑定文件能力的固定/摘要basename，保留原Store业务及默认filesystem分支；定时任务配置随state持久化。最多1MiB，写入经最多32项的串行队列，未知结果污染会话并拒绝后续操作，重启回读，不重试或伪称失败未落盘。已知超限虽未发布，也要重载，因为Store可能在保存前已修改内存。`Store.readUsage`现在仅ENOENT为空，其他读错误上抛。宿主使用假文件能力与真实Bot Store/HTTP验证冷重开、聊天隔离、计划配置、未知结果及损坏/上限；不是实际Android文件链路。MemoryStore、媒体、mcode FS、跨进程独占lease及超1MiB增长均未解决；完整验收与下一步见[NEXT-AGENT](NEXT-AGENT.md)。
+真实官方Store和生产adapter已嵌入Android固定验收脚本、连接`mbot_files_bridge`；计划在两个独立isolated进程通过Main文件broker检验聊天、定时任务配置和用量恢复，以及随机Key不入报告/文件。Node候选的验收APK和仪器APK本地构建通过；带Intl的精确脚本在两个宿主进程以磁盘假能力实跑通过，无Intl分支明确跳过。**Android设备/模拟器尚未执行**，GitHub计费问题及复现见[NEXT-AGENT](NEXT-AGENT.md)。
+
+真实`Store`现可经宿主注入`bot-store-persistence.mjs`，将state、上游规范化chat JSON和usage ledger映射到已绑定文件能力的固定/摘要basename，保留原Store业务及默认filesystem分支；定时任务配置随state持久化。最多1MiB，写入经最多32项的串行队列，未知结果污染会话并拒绝后续操作，重启回读，不重试或伪称失败未落盘。已知超限虽未发布，也要重载，因为Store可能在保存前已修改内存。`Store.readUsage`现在仅ENOENT为空，其他读错误上抛。宿主使用假文件能力与真实Bot Store/HTTP验证冷重开、聊天隔离、计划配置、未知结果及损坏/上限；不能证明Android文件链路运行成功。MemoryStore、媒体、mcode FS、跨进程独占lease及超1MiB增长均未解决；完整验收与下一步见[NEXT-AGENT](NEXT-AGENT.md)。
 
 **尚未实现完整runtime FS。** 当前WAL/两进程读取、Main四文件owner已有各自设备证据，不能代替本卡。Mini App可视化程序仍不适配；下述官方Bot的miniapp/node目录是复用其业务后端，不新增Mini App浏览器。
 
