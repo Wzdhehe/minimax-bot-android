@@ -1,0 +1,9 @@
+{
+  "mbotMemoryDeleteEntry": "删除这条记忆",
+  "mbotMemoryDeleteConfirm": "删除当前这条记忆。删除后无法在这个页面里撤销。",
+  "mbotMemoryConflict": "这条记忆已经被改动，请刷新后重新编辑。",
+  "mbotMemoryRejected": "服务端没有接受这条记忆。",
+  "mbotMemoryUnknown": "无法确认是否已经写入，请刷新核对。",
+  "mbotMemoryRefreshFailed": "没能重新读取记忆，请刷新核对。",
+  "mbotMemoryDraftKept": "草稿保留在这里，可以复制后再试。"
+}

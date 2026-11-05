@@ -8305,6 +8305,27 @@ class L10nEn extends L10n {
   }
 
   @override
+  String get mbotMemoryDeleteEntry => 'Delete this memory';
+
+  @override
+  String get mbotMemoryDeleteConfirm => 'Deletes the current entry. It cannot be undone on this page.';
+
+  @override
+  String get mbotMemoryConflict => 'This memory has changed. Refresh and edit it again.';
+
+  @override
+  String get mbotMemoryRejected => 'The service did not accept this memory.';
+
+  @override
+  String get mbotMemoryUnknown => 'Cannot tell whether it was written. Refresh to check.';
+
+  @override
+  String get mbotMemoryRefreshFailed => 'Could not read the memories again. Refresh to check.';
+
+  @override
+  String get mbotMemoryDraftKept => 'The draft is kept here. Copy it and try again.';
+
+  @override
   String get mediaGenerateTile => 'Create';
 
   @override

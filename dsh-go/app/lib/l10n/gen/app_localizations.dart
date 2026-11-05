@@ -14414,6 +14414,48 @@ abstract class L10n {
   /// **'{count} 个插件'**
   String marketCombinedCount(int count);
 
+  /// No description provided for @mbotMemoryDeleteEntry.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除这条记忆'**
+  String get mbotMemoryDeleteEntry;
+
+  /// No description provided for @mbotMemoryDeleteConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除当前这条记忆。删除后无法在这个页面里撤销。'**
+  String get mbotMemoryDeleteConfirm;
+
+  /// No description provided for @mbotMemoryConflict.
+  ///
+  /// In zh, this message translates to:
+  /// **'这条记忆已经被改动，请刷新后重新编辑。'**
+  String get mbotMemoryConflict;
+
+  /// No description provided for @mbotMemoryRejected.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务端没有接受这条记忆。'**
+  String get mbotMemoryRejected;
+
+  /// No description provided for @mbotMemoryUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法确认是否已经写入，请刷新核对。'**
+  String get mbotMemoryUnknown;
+
+  /// No description provided for @mbotMemoryRefreshFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'没能重新读取记忆，请刷新核对。'**
+  String get mbotMemoryRefreshFailed;
+
+  /// No description provided for @mbotMemoryDraftKept.
+  ///
+  /// In zh, this message translates to:
+  /// **'草稿保留在这里，可以复制后再试。'**
+  String get mbotMemoryDraftKept;
+
   /// No description provided for @mediaGenerateTile.
   ///
   /// In zh, this message translates to:

@@ -7862,6 +7862,27 @@ class L10nZh extends L10n {
   }
 
   @override
+  String get mbotMemoryDeleteEntry => '删除这条记忆';
+
+  @override
+  String get mbotMemoryDeleteConfirm => '删除当前这条记忆。删除后无法在这个页面里撤销。';
+
+  @override
+  String get mbotMemoryConflict => '这条记忆已经被改动，请刷新后重新编辑。';
+
+  @override
+  String get mbotMemoryRejected => '服务端没有接受这条记忆。';
+
+  @override
+  String get mbotMemoryUnknown => '无法确认是否已经写入，请刷新核对。';
+
+  @override
+  String get mbotMemoryRefreshFailed => '没能重新读取记忆，请刷新核对。';
+
+  @override
+  String get mbotMemoryDraftKept => '草稿保留在这里，可以复制后再试。';
+
+  @override
   String get mediaGenerateTile => '生成';
 
   @override

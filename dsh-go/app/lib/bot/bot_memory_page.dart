@@ -5,23 +5,57 @@ import 'package:mbot_settings/mbot_settings.dart';
 
 import '../l10n/l10n.dart';
 
-/// The memory of one Bot, read only.
+/// One memory entry as the service described it.
+///
+/// The service gives an entry an id and a revision. An entry that has no
+/// usable id cannot be edited or deleted, and one that has no revision
+/// cannot be edited: the page then shows the text and offers nothing.
+class _MemoryEntry {
+  const _MemoryEntry({required this.text, this.id, this.revision});
+
+  final String text;
+
+  /// The service's id, when it has one this client can use.
+  final String? id;
+
+  /// The service's revision. It is a string the service compares, not a
+  /// counter, and it is only meaningful together with [id].
+  final String? revision;
+
+  bool get editable => id != null && revision != null && revision!.isNotEmpty;
+  bool get deletable => id != null;
+}
+
+/// What went wrong with the last change.
+enum _ChangeFailure {
+  /// The service says the entry changed under us.
+  conflict,
+
+  /// The service refused the change.
+  rejected,
+
+  /// The change may or may not have been written.
+  unknown,
+}
+
+/// The memory of one Bot.
 ///
 /// The page owns nothing of the service: the caller keeps the API and this
 /// page never closes it. One read per Bot at a time, and a newer Bot replaces
 /// the older one — an answer that belongs to an older read may not write over
 /// the newer result.
 ///
-/// The service answers `GET /api/memory/{scope}` with the scope, the entries
-/// and the budget. Only the entries' text is shown: no ids, no revisions, no
-/// raw payload, and no exception text.
+/// Changes are never repeated on their own. A change that failed keeps its
+/// draft on the screen and closes the write entries until a read succeeds,
+/// because a refused change, a conflicting change and a change whose outcome
+/// is unknown need the user to look at the service again.
 class BotMemoryPage extends StatefulWidget {
   const BotMemoryPage({super.key, required this.api, required this.botId});
 
   /// The service the parent owns. This page never closes it.
   final MiniMaxBotApi api;
 
-  /// The Bot whose memory is read. The scope of the read is this id.
+  /// The Bot whose memory is read. The scope of every call is this id.
   final String botId;
 
   @override
@@ -29,8 +63,8 @@ class BotMemoryPage extends StatefulWidget {
 }
 
 class _BotMemoryPageState extends State<BotMemoryPage> {
-  /// The texts the service sent, in its order.
-  List<String> _entries = const [];
+  /// The entries the service sent, in its order.
+  List<_MemoryEntry> _entries = const [];
   bool _loading = true;
   bool _failed = false;
 
@@ -40,6 +74,22 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
   MiniMaxBotApi? _api;
   /// The newest read. An older one may not write a result.
   int _read = 0;
+
+  /// One change at a time: the dialog, its close transition, the request and
+  /// the read that follows it.
+  bool _changing = false;
+  /// The newest change. An older one may not write a result.
+  int _change = 0;
+  /// The write entries are closed until a read succeeds again.
+  bool _blocked = false;
+  /// What went wrong with the last change.
+  _ChangeFailure? _failure;
+  /// The draft of the last failed change, kept for the user to read or copy.
+  String? _draft;
+  /// The last change was written but the list could not be read again.
+  bool _refreshNeeded = false;
+
+  static final _idPattern = RegExp(r'^[a-f0-9]{8}$');
 
   @override
   void initState() {
@@ -51,12 +101,19 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
   void didUpdateWidget(covariant BotMemoryPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.api != widget.api || oldWidget.botId != widget.botId) {
+      // Another Bot or another service: its write entries are their own.
+      setState(() {
+        _blocked = false;
+        _failure = null;
+        _draft = null;
+        _refreshNeeded = false;
+      });
       _load();
     }
   }
 
   /// Reads the current Bot's memory. A read that is already running for this
-  /// Bot and service is not repeated; a retry waits for nothing.
+  /// Bot and service is not repeated.
   Future<void> _load() async {
     final api = widget.api;
     final scope = widget.botId;
@@ -70,10 +127,8 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
     try {
       final payload = await api.memory(scope);
       if (!mounted || read != _read) return;
-      final entries = _textsOf(payload, scope);
+      final entries = _entriesOf(payload, scope);
       if (entries == null) {
-        // A payload that is not this Bot's memory is a failed read, not an
-        // empty memory: its entries are never shown.
         setState(() {
           _failed = true;
           _loading = false;
@@ -84,6 +139,9 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
         _entries = entries;
         _failed = false;
         _loading = false;
+        // A read that worked closes the write entries again.
+        _blocked = false;
+        _refreshNeeded = false;
       });
     } catch (_) {
       if (!mounted || read != _read) return;
@@ -94,26 +152,212 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
     }
   }
 
-  /// The texts of a memory payload, or null when the payload does not belong
-  /// to [scope] or does not have the shape the service promises.
-  static List<String>? _textsOf(Map<String, Object?> payload, String scope) {
+  /// The entries of a memory payload, or null when the payload does not
+  /// belong to [scope] or does not have the shape the service promises.
+  static List<_MemoryEntry>? _entriesOf(Map<String, Object?> payload, String scope) {
     if (payload['scope'] is! String || payload['scope'] != scope) return null;
     final entries = payload['entries'];
     if (entries is! List) return null;
-    final texts = <String>[];
+    final rows = <_MemoryEntry>[];
     for (final entry in entries) {
       if (entry is! Map) return null;
       final text = entry['text'];
       if (text is! String) return null;
-      texts.add(text);
+      final id = entry['id'];
+      final revision = entry['revision'];
+      rows.add(_MemoryEntry(
+        text: text,
+        id: id is String && _idPattern.hasMatch(id) ? id : null,
+        revision: revision is String && revision.isNotEmpty ? revision : null,
+      ));
     }
-    return texts;
+    return rows;
+  }
+
+  /// Whether a write may be started for the current Bot.
+  bool get _writesAllowed =>
+      !_changing && !_blocked && _scope == widget.botId && _api == widget.api;
+
+  /// Opens the form for a new or an existing entry. The same form does both:
+  /// the text is prefilled for an existing entry.
+  Future<void> _openForm({_MemoryEntry? entry}) async {
+    if (_changing) return;
+    final api = widget.api;
+    final scope = widget.botId;
+    final page = ModalRoute.of(context);
+    setState(() => _changing = true);
+    final text = TextEditingController(text: entry?.text ?? '');
+    try {
+      final route = DialogRoute<bool>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, update) {
+            final ready = text.text.trim().isNotEmpty;
+            return AlertDialog(
+              title: Text(entry == null ? context.l10n.botsAddMemory : context.l10n.botsEditMemory),
+              content: TextField(
+                controller: text,
+                autofocus: true,
+                minLines: 2,
+                maxLines: 6,
+                onChanged: (_) => update(() {}),
+                decoration: InputDecoration(labelText: context.l10n.botsMemory),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: Text(context.l10n.commonCancel)),
+                TextButton(
+                  onPressed: ready ? () => Navigator.pop(context, true) : null,
+                  child: Text(context.l10n.commonSave),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      final accepted = await Navigator.of(context).push(route);
+      await route.completed;
+      if (accepted != true) return;
+      // The page may be gone, or the Bot or the service may have changed
+      // while the dialog was closing. A confirmed dialog is not a licence to
+      // write for a page that is no longer there. The route tells a page that
+      // left apart from one that is still there: an element can outlive the
+      // navigator for a frame.
+      if (!mounted) return;
+      if (page == null || !page.isActive) return;
+      if (widget.api != api || widget.botId != scope) return;
+      final body = text.text.trim();
+      await _runChange(api, scope, () {
+        if (entry == null) {
+          return api.remember(scope, {'text': body});
+        }
+        return api.remember(scope, {
+          'text': body,
+          'replaceId': entry.id,
+          'expectedRevision': entry.revision,
+        });
+      }, draft: body);
+    } finally {
+      text.dispose();
+      if (mounted) setState(() => _changing = false);
+    }
+  }
+
+  /// Asks before removing an entry. The service's forget call takes no
+  /// revision, so the confirmation says what it does and no more.
+  Future<void> _confirmDelete(_MemoryEntry entry) async {
+    if (_changing) return;
+    final api = widget.api;
+    final scope = widget.botId;
+    final id = entry.id;
+    final page = ModalRoute.of(context);
+    if (id == null) return;
+    setState(() => _changing = true);
+    try {
+      final route = DialogRoute<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(context.l10n.mbotMemoryDeleteEntry),
+          content: Text(context.l10n.mbotMemoryDeleteConfirm),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(context.l10n.commonCancel)),
+            TextButton(onPressed: () => Navigator.pop(context, true), child: Text(context.l10n.commonDelete)),
+          ],
+        ),
+      );
+      final accepted = await Navigator.of(context).push(route);
+      await route.completed;
+      if (accepted != true) return;
+      if (!mounted) return;
+      if (page == null || !page.isActive) return;
+      if (widget.api != api || widget.botId != scope) return;
+      await _runChange(api, scope, () => api.forget(scope, id));
+    } finally {
+      if (mounted) setState(() => _changing = false);
+    }
+  }
+
+  /// Runs one change and then reads what the service actually holds.
+  ///
+  /// A change is never repeated on its own, and a failure never pretends that
+  /// nothing was written: the outcome is unknown until a read says so.
+  Future<void> _runChange(
+    MiniMaxBotApi api,
+    String scope,
+    Future<Map<String, Object?>> Function() write, {
+    String? draft,
+  }) async {
+    final change = ++_change;
+    try {
+      await write();
+      if (!mounted || change != _change) return;
+      await _readAfter(api, scope, change);
+    } on MiniMaxBotException catch (error) {
+      if (!mounted || change != _change) return;
+      _onFailure(_kindOf(error), draft);
+    } catch (_) {
+      if (!mounted || change != _change) return;
+      // A timeout, a dropped connection or a broken answer may already have
+      // written. The outcome is unknown, never "it did not write".
+      _onFailure(_ChangeFailure.unknown, draft);
+    }
+  }
+
+  /// Reads the entries again after a change the service accepted.
+  Future<void> _readAfter(MiniMaxBotApi api, String scope, int change) async {
+    try {
+      final payload = await api.memory(scope);
+      if (!mounted || change != _change) return;
+      final entries = _entriesOf(payload, scope);
+      if (entries == null) {
+        setState(() => _refreshNeeded = true);
+        return;
+      }
+      setState(() {
+        _entries = entries;
+        _failed = false;
+        _loading = false;
+        _blocked = false;
+        _refreshNeeded = false;
+        _failure = null;
+        _draft = null;
+      });
+    } catch (_) {
+      if (!mounted || change != _change) return;
+      // The change may be stored; the list cannot show what is stored.
+      setState(() => _refreshNeeded = true);
+    }
+  }
+
+  void _onFailure(_ChangeFailure kind, String? draft) {
+    setState(() {
+      _failure = kind;
+      _draft = draft;
+      // The write entries stay closed until a read succeeds.
+      _blocked = true;
+    });
+  }
+
+  /// How a failure is read. The service's code decides; its message never
+  /// does, because a message is written for a person.
+  static _ChangeFailure _kindOf(MiniMaxBotException error) {
+    if (error.code == 'memory_conflict') return _ChangeFailure.conflict;
+    if (error.status >= 500) return _ChangeFailure.unknown;
+    return _ChangeFailure.rejected;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.botsMemory)),
+      appBar: AppBar(
+        title: Text(context.l10n.botsMemory),
+        actions: [
+          IconButton(
+            onPressed: _writesAllowed ? () => _openForm() : null,
+            icon: const Icon(Icons.add),
+            tooltip: context.l10n.botsAddMemory,
+          ),
+        ],
+      ),
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
@@ -143,20 +387,61 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
         ],
       );
     }
-    if (_entries.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.all(24),
-        children: [Text(context.l10n.botsNoMemory)],
-      );
-    }
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        for (final entry in _entries) ...[
-          SelectableText(entry),
-          const SizedBox(height: 12),
+        if (_refreshNeeded || _failure != null) ...[
+          if (_refreshNeeded) Text(context.l10n.mbotMemoryRefreshFailed),
+          if (_failure != null) Text(_failureText(context)),
+          const SizedBox(height: 8),
+          TextButton(onPressed: _loading ? null : _load, child: Text(context.l10n.botsTapRetry)),
+          const SizedBox(height: 8),
         ],
+        if (_draft != null) ...[
+          SelectableText(_draft!),
+          const SizedBox(height: 8),
+          Text(context.l10n.mbotMemoryDraftKept),
+          const SizedBox(height: 8),
+        ],
+        if (_entries.isEmpty)
+          // A read that failed after a change does not fall back to an empty
+          // memory: the list may hold entries the page cannot show yet.
+          if (_refreshNeeded) const SizedBox(height: 0) else Text(context.l10n.botsNoMemory)
+        else
+          for (final entry in _entries) _entry(context, entry),
       ],
     );
   }
+
+  Widget _entry(BuildContext context, _MemoryEntry entry) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SelectableText(entry.text),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton(
+                onPressed: _writesAllowed && entry.editable ? () => _openForm(entry: entry) : null,
+                child: Text(context.l10n.commonEdit),
+              ),
+              TextButton(
+                onPressed: _writesAllowed && entry.deletable ? () => _confirmDelete(entry) : null,
+                child: Text(context.l10n.commonDelete),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _failureText(BuildContext context) => switch (_failure) {
+        _ChangeFailure.conflict => context.l10n.mbotMemoryConflict,
+        _ChangeFailure.rejected => context.l10n.mbotMemoryRejected,
+        _ChangeFailure.unknown => context.l10n.mbotMemoryUnknown,
+        null => '',
+      };
 }
