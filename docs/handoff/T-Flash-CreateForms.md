@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Flash任务：完善已有Bot/群创建表单
 
-状态：收到5afbd76/0fc0315/16f6ba3，已快进合入；源码审查有一项生命周期回归待本机修复，见文末。Flash自报的Windows测试尚未在云端复跑。Endpoint代次保护已由Codex完成，不修改它。
+状态：已交付5afbd76/0fc0315/16f6ba3及审查修复82343ad，均已快进纳入；Codex已复核恢复的mounted守卫和特定回归用例。Flash本机自报analyze及相关widget11项通过，云端无Flutter未复跑，设备未验证。下一张卡见[T-Flash-ProfileEdit](T-Flash-ProfileEdit.md)，本卡以下保留历史验收要求。
 
 ## 先修正接口报告（独立文档提交）
 
