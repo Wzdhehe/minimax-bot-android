@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -96,6 +97,11 @@ test('an unknown journal append recovers without duplicating its operation', asy
   files.failAppendAfterApplying();
   await assert.rejects(memory.remember('team', { text: '日志恢复', key: 'journal' }),
     (error) => error.code === 'memory_pending' && error.details?.causeCode === 'runtime_data_outcome_unknown');
+  // The durable pending record, not the prepared document, is the source of
+  // recovery. Simulate cleanup after the former writer has fully retired.
+  const stages = [...files.values.keys()].filter((name) => /^bot-memory-stage-[a-f0-9]{64}\.bin$/.test(name));
+  assert.equal(stages.length, 1);
+  for (const stage of stages) files.values.delete(stage);
   const restored = new MemoryStore(root, filesystem(files));
   await restored.init();
   assert.equal((await restored.list('team'))[0].text, '日志恢复');
@@ -115,6 +121,28 @@ test('an unknown preparation write before the pending record does not invent a c
   // The rejected lease cannot clean an already-created temporary record.
   // Durable orphan cleanup is a separate native lifecycle responsibility.
   assert.equal(files.values.size, 1);
+  assert.match([...files.values.keys()][0], /^bot-memory-stage-[a-f0-9]{64}\.bin$/);
+});
+
+test('a pending transaction from the old stage naming scheme still recovers', async () => {
+  const files = fakeFiles(), memory = new MemoryStore(root, filesystem(files));
+  await memory.init();
+  files.failAppendAfterApplying();
+  await assert.rejects(memory.remember('team', { text: '旧事务恢复', key: 'legacy' }),
+    (error) => error.code === 'memory_pending');
+  const pendingName = `bot-memory-${createHash('sha256').update('.pending.json').digest('hex')}.bin`;
+  const transaction = JSON.parse(files.values.get(pendingName).toString('utf8'));
+  const oldStage = `bot-memory-${createHash('sha256').update(`team.md.${transaction.operationId}.pending`).digest('hex')}.bin`;
+  const newStage = [...files.values.keys()].find((name) => /^bot-memory-stage-[a-f0-9]{64}\.bin$/.test(name));
+  assert.ok(newStage);
+  files.values.set(oldStage, files.values.get(newStage));
+  files.values.delete(newStage);
+  const restored = new MemoryStore(root, filesystem(files));
+  await restored.init();
+  assert.equal((await restored.list('team'))[0].text, '旧事务恢复');
+  assert.equal(restored.journalEntries(await restored.journalText()).length, 1);
+  // Old hashed orphans cannot be safely distinguished from durable files.
+  assert.ok(files.values.has(oldStage));
 });
 
 test('an unknown exclusive backup does not replace the original memory on retry', async () => {

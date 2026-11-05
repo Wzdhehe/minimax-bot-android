@@ -7,6 +7,8 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+为后续清理建立可安全识别的记忆临时文件命名：`bot-memory-filesystem.mjs`把准备文档、pending临时记录和备份临时副本映射为`bot-memory-stage-<sha256>.bin`；持久文档、journal、backup、已接受的`.pending.json`沿用原`bot-memory-<sha256>.bin`，因此已保存数据不会迁移。官方`MemoryStore.finish()`会从已接受的pending记录重建准备文档：宿主故障测试模拟删除新临时文件后重启，验证恢复内容且journal不重复；另用旧格式准备文件与原pending记录实测升级恢复。旧的不可区分摘要孤儿仍保留，**当前没有自动清理实现**，不得以`bot-memory-*.bin`宽匹配删除。测试：记忆适配9/9、完整host glob 168通过/13按缺外部环境跳过/0失败；以钉住的真实mcode源码与esbuild运行bundle图4/4；精确APK脚本4/4（首次因上次生成asset陈旧失败，重新`prepare-probe.py --bundle-only`并保留原SQLite wrapper后通过）。此阶段只改Node适配/测试；Android设备未执行。
+
 native Bot数据排他候选：`RuntimeFileCommitHost.openBotState`只接可信Main指定的scope，使用专用`noBackupFilesDir/minimax-bot-runtime/bot-state/<scope>`，每次独立打开私有目录FD后在该FD上非阻塞申请`flock(LOCK_EX|LOCK_NB)`；竞争返回固定`runtime_data_busy`，其他系统失败关闭并拒绝。publisher/reader都复制同一个已锁目录能力，不重新按路径打开；目录FD不传给guest，不创建锁文件。相同描述符的所有副本关闭前锁持续存在；host撤销新请求、排空在途操作和输出后依次关闭publisher/reader/锁FD，`closeAsync`/`whenRetired`完成才可重启。对端Binder死亡也触发同样流程；创建失败会关闭已持有资源。验收脚本的Store/Memory使用该入口，两个进程重启之间显式等待`closeAsync`。
 
 这是**协作式内核锁，不是强制锁或安全沙箱**：所有可信写者必须对同一实际Bot Store选同一scope并从该入口申请；禁止绕过入口直接写、持有时重命名/替换数据目录或另设不同目录别名。原通用`open`使用`files`子树，不与新`bot-state`子树重叠；正式产品尚未使用该入口，也未实施迁移。锁不覆盖SQLite，不能撤销其他子系统交出的FD，不能证明文件系统崩溃/断电恢复；孤儿stage、单文件1MiB和日志整文件追加成本仍未解决。`RuntimePrivateDirectory.open`的初始建树依赖主应用可信目录策略；持锁后读写使用已持有的目录能力。

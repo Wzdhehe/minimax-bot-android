@@ -30,7 +30,14 @@ export function createBotMemoryFilesystem({ dataDir, lease } = {}) {
     const allowed = (parent === root && rootName.test(name)) || (parent === bots && scopeDocument.test(name)) ||
       (parent === backups && backupName.test(name)) || (parent === archive && archiveName.test(name));
     if (!allowed || join(parent, name) !== path) throw failure('runtime_data_invalid');
-    return `bot-memory-${createHash('sha256').update(relative(root, path)).digest('hex')}.bin`;
+    // A pending record contains all bytes needed to regenerate its document;
+    // temporary preparations and backup copies are never durable documents.
+    // Distinguish those names so Main can eventually clean only this reserved
+    // namespace after retiring the previous exclusive writer. Existing durable
+    // document, journal, backup and pending-record names stay unchanged.
+    const transient = name.endsWith('.pending') || name.endsWith('.tmp');
+    const prefix = transient ? 'bot-memory-stage-' : 'bot-memory-';
+    return `${prefix}${createHash('sha256').update(relative(root, path)).digest('hex')}.bin`;
   }
   function missing(error) { return error?.code === 'runtime_data_not_found' ? failure('ENOENT') : error; }
   function bytes(content, encoding) {
