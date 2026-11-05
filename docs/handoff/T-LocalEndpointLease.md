@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# 本机agent任务：Bot Endpoint运行代次保护
+# Codex任务：Bot Endpoint运行代次保护
 
-状态：2026-11-05依用户最新分工改由Codex负责，尚未实现/验收；不再派给本机M3.1 Flash。若本机已开工，保留现有diff和测试结果交Codex审阅，不继续扩展或丢弃工作。原实现合同如下。
+状态：2026-11-05已由Codex实现并完成宿主验证；不派给本机M3.1 Flash。Android/Flutter集成与设备未验证。若本机已开工，保留现有diff和测试结果交Codex审阅，不继续扩展或丢弃工作。原实现合同如下。
 
 ## 要解决的问题
 
@@ -44,6 +44,48 @@
 - 不以descriptor已写入或guest端口探测作为Endpoint就绪证据。Main侧桥、isolated进程与FD能力的就绪/退出协议由主agent后续接线。
 - 不等待rootfs来做本项；也不直接将DsBotApi批量替换为MiniMaxBotApi，两者模型和接口不同。
 
-## 本机agent回填
+## Codex验证记录
 
-待实现、待实际验证。
+`publish`现返回无凭据的Closeable Lease，每次发布使用独立对象身份，即使URL/token相同也区分不同运行。关闭只在当前owner仍匹配时清除，重复或迟到关闭无副作用；移除无条件clear。参数在改变状态前验证，descriptor仍仅baseUrl/token；句柄toString固定打码。没有生产publish/clear调用方需要迁移，MethodChannel读取接口不变。
+
+不能把该持有器当作存活检测：正式launcher仍须在Main桥实际就绪后publish，并在退出时关闭对应Lease。已交给Dart的descriptor副本不会被追溯撤销，真实桥/服务的退出与token失效仍须单独保证。
+
+新增10项定向JUnit：旧运行被替换后关闭、相同值的不同代次、顺序关闭/发布、并发关闭/发布、重复关闭、无效发布不覆盖活连接、句柄打码及descriptor快照语义。定向编译后实际输出：
+
+```text
+JUnit version 4.13.2
+..........
+Time: 0.102
+
+OK (10 tests)
+```
+
+为防后续漏测，关联修改`dsh-go/tooling/test-native-model-broker.sh`将这两个纯Kotlin文件和用例加入现有CI脚本；workflow的runtime/bot路径已覆盖，无需另改workflow。实际命令：
+
+```bash
+KOTLINC=/workspace/toolchains/kotlinc/bin/kotlinc MBOT_NATIVE_DEPS=/tmp/mbot-native-deps bash dsh-go/tooling/test-native-model-broker.sh
+```
+
+完整JUnit段与Node段末尾输出：
+
+```text
+JUnit version 4.13.2
+........................................................
+Time: 5.23
+
+OK (56 tests)
+```
+
+```text
+1..56
+# tests 56
+# suites 0
+# pass 56
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 29043.02637
+```
+
+进程退出码0。依赖使用既有按CI校验的JAR，未下载/升级依赖。此为JVM/Node宿主证据；本轮未运行产品Android构建、Flutter或设备，不宣称launcher已完成。

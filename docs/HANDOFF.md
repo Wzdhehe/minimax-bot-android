@@ -8,6 +8,7 @@
 
 ## 当前已完成与未完成
 
+- Codex已完成Endpoint代次保护：publish返回native所有权Lease，旧运行退出不能清除新运行；相同URL/token仍区分代次，无效发布不覆盖现有连接。Flutter字段不变，启动器就绪/死亡检测尚未接入。定向JUnit10项，完整native回归JUnit56/Node56通过；见[Endpoint记录](handoff/T-LocalEndpointLease.md)。
 - 最新验收脚本在Intl可用时已调用真实官方Bot服务，经native文件能力启动并通过运行中授予的socket处理匿名403与授权状态200；缺Intl时明确只跑基础HTTP夹具。宿主精确脚本6/6、Python39/39，本地验收APK/仪器APK构建通过；**新Android设备用例未执行**。Endpoint代次保护由Codex负责，不用等待rootfs，不另起PRoot runner。
 - 真实官方Bot服务增加受限启动候选：不打开主应用工作区，以已授予的状态/记忆能力运行；附件、上传和自定义图片明确返回不可用，默认工作区模式不变。宿主用真实Bot、已连接FD和假文件broker验证HTTP/SSE与鉴权，并从内存模块启动服务；验收APK已打包该模块，**尚未在Android加载/启动真实服务**，也未接产品启动器。
 - Bot记忆的临时准备文件采用`bot-memory-stage-<摘要>.bin`命名，native候选在获取独占锁后、授予guest文件能力前清理这一命名空间及严格匹配的原子发布临时文件。宿主验证已接受事务在删除临时文件后仍可从pending恢复，清理会保留持久文件并拒绝软硬链接等异常；已写Android跨两次进程的「清理后恢复」联合验收，但设备未执行。旧版摘要孤儿无法安全辨认，不可批量删。
