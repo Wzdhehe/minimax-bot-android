@@ -6,9 +6,11 @@
 
 ## 当前已完成与未完成
 
-- 为运行中动态交付连接增加有界`GrantedConnectionQueue`：最多64项，实际默认8项；满/关闭时关闭未接收的连接，退出关闭剩余连接，取出后所有权转交消费者。单元测试覆盖顺序、超时、关闭唤醒、拒收及竞争；**尚未接入Binder/JNI或产品启动器**，不是动态传输闭环。具体下一步见[NEXT-AGENT](handoff/NEXT-AGENT.md)。
+- 验收工程已接出运行中动态交付Bot socket的候选链：Main经owner UID检查的Binder把socket交入有界队列；隔离Node经受限JNI异步取出，交生产FD transport。设备测试编写了Node启动后顺序交付两次、启动前拒绝并关闭、原模型/Key边界等断言；**只完成本地构建，Android执行未验证，尚非产品launcher/真实Bot**。宿主精确脚本3项和Python33项通过；详见[NEXT-AGENT](handoff/NEXT-AGENT.md)。
+- **GitHub Actions计费阻塞**：76f3dcc触发的41943645851等5个workflow全部在作业开始前失败、步骤数为0；check-run annotation原文为“The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings”。本地测试不能冒充Android设备CI。账户限制解除后对最新提交重新运行相关workflow并查看artifact。
+- 为运行中动态交付连接增加有界`GrantedConnectionQueue`：最多64项，实际默认8项；满/关闭时关闭未接收的连接，退出关闭剩余连接，取出后所有权转交消费者。单元测试覆盖顺序、超时、关闭唤醒、拒收及竞争；验收工程已接Binder/JNI，但**尚未接产品启动器或设备验证**。具体下一步见[NEXT-AGENT](handoff/NEXT-AGENT.md)。
 - Android独立Node验收新增双向Bot socket FD用例：Main在启动时传入socketpair并发HTTP，isolated Node用生产FD transport和简单HTTP夹具回复，断言无监听、请求/响应与Key边界。宿主精确脚本3项、Python33项和验收APK编译通过；**fd80f3b / run 41864552047整体success，API26/35各t49/f0/e0/s0；真实Bot业务的Android运行仍未验证**。
-- 新增Bot的已连接FD服务接缝：真实官方Bot HTTP/鉴权/创建/ SSE可消费可信启动器交来的Unix连接，不在guest开启监听；保留原TCP模式。宿主实际跨进程FD测试及84项host回归通过，**Android传FD/Flutter桥/完整产品尚未接入或验证**，停止时活动SSE可能收到连接中断。
+- 新增Bot的已连接FD服务接缝：真实官方Bot HTTP/鉴权/创建/ SSE可消费可信启动器交来的Unix连接，不在guest开启监听；保留原TCP模式。宿主实际跨进程FD测试及84项host回归通过，**Android动态FD候选已编译但设备未验证；Flutter桥/完整产品尚未接入或验证**，停止时活动SSE可能收到连接中断。
 - 已实现隔离descriptor只读FD交接组件：Main原子写入、校验owner和权限后提供只读FD，isolated Node按可信owner UID、大小、文件类型和字段白名单验证并关闭；支持已被替换的旧inode。Kotlin允许broker为null，不伪造isolated无法使用的loopback模型broker。8df623b / run 41861262297整体success，API26/35 artifact均t49/f0/e0/s0；正式launcher仍未接入。
 - Android隔离Node验收已增加生产`native-model-binding`的真实JNI/Binder模型链：无scope先拒绝，两个binding先后经过相同授权模型/流，关闭一个后另一个继续；仪器用例核对工具事件、生成Key只在native注入且不进入报告/文件。Linux实际FD夹具2项、Python32、SQLite VFS宿主验证和两个验收APK编译已通过；**a3c2056 / 41856965389 API26/35模拟器均success，artifact各t49/f0/e0/s0；真实provider/产品launcher仍未完成**。
 - 本轮修复多个runtime共享fetch时的路由冲突：共享AsyncLocalStorage、按target引用计数与在飞operation收尾，任一runtime关闭不能让另一runtime退回原始fetch；未绑定请求拒绝。此路由仍不是进程/UID隔离，孤儿异步任务及真实launcher的进程终止须另行处理。

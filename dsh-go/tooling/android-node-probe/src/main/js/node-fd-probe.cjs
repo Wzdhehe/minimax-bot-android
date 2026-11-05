@@ -11,7 +11,7 @@ let probePhase = 'bootstrap';
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
 
 (async () => {
-  const [normal, stalled, echo, result, privatePath, nativeLibraryDir, providerId, descriptorFd, descriptorOwnerUid, botFd, ...dataFdArgs] = process.argv.slice(1);
+  const [normal, stalled, echo, result, privatePath, nativeLibraryDir, providerId, descriptorFd, descriptorOwnerUid, ...dataFdArgs] = process.argv.slice(1);
   const { streamNativeModelFd } = await import(modelModuleUrl);
   async function consume(fd, cancel) {
     const controller = new AbortController();
@@ -123,21 +123,26 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     const { createBotFdTransport } = await import(botTransportModuleUrl);
     const botTransport = createBotFdTransport();
     let complete;
+    let connections = 0;
+    let allValid = true;
     const received = new Promise((resolve) => { complete = resolve; });
     const server = require('node:http').createServer((request, response) => {
       const valid = request.method === 'GET' && request.url === '/fd-probe' && request.headers.host === '127.0.0.1:43117';
       response.writeHead(valid ? 200 : 400, { 'content-type': 'text/plain', connection: 'close' });
-      response.once('finish', () => complete(valid));
+      response.once('finish', () => { allValid &&= valid; if (++connections === 2) complete(allValid); });
       response.end(valid ? 'fd-ok' : 'fd-invalid');
     });
     let timer;
     try {
       await botTransport.listenServer(server);
-      botTransport.accept(Number(botFd));
+      const ingress = process._linkedBinding('mbot_bot_ingress');
+      // One private byte tells Main Node is running before it sends either FD.
+      fs.writeSync(Number(result), 'R');
+      for (let index = 0; index < 2; index++) botTransport.accept(await ingress.next());
       const request = await Promise.race([received, new Promise((_, reject) => {
         timer = setTimeout(() => reject(Object.assign(new Error('bot_transport_timeout'), { code: 'bot_transport_timeout' })), 5000);
       })]);
-      report.botFdTransport = { request, noListener: !server.listening };
+      report.botFdTransport = { request, noListener: !server.listening, connections };
     } finally { clearTimeout(timer); botTransport.close(); server.close(() => {}); }
     probePhase = 'model_dynamic';
     const binding = process._linkedBinding('mbot_model_bridge');

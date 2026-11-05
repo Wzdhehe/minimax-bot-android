@@ -11,7 +11,10 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Message
 import android.os.Messenger
+import android.os.ParcelFileDescriptor
+import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -20,6 +23,7 @@ internal class ProbeConnection(private val context: Context) : java.io.Closeable
     private val connected = CompletableFuture<Messenger>()
     private val result = CompletableFuture<Reply>()
     private val identityResult = CompletableFuture<Reply>()
+    private val offers = ConcurrentHashMap<String, CompletableFuture<Reply>>()
     fun peerBinder(): IBinder = connected.get(10, TimeUnit.SECONDS).binder
     fun identity(): CompletableFuture<Reply> {
         connected.get(10, TimeUnit.SECONDS).send(Message.obtain(null, 3).apply { replyTo = receiver })
@@ -30,6 +34,7 @@ internal class ProbeConnection(private val context: Context) : java.io.Closeable
     private val receiver = Messenger(Handler(thread.looper, Handler.Callback { message ->
         if (message.what == 3 && message.data.getString("code") == "ready") identityResult.complete(Reply(message.sendingUid, message.data))
         if (message.what == 2 && message.data.getString("id") == expectedId) result.complete(Reply(message.sendingUid, message.data))
+        if (message.what == 7) message.data.getString("id")?.let { id -> offers.remove(id)?.complete(Reply(message.sendingUid, message.data)) }
         true
     }))
     private val connection = object : ServiceConnection {
@@ -45,9 +50,25 @@ internal class ProbeConnection(private val context: Context) : java.io.Closeable
         connected.get(10, TimeUnit.SECONDS).send(Message.obtain(null, what).apply { this.data = data; replyTo = receiver })
         return result
     }
+    fun offerBotConnection(fd: ParcelFileDescriptor): CompletableFuture<Reply> {
+        val id = UUID.randomUUID().toString()
+        val result = CompletableFuture<Reply>()
+        offers[id] = result
+        try {
+            connected.get(10, TimeUnit.SECONDS).send(Message.obtain(null, 7).apply {
+                data = Bundle().apply { putString("id", id); putParcelable("bot_connection", fd) }
+                replyTo = receiver
+            })
+        } catch (error: Exception) {
+            offers.remove(id)
+            result.completeExceptionally(error)
+        }
+        return result
+    }
     private fun fail() {
         val error = IllegalStateException("node_probe_disconnected")
         connected.completeExceptionally(error); result.completeExceptionally(error); identityResult.completeExceptionally(error)
+        offers.values.forEach { it.completeExceptionally(error) }; offers.clear()
     }
     override fun close() {
         val peer = try { connected.getNow(null)?.binder } catch (_: Exception) { null }

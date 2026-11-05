@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createServer, connect } from 'node:net';
 import { once } from 'node:events';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
@@ -23,7 +24,9 @@ test('the exact APK script consumes inherited Unix FDs and reports privately wit
   catch { script = fresh; }
   // Do not overwrite the prepared APK asset (which may include the pinned
   // SQLite wrapper). Model transport must still be today's exact source.
-  assert.equal(script.replace(/^const sqliteWrapper = .*;$/m, 'const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";'), fresh);
+  const hash = (value) => createHash('sha256').update(value).digest('hex');
+  assert.equal(hash(script.replace(/^const sqliteWrapper = .*;$/m, 'const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";')),
+    hash(fresh), 'prepared probe asset is stale');
   const marker = join(directory, 'marker');
   await writeFile(marker, 'non-sensitive marker');
   const servers = [], owners = [], peers = [];
@@ -163,7 +166,7 @@ test('the packaged scoped-model block routes two turns over actual inherited FDs
   }
 });
 
-test('the packaged Bot transport block serves HTTP on an inherited duplex FD without listening', { timeout: 12_000 }, async (t) => {
+test('the packaged Bot transport block serves two granted duplex FDs without listening', { timeout: 12_000 }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'mbot-node-bot-fd-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   execFileSync('python3', [join(root, 'prepare-probe.py'), '--bundle-only', '--bundle-output', directory]);
@@ -177,46 +180,65 @@ test('the packaged Bot transport block serves HTTP on an inherited duplex FD wit
   const block = script.slice(start, end);
   const childScript = `
     const botTransportModuleUrl = ${JSON.stringify(moduleUrl)};
-    const botFd = '3';
+    const fs = require('node:fs');
+    const result = '5';
+    let next = 3;
+    const control = new (require('node:net').Socket)({ fd: 5, readable: true, writable: true });
+    process._linkedBinding = (name) => {
+      if (name !== 'mbot_bot_ingress') throw Error('unexpected binding');
+      return { next: () => new Promise((resolve, reject) => {
+        control.once('data', (chunk) => chunk.toString() === 'A' ? resolve(next++) : reject(Error('bad grant')));
+      }) };
+    };
     let probePhase;
     const report = {};
     (async () => { ${block}
+      control.destroy();
       process.stdout.write(JSON.stringify(report.botFdTransport));
     })().catch(() => { process.exitCode = 1; });
   `;
-  let peer, owner, child;
-  const server = createServer((socket) => { peer = socket; socket.on('error', () => {}); });
-  const timeout = setTimeout(() => { child?.kill('SIGKILL'); owner?.destroy(); peer?.destroy(); }, 10_000);
+  const peers = [], owners = [], responses = ['', ''];
+  let child;
+  const server = createServer((socket) => { peers.push(socket); socket.on('error', () => {}); });
+  const timeout = setTimeout(() => { child?.kill('SIGKILL'); owners.forEach((socket) => socket.destroy()); peers.forEach((socket) => socket.destroy()); }, 10_000);
   try {
     server.listen(join(directory, 'bot.sock'));
     await once(server, 'listening');
-    const accepted = once(server, 'connection');
-    owner = connect(join(directory, 'bot.sock'));
-    owner.on('error', () => {});
-    await once(owner, 'connect');
-    await accepted;
+    for (let index = 0; index < 2; index++) {
+      const accepted = once(server, 'connection');
+      const owner = connect(join(directory, 'bot.sock'));
+      owners.push(owner); owner.on('error', () => {});
+      await once(owner, 'connect'); await accepted;
+      owner.setEncoding('utf8').on('data', (chunk) => { responses[index] += chunk; });
+    }
     child = spawn(process.execPath, ['--no-warnings', '-e', "eval(require('node:fs').readFileSync(0, 'utf8'))"], {
-      stdio: ['pipe', 'pipe', 'pipe', peer], env: buildRuntimeEnv(process.env),
+      stdio: ['pipe', 'pipe', 'pipe', ...peers, 'pipe'], env: buildRuntimeEnv(process.env),
     });
-    child.stdin.end(childScript);
     const exited = once(child, 'exit');
-    let stdout = '', stderr = '', response = '';
+    const ready = once(child.stdio[5], 'data');
+    child.stdin.end(childScript);
+    let stdout = '', stderr = '';
     child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
     child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
-    owner.setEncoding('utf8').on('data', (chunk) => { response += chunk; });
-    const ownerClosed = new Promise((resolve) => owner.once('close', resolve));
     await once(child, 'spawn');
-    peer.destroy();
-    owner.write('GET /fd-probe HTTP/1.1\r\nHost: 127.0.0.1:43117\r\nConnection: close\r\n\r\n');
+    peers.forEach((socket) => socket.destroy());
+    assert.equal((await ready)[0].toString(), 'R');
+    for (const owner of owners) {
+      const closed = once(owner, 'close');
+      child.stdio[5].write('A');
+      owner.write('GET /fd-probe HTTP/1.1\r\nHost: 127.0.0.1:43117\r\nConnection: close\r\n\r\n');
+      await closed;
+    }
     const [code] = await exited;
-    await ownerClosed;
     assert.equal(code, 0, stderr);
     assert.equal(stderr, '');
-    assert.deepEqual(JSON.parse(stdout), { request: true, noListener: true });
-    assert.match(response, /^HTTP\/1\.1 200/);
-    assert.ok(response.includes('fd-ok'));
+    assert.deepEqual(JSON.parse(stdout), { request: true, noListener: true, connections: 2 });
+    for (const response of responses) {
+      assert.match(response, /^HTTP\/1\.1 200/);
+      assert.ok(response.includes('fd-ok'));
+    }
   } finally {
-    clearTimeout(timeout); child?.kill(); owner?.destroy(); peer?.destroy();
+    clearTimeout(timeout); child?.kill(); owners.forEach((socket) => socket.destroy()); peers.forEach((socket) => socket.destroy());
     await new Promise((resolve) => server.close(resolve));
   }
 });

@@ -13,6 +13,7 @@ import android.os.Messenger
 import android.os.ParcelFileDescriptor
 import android.os.Process
 import io.github.ccch1mneyyy.dsh_app.isolation.ModelRequestClient
+import io.github.ccch1mneyyy.dsh_app.isolation.GrantedConnectionQueue
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDatabaseFiles
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeAtomicPublisher
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitClient
@@ -26,6 +27,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal object NodeProbeRuntime {
     @Volatile private var modelClient: ModelRequestClient? = null
     @Volatile private var fileClient: RuntimeFileCommitClient? = null
+    private val botConnections = GrantedConnectionQueue<ParcelFileDescriptor>()
+    fun offerBotConnection(fd: ParcelFileDescriptor) = botConnections.offer(fd)
+    fun takeBotConnection(): Int {
+        val fd = botConnections.take(15_000) ?: return -1
+        return try { fd.detachFd() } catch (_: Exception) { try { fd.close() } catch (_: Exception) { }; -1 }
+    }
+    fun closeBotConnections() = botConnections.close()
     fun configureModelBroker(host: IBinder, session: String) { modelClient = ModelRequestClient(host, session) }
     fun configureFileBroker(host: IBinder, session: String) { fileClient = RuntimeFileCommitClient(host, session) }
     private fun fileError(code: RuntimeDataCode): Int = when (code) {
@@ -93,17 +101,20 @@ internal object NodeProbeRuntime {
     fun openModelFd(id: String, body: String): Int = try { modelClient?.open(id, body)?.detachFd() ?: -1 } catch (_: Exception) { -1 }
     fun cancelModelFd(id: String) { try { modelClient?.cancel(id) } catch (_: Exception) { } }
     fun load() { System.loadLibrary("mbot_node_probe") }
-    external fun start(script: String, normal: Int, stalled: Int, echo: Int, result: Int, privatePath: String, nativeLibraryDir: String, providerId: String, descriptorFd: Int, ownerUid: Int, botFd: Int, dataFds: IntArray): Int
+    external fun start(script: String, normal: Int, stalled: Int, echo: Int, result: Int, privatePath: String, nativeLibraryDir: String, providerId: String, descriptorFd: Int, ownerUid: Int, dataFds: IntArray): Int
 }
 
 /** Verification APK only. One fixed APK script per isolated process; no JS,
  * commands, model credentials or endpoint descriptors are accepted over IPC. */
 class NodeIsolationProbeService : Service() {
     private val started = AtomicBoolean()
+    private val acceptingBotConnections = AtomicBoolean()
     private val worker = Executors.newSingleThreadExecutor()
     private val messenger by lazy {
         Messenger(Handler(Looper.getMainLooper(), Handler.Callback { message ->
-            if (message.sendingUid == applicationInfo.uid) {
+            if (message.what == 7) {
+                receiveBotConnection(message)
+            } else if (message.sendingUid == applicationInfo.uid) {
                 if (message.what == 1) runProbe(message)
                 else if (message.what in 4..6 && started.compareAndSet(false, true)) {
                     val data = message.data
@@ -143,6 +154,8 @@ class NodeIsolationProbeService : Service() {
     }
     override fun onBind(intent: Intent?): IBinder = messenger.binder
     override fun onDestroy() {
+        acceptingBotConnections.set(false)
+        NodeProbeRuntime.closeBotConnections()
         UnconsumedSnapshotProbe.close()
         worker.shutdownNow()
         super.onDestroy()
@@ -154,11 +167,36 @@ class NodeIsolationProbeService : Service() {
         if (Build.VERSION.SDK_INT >= 33) data.getParcelable(name, ParcelFileDescriptor::class.java)
         else { @Suppress("DEPRECATION") (data.getParcelable(name) as? ParcelFileDescriptor) }
 
+    private fun receiveBotConnection(message: Message) {
+        // The queue only handles ownership, never sender authorization.
+        val fd = try { descriptor(message.data, "bot_connection") } catch (_: Exception) { null }
+        if (message.sendingUid != applicationInfo.uid) {
+            try { fd?.close() } catch (_: Exception) { }
+            return
+        }
+        val id = try { message.data.getString("id") } catch (_: Exception) { null }
+        val reply = message.replyTo
+        if (fd == null || id == null || !id.matches(Regex("[a-zA-Z0-9_-]{1,128}")) || reply == null) {
+            try { fd?.close() } catch (_: Exception) { }
+            return
+        }
+        val result = if (acceptingBotConnections.get()) NodeProbeRuntime.offerBotConnection(fd)
+            else { try { fd.close() } catch (_: Exception) { }; GrantedConnectionQueue.Offer.CLOSED }
+        val response = Message.obtain(null, 7).apply {
+            data = Bundle().apply { putString("id", id); putString("code", when (result) {
+                GrantedConnectionQueue.Offer.ACCEPTED -> "ok"
+                GrantedConnectionQueue.Offer.FULL -> "busy"
+                else -> "unavailable"
+            }) }
+        }
+        try { reply.send(response) } catch (_: Exception) { }
+    }
+
     private fun runProbe(message: Message) {
         val data = message.data
         val reply = message.replyTo ?: return
         val id = data.getString("id") ?: return
-        val fds = listOf("normal", "stalled", "echo", "result", "db", "wal", "shm", "journal", "runtime_descriptor", "bot_connection").map { descriptor(data, it) }
+        val fds = listOf("normal", "stalled", "echo", "result", "db", "wal", "shm", "journal", "runtime_descriptor").map { descriptor(data, it) }
         val privatePath = data.getString("privatePath")
         val host = data.getBinder("model_host")
         val session = data.getString("model_session")
@@ -172,6 +210,7 @@ class NodeIsolationProbeService : Service() {
             fds.forEach { try { it?.close() } catch (_: Exception) { } }
             return
         }
+        acceptingBotConnections.set(true)
         worker.execute {
             var code = "node_start_failed"
             try {
@@ -183,11 +222,15 @@ class NodeIsolationProbeService : Service() {
                 // FDs on every stream path and the result FD after writing.
                 val raw = fds.map { it!!.detachFd() }
                 val exit = NodeProbeRuntime.start(script, raw[0], raw[1], raw[2], raw[3], privatePath, applicationInfo.nativeLibraryDir, providerId,
-                    raw[8], applicationInfo.uid, raw[9], raw.subList(4, 8).toIntArray())
+                    raw[8], applicationInfo.uid, raw.subList(4, 8).toIntArray())
                 code = if (exit == 0) "ok" else "node_nonzero_exit"
             } catch (_: UnsatisfiedLinkError) { code = "node_library_unavailable" }
             catch (_: Throwable) { code = "node_start_failed" }
-            finally { fds.forEach { try { it?.close() } catch (_: Exception) { } } }
+            finally {
+                acceptingBotConnections.set(false)
+                NodeProbeRuntime.closeBotConnections()
+                fds.forEach { try { it?.close() } catch (_: Exception) { } }
+            }
             val response = Message.obtain(null, 2)
             response.data = Bundle().apply { putString("id", id); putString("code", code) }
             try { reply.send(response) } catch (_: Exception) { }

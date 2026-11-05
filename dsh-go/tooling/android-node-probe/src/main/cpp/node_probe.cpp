@@ -13,6 +13,7 @@ JavaVM* java_vm = nullptr;
 jobject dispatcher = nullptr;
 jmethodID open_method = nullptr;
 jmethodID cancel_method = nullptr;
+jmethodID bot_connection_method = nullptr;
 jmethodID file_method = nullptr;
 jmethodID file_read_method = nullptr;
 jmethodID file_size_method = nullptr;
@@ -21,6 +22,7 @@ jmethodID file_remove_method = nullptr;
 jmethodID file_append_method = nullptr;
 std::atomic<int> opens{0};
 std::atomic<int> file_commits{0};
+std::atomic<bool> bot_connection_waiting{false};
 
 struct OpenWork {
   uv_work_t work{};
@@ -109,6 +111,73 @@ void Initialize(v8::Local<v8::Object> exports, v8::Local<v8::Value>, v8::Local<v
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "cancel"), v8::Function::New(context, CancelModel).ToLocalChecked()).Check();
 }
 NODE_MODULE_LINKED(mbot_model_bridge, Initialize)
+
+// Fixed verification-only ingress: the isolated service has already checked
+// the Binder sender UID before placing a socket in this bounded queue.
+struct BotConnectionWork {
+  uv_work_t work{};
+  v8::Isolate* isolate;
+  v8::Global<v8::Promise::Resolver> resolver;
+  v8::Global<v8::Context> context;
+  int fd = -1;
+};
+
+void RunBotConnection(uv_work_t* request) {
+  auto* task = static_cast<BotConnectionWork*>(request->data);
+  JNIEnv* env = nullptr;
+  bool attached = false;
+  if (java_vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_EDETACHED) {
+    if (java_vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+    attached = true;
+  }
+  if (env) {
+    task->fd = env->CallIntMethod(dispatcher, bot_connection_method);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); if (task->fd >= 0) close(task->fd); task->fd = -1; }
+  }
+  if (attached) java_vm->DetachCurrentThread();
+}
+
+void FinishBotConnection(uv_work_t* request, int status) {
+  auto* task = static_cast<BotConnectionWork*>(request->data);
+  v8::HandleScope handles(task->isolate);
+  auto context = task->context.Get(task->isolate);
+  v8::Context::Scope entered(context);
+  auto resolver = task->resolver.Get(task->isolate);
+  if (status == 0 && task->fd >= 3) {
+    if (!resolver->Resolve(context, v8::Integer::New(task->isolate, task->fd)).FromMaybe(false)) close(task->fd);
+  } else {
+    if (task->fd >= 0) close(task->fd);
+    resolver->Reject(context, v8::Exception::Error(v8::String::NewFromUtf8Literal(task->isolate, "bot_transport_unavailable"))).FromMaybe(false);
+  }
+  bot_connection_waiting.store(false);
+  delete task;
+}
+
+void NextBotConnection(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  auto* isolate = args.GetIsolate();
+  auto context = isolate->GetCurrentContext();
+  auto resolver = v8::Promise::Resolver::New(context).ToLocalChecked();
+  args.GetReturnValue().Set(resolver->GetPromise());
+  bool expected = false;
+  if (args.Length() != 0 || !bot_connection_waiting.compare_exchange_strong(expected, true)) {
+    resolver->Reject(context, v8::Exception::Error(v8::String::NewFromUtf8Literal(isolate, "bot_transport_unavailable"))).FromMaybe(false);
+    return;
+  }
+  auto* task = new BotConnectionWork;
+  task->isolate = isolate; task->resolver.Reset(isolate, resolver); task->context.Reset(isolate, context);
+  task->work.data = task;
+  if (uv_queue_work(node::GetCurrentEventLoop(isolate), &task->work, RunBotConnection, FinishBotConnection) != 0) {
+    FinishBotConnection(&task->work, UV_ECANCELED);
+  }
+}
+
+void InitializeBotIngress(v8::Local<v8::Object> exports, v8::Local<v8::Value>, v8::Local<v8::Context> context, void*) {
+  auto* isolate = context->GetIsolate();
+  exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "next"), v8::Function::New(context, NextBotConnection).ToLocalChecked()).Check();
+}
+namespace bot_ingress_module_registration {
+NODE_MODULE_LINKED(mbot_bot_ingress, InitializeBotIngress)
+}
 
 struct FileWork {
   uv_work_t work{};
@@ -306,13 +375,13 @@ std::string ReadString(JNIEnv* env, jstring value) {
 // No credential, network endpoint or arbitrary command is accepted here.
 jint Start(JNIEnv* env, jobject owner, jstring script, jint normal, jint stalled,
            jint echo, jint result, jstring private_path, jstring native_dir, jstring provider_id,
-           jint descriptor_fd, jint owner_uid, jint bot_fd, jintArray data_fds) {
+           jint descriptor_fd, jint owner_uid, jintArray data_fds) {
   std::vector<std::string> args{
       "mbot-node-probe", "--no-warnings", "-e", ReadString(env, script),
       std::to_string(normal), std::to_string(stalled), std::to_string(echo),
       std::to_string(result), ReadString(env, private_path), ReadString(env, native_dir), ReadString(env, provider_id),
-      std::to_string(descriptor_fd), std::to_string(owner_uid), std::to_string(bot_fd)};
-  if (env->ExceptionCheck() || descriptor_fd < 3 || owner_uid < 0 || bot_fd < 3 || !data_fds || env->GetArrayLength(data_fds) != 4) return -1;
+      std::to_string(descriptor_fd), std::to_string(owner_uid)};
+  if (env->ExceptionCheck() || descriptor_fd < 3 || owner_uid < 0 || !data_fds || env->GetArrayLength(data_fds) != 4) return -1;
   jint descriptors[4];
   env->GetIntArrayRegion(data_fds, 0, 4, descriptors);
   if (env->ExceptionCheck()) return -1;
@@ -343,15 +412,16 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   if (!type) return JNI_ERR;
   open_method = env->GetMethodID(type, "openModelFd", "(Ljava/lang/String;Ljava/lang/String;)I");
   cancel_method = env->GetMethodID(type, "cancelModelFd", "(Ljava/lang/String;)V");
+  bot_connection_method = env->GetMethodID(type, "takeBotConnection", "()I");
   file_method = env->GetMethodID(type, "commitRuntimeFile", "(Ljava/lang/String;[BZ)I");
   file_read_method = env->GetMethodID(type, "readRuntimeFile", "(Ljava/lang/String;)[B");
   file_size_method = env->GetMethodID(type, "sizeRuntimeFile", "(Ljava/lang/String;)J");
   file_move_method = env->GetMethodID(type, "moveRuntimeFile", "(Ljava/lang/String;Ljava/lang/String;Z)I");
   file_remove_method = env->GetMethodID(type, "removeRuntimeFile", "(Ljava/lang/String;)I");
   file_append_method = env->GetMethodID(type, "appendRuntimeFile", "(Ljava/lang/String;[B)I");
-  if (!open_method || !cancel_method || !file_method || !file_read_method || !file_size_method || !file_move_method || !file_remove_method || !file_append_method) return JNI_ERR;
+  if (!open_method || !cancel_method || !bot_connection_method || !file_method || !file_read_method || !file_size_method || !file_move_method || !file_remove_method || !file_append_method) return JNI_ERR;
   JNINativeMethod method{const_cast<char*>("start"),
-      const_cast<char*>("(Ljava/lang/String;IIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;III[I)I"), reinterpret_cast<void*>(Start)};
+      const_cast<char*>("(Ljava/lang/String;IIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;II[I)I"), reinterpret_cast<void*>(Start)};
   if (env->RegisterNatives(type, &method, 1) != JNI_OK) return JNI_ERR;
   return JNI_VERSION_1_6;
 }

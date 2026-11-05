@@ -7,9 +7,17 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
-新加入`isolation/GrantedConnectionQueue.kt`与4项JUnit测试，是未来运行中交付已授权socket FD的有界队列：默认8、上限64；被队列接纳的FD在take前由队列管理，take后由消费者管理，溢出/关闭时立即关闭，close唤醒等待并关闭尚未取走的FD。队列**不鉴权**，调用方必须先核验Binder调用UID；它尚未接服务，也不撤销已经取走的FD。当前环境使用本机`/workspace/toolchains/kotlinc`、系统JDK 21和按CI SHA校验的临时JAR，native回归JUnit 46/Node 56通过；Android接入和设备验证未做。
+最新动态socket候选在`tooling/android-node-probe`验收工程：`NodeIsolationProbeService`的消息7只接受App owner UID，拒收关闭PFD，队列默认8个；`NodeProbeRuntime.takeBotConnection`经15秒有界等待由`mbot_bot_ingress.next()`以libuv worker异步返回，每次最多一个等待。Node固定脚本写私有ready字节，Main随后分别创建并传送两个socket，第二个在第一个HTTP响应结束后才发送；接收器使用生产`bot-fd-transport.mjs`，不在guest listen。新增启动前拒绝/关闭用例，错误报告只输出允许列表内的阶段和代码。关闭队列只回收尚未取走的FD，已交出的FD由transport/进程生命周期管理；此为**验收工程夹具**，不是正式launcher，也没有让真实Bot业务在Android运行。
 
-下一项：在**验收工程**中让通过owner UID验证的Main于isolated Node启动后，经Binder发送一个或多个已连接socket FD；在隔离进程用上述队列有界接收，经JNI异步取出，交`bot-fd-transport.mjs`；用双向HTTP夹具和严格超时验证无需重启的多次交付、关闭及Key边界。不得让消息携带任意代码/命令，队列不代替UID验证，也不能将夹具说成真实Bot或正式launcher。随后才可整合真实Bot与产品桥，继续处理进程死亡、FD回收、真实provider、ARM64/真机。
+本次本地：重新获取Google repository XML所列platform36/build-tools36/CMake3.22.1/NDK27d并按其SHA1校验，Temurin JDK21和Gradle9.3.1按各自发布SHA256校验；本地已有1101个Node头按既存metadata逐一校验、libnode与release pin匹配。实际NDK编译JNI成功，验收APK及仪器APK首次 `BUILD SUCCESSFUL in 1m 34s`，随后补诊断代码重编 `BUILD SUCCESSFUL in 49s`；`javap`确认`takeBotConnection()I`和新`start(...II[I)I`与JNI匹配；本地release `requiresIntl=false`、`requiresSqlite=false`。精确脚本host 3/3（控制信号在首个HTTP响应后才授予第二个FD，host仍以stub代替Binder/JNI）、Python33/33、生产transport host 2/2通过。**新增设备测试尚未运行**，不能引用fd80f3b的模拟器结果冒充。
+
+GitHub计费阻塞：76f3dcc触发的`Isolated Android Node candidate` **41943645851**、`Documentation relative links` **41943645872**、`Bot fork scope checks` **41943645845**、`Android broker emulator verification` **41943646295**和`Native model broker boundary` **41943645860**都在开始前failure，job没有任何step。只读API查询check-run 126970353514的failure annotation：`The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings`。不要因0步失败去改源码或宣称测试失败/通过；账户限制解除后，在最新提交触发/重跑当前workflow，核API26/35实际执行和XML/artifact。此前成功的fd80f3b/41864552047只证明启动时传一条FD的旧版。
+
+接下来：1）对动态链在API26/35实际执行新测试，补外来UID恶意交付、队列满/关闭、isolated进程死亡和在途FD回收等设备边界；2）将已验证的能力及真实官方Bot服务合入正式独立UID launcher和Flutter桥；3）测试真实provider、ARM64和物理设备。若继续生产化，须设计持续长轮询/取消，不能直接把验收用的15秒单次等待包装为完整服务。临时工具链在`/tmp/mbot-{jdk21,gradle,android-sdk,ndk}`，可能随环境重建消失；full-ICU producer 41826964330的artifact查询时尚未过期（2026-11-11 12:13:11Z到期），复用前仍须原五输入authority验证。
+
+新加入`isolation/GrantedConnectionQueue.kt`与4项JUnit测试，是运行中交付已授权socket FD的有界队列：默认8、上限64；被队列接纳的FD在take前由队列管理，take后由消费者管理，溢出/关闭时立即关闭，close唤醒等待并关闭尚未取走的FD。队列**不鉴权**，调用方必须先核验Binder调用UID；当前已接验收服务，但不撤销已经取走的FD。当前环境使用本机`/workspace/toolchains/kotlinc`、系统JDK 21和按CI SHA校验的临时JAR，native回归JUnit 46/Node 56通过；产品启动器接入和设备验证未做。
+
+当前候选已接**验收工程**，但设备验证仍未做。不得让消息携带任意代码/命令，队列不代替UID验证，也不能将夹具说成真实Bot或正式launcher。
 
 用户已要求继续开发；本轮从远端20c4516快进。实查41847283176重跑后整体success：API26/35结果artifact均t49/f0/e0/s0；首次API35模拟器包下载损坏的失败历史保留。41850609902等是GitHub Android模拟器，不能称物理真机。
 
@@ -17,7 +25,7 @@
 
 Bot传输的Android验收已添加：Main启动时传入socketpair → isolated Node内生产FD transport → 简单HTTP夹具 → Main响应，验证双向与不listen；这不是Android上启动真实Bot业务。精确脚本宿主3项、Python33和默认release验收APK/仪器APK编译通过；**fd80f3b / 41864552047整体success，API26/35均t49/f0/e0/s0**，见[T-AndroidNode](T-AndroidNode.md)。
 
-新Bot FD传输：`bot-fd-transport.mjs`将可信启动器交来的已连接socket FD交给原版Bot HTTP server，不自行listen；vendor仅加可选listenServer宿主接缝，原TCP路径保留。64连接上限、类型/所有权/关闭处理；HTTP鉴权和Host/Origin检查不变。真实Bot宿主跨进程Unix FD测试覆盖匿名/错误Origin/Host拒绝、创建Bot、SSE state.changed和stop；完整host回归84项通过。**仅宿主组件**：Android Binder/JNI/Flutter连接交付尚未实现，停止会销毁活动连接、SSE可能异常结束，完整runtime FS和product launcher仍缺。不要把传输组件当可用APK。
+新Bot FD传输：`bot-fd-transport.mjs`将可信启动器交来的已连接socket FD交给原版Bot HTTP server，不自行listen；vendor仅加可选listenServer宿主接缝，原TCP路径保留。64连接上限、类型/所有权/关闭处理；HTTP鉴权和Host/Origin检查不变。真实Bot宿主跨进程Unix FD测试覆盖匿名/错误Origin/Host拒绝、创建Bot、SSE state.changed和stop；完整host回归84项通过。Android Binder/JNI动态交付候选仅接验收工程、设备未验证；Flutter桥尚未实现。停止会销毁活动连接、SSE可能异常结束，完整runtime FS和product launcher仍缺。不要把传输组件当可用APK。
 
 本轮复核发现`createBotAgentPort`无binding时原来仍调用上游gateway，与既定「未接broker时拒绝模型」相矛盾。现`run`与`answer`在进入gateway前返回`native_binding_unavailable`；`models`/`reply`不变。真实钉点gateway测试覆盖无binding拒绝且无session/turn发生；原身份/取消用例显式使用假路由，其模型执行仍为桩。真实完整factory另覆盖已投影模型但无binding时拒绝。**修复不是Android launcher或真实模型已接通。**
 

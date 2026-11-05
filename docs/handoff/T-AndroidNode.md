@@ -1,12 +1,18 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Android Node 加载关口（2026-11-03，正在开发）
 
+## 运行中动态Bot socket交接候选（仅构建，设备未验证）
+
+验收工程`NodeIsolationProbeService`加入owner UID限定的socket消息与有界队列；`mbot_bot_ingress.next()`经JNI/libuv worker异步取PFD，Node用生产transport接收，保持HTTP服务器未listen。Main等Node ready后顺序交两条连接，第二条在第一条响应后创建；新增启动前拒绝并关闭的仪器测试。固定脚本仍用简单HTTP夹具，消息不能携带代码/命令。队列默认8、等待15秒，close只清未取FD；这不是生产服务的持续轮询/生命周期实现。
+
+本地真实NDK r27d/API26/x86_64编译JNI成功；采用release pin的libnode，头文件逐个校验后构建验收APK/仪器APK `BUILD SUCCESSFUL in 1m 34s`，补诊断后再次构建 `BUILD SUCCESSFUL in 49s`，javap核对JNI两处签名。该release `requiresIntl=false`/`requiresSqlite=false`；精确脚本host 3/3、Python33/33、transport host 2/2通过。**本轮没有Android模拟器或真机执行。** GitHub Actions因账户支付/支出限额在job启动前被拦，详见[NEXT-AGENT](NEXT-AGENT.md)中的run号和原始annotation；先恢复Actions再对当前提交实跑，不能沿用下节旧版成功结果。
+
 
 ## Bot双向socket FD跨UID验收（API26/35模拟器通过）
 
 验收APK内嵌生产`bot-fd-transport.mjs`。Main通过既有isolated服务交付socketpair并发送固定HTTP请求；隔离Node用该transport将FD接到一个**简单HTTP夹具**，不调用listen，Main读取HTTP响应，双方各断言请求/响应和未监听。保留真实Keystore Key/模型JNI、descriptor旧generation、SQLite/WAL/full-ICU等既有断言；真实Bot服务鉴权/SSE已在单独Linux跨进程FD测试验证，**此Android用例尚未启动真实Bot业务**。
 
-本地：精确打包脚本宿主3项、Python33项通过；固定Node/NDK JNI重编、默认release的验收APK和仪器APK `BUILD SUCCESSFUL in 2m 5s`（71 tasks/17 executed），javap证实JNI start签名匹配。该本地APK `requiresIntl=false`、`requiresSqlite=false`，不把它当组合测试；本机无adb/KVM/物理设备。**fd80f3b / run 41864552047整体success，API26/35各t49/f0/e0/s0**。目前socket仅在Node启动时传入，运行后动态交付还未接通。
+本地：精确打包脚本宿主3项、Python33项通过；固定Node/NDK JNI重编、默认release的验收APK和仪器APK `BUILD SUCCESSFUL in 2m 5s`（71 tasks/17 executed），javap证实JNI start签名匹配。该本地APK `requiresIntl=false`、`requiresSqlite=false`，不把它当组合测试；本机无adb/KVM/物理设备。**fd80f3b / run 41864552047整体success，API26/35各t49/f0/e0/s0**。该旧版socket仅在Node启动时传入；运行后动态交付候选见文首。
 
 ## scoped模型binding → JNI/Binder 验收（模拟器已通过）
 
