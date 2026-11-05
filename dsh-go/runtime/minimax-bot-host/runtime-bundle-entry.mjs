@@ -25,3 +25,4 @@ export function createBuiltinBotRuntime({ dataDir, appVersion, signal, descripto
 export { createBotAgentPort } from './agent-port.mjs';
 export { startBotService } from './service.mjs';
 export { createBotFdTransport } from './bot-fd-transport.mjs';
+export { startBotFdIngress } from './bot-fd-ingress.mjs';

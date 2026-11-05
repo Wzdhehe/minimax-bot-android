@@ -87,6 +87,9 @@ test('the real Bot serves authenticated HTTP and SSE over granted FDs without op
   assert.equal(firstLine, 'ready');
 
   function request(index, path, { method = 'GET', headers = {}, body } = {}) {
+    // Grant each preconnected FD only when its request is about to start;
+    // the real Bot remains alive while subsequent connections arrive.
+    child.stdin.write('grant\n');
     const agent = new Agent();
     agent.createConnection = () => clients[index];
     return new Promise((resolve, reject) => {

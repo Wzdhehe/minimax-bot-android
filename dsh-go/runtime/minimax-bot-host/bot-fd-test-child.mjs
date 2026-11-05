@@ -2,10 +2,11 @@
 // Host-only fixture. Sockets are preconnected by the parent and inherited as
 // FDs; neither this process nor the Bot service opens a listening socket.
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 import { createBotFdTransport } from './bot-fd-transport.mjs';
+import { startBotFdIngress } from './bot-fd-ingress.mjs';
 import { startBotService } from './service.mjs';
 
 const [root, portText, countText] = process.argv.slice(2);
@@ -18,9 +19,32 @@ const service = await startBotService({ port, dataDir: join(root, 'data'), files
   authToken: 'a'.repeat(64), fdTransport: transport, signal: new AbortController().signal,
   logger: { info() {}, warn() {}, error() {} },
 });
-for (let index = 0; index < count; index++) transport.accept(3 + index);
-assert.throws(() => transport.accept(3), (error) => error.code === 'bot_transport_invalid');
+let nextFd = 3, waiting;
+const grants = [];
+let closeRequested;
+const closing = new Promise((resolve) => { closeRequested = resolve; });
+const commands = createInterface({ input: process.stdin });
+commands.on('line', (line) => {
+  if (line === 'grant' && nextFd < 3 + count) {
+    const fd = nextFd++;
+    if (waiting) { const resolve = waiting; waiting = undefined; resolve(fd); }
+    else grants.push(fd);
+  } else if (line === 'close') closeRequested();
+});
+let checkedDuplicate = false;
+const ingress = startBotFdIngress({
+  next: () => grants.length ? grants.shift() : new Promise((resolve) => { waiting = resolve; }),
+  transport: { accept(fd) {
+    transport.accept(fd);
+    if (!checkedDuplicate) {
+      checkedDuplicate = true;
+      assert.throws(() => transport.accept(fd), (error) => error.code === 'bot_transport_invalid');
+    }
+  } },
+});
 process.stdout.write('ready\n');
-await once(process.stdin, 'data');
+await closing;
+await ingress.close();
+commands.close();
 await service.dispose();
 process.stdout.write('closed\n');

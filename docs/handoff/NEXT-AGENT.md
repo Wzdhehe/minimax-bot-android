@@ -7,6 +7,10 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+新增`runtime/minimax-bot-host/bot-fd-ingress.mjs`并由`runtime-bundle-entry.mjs`导出：从可信、已经授权的`next(signal)`顺序取得独立拥有的FD，交给`bot-fd-transport`；停止不等待不合作的source，已挂回调负责关闭随后迟到的FD；source/transport失败只抛固定`bot_transport_unavailable`。每次只保留一个等待回调，不对每条连接在同一个永久Promise上累积监听；单测包括连续500次交付、取消竞态与真实FD关闭。宿主回归90/90通过；使用真实官方Bot的跨进程HTTP/SSE用例已改为经此循环，六个连接在Bot启动后按每次请求分别交付。以干净钉点`97818b2`及其esbuild 0.28.2运行完整源码打包图4/4通过，断言实际包含该文件。它**不是鉴权边界**：native源必须确保每次返回独立拥有的已授权FD；JS close不会自动结束忽略abort的底层线程，late-FD回调仅在进程存活至返回时执行。
+
+下一阶段将此循环接到验收APK的固定脚本：给JNI `mbot_bot_ingress`增加受限cancel，调用隔离侧队列close来唤醒有界等待；关闭时先撤销native等待，再停止JS循环与transport。确保不在Node主线程阻塞、不得接收任意代码，补验证不合作源/迟到FD和进程退出；实际Android API26/35仍须等GitHub计费限制解除或另有设备。产品launcher、完整Bot Android运行和Flutter连接仍未完成。
+
 最新动态socket候选在`tooling/android-node-probe`验收工程：`NodeIsolationProbeService`的消息7只接受App owner UID，拒收关闭PFD，队列默认8个；`NodeProbeRuntime.takeBotConnection`经30秒有界等待由`mbot_bot_ingress.next()`以libuv worker异步返回，每次最多一个等待。Node固定脚本写私有ready字节，Main随后分别创建并传送两个socket，第二个在第一个HTTP响应结束后才发送；接收器使用生产`bot-fd-transport.mjs`，不在guest listen。新增启动前拒绝/关闭用例；还编写另一isolated UID在Node运行中发送格式合法socket的负例，验证UID不同、目标关闭该FD后继续接受两条合法连接。后者使用验收专用、不可导出的`ForeignOfferProbeService`，只转发固定消息；这些设备断言**均未执行**。错误报告只输出允许列表内的阶段和代码。关闭队列只回收尚未取走的FD，已交出的FD由transport/进程生命周期管理；此为**验收工程夹具**，不是正式launcher，也没有让真实Bot业务在Android运行。
 
 本次本地：重新获取Google repository XML所列platform36/build-tools36/CMake3.22.1/NDK27d并按其SHA1校验，Temurin JDK21和Gradle9.3.1按各自发布SHA256校验；本地已有1101个Node头按既存metadata逐一校验、libnode与release pin匹配。实际NDK编译JNI成功，验收APK及仪器APK首次 `BUILD SUCCESSFUL in 1m 34s`，补诊断代码重编 `BUILD SUCCESSFUL in 49s`，新增外来UID负例后重编 `BUILD SUCCESSFUL in 1m 26s`；`javap`确认`takeBotConnection()I`和新`start(...II[I)I`与JNI匹配；本地release `requiresIntl=false`、`requiresSqlite=false`。精确脚本host 3/3（控制信号在首个HTTP响应后才授予第二个FD，host仍以stub代替Binder/JNI）、Python33/33、生产transport host 2/2通过。**新增设备测试尚未运行**，不能引用fd80f3b的模拟器结果冒充。
