@@ -22,6 +22,11 @@ class _BotHomeState extends State<BotHome> {
   BotController get bot => widget.controller;
   StreamSubscription<Map<String, Object?>>? _notices;
 
+  /// One creation flow at a time: the dialog, its close transition, the
+  /// create request and the refresh that follows it. The entry is disabled
+  /// while it runs, and the method refuses a second flow on its own.
+  bool _creating = false;
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +44,10 @@ class _BotHomeState extends State<BotHome> {
   }
 
   Future<void> _create({bool group = false}) async {
+    // The entry is disabled while a flow runs; the guard here is what keeps
+    // a second flow from starting even if the entry is reached anyway.
+    if (_creating) return;
+    setState(() => _creating = true);
     final name = TextEditingController();
     final role = TextEditingController();
     final members = <String>{};
@@ -46,63 +55,69 @@ class _BotHomeState extends State<BotHome> {
       final route = DialogRoute<bool>(
         context: context,
         builder: (context) => StatefulBuilder(
-          builder: (context, update) => AlertDialog(
-            title: Text(group ? context.l10n.mobileBotGroup : context.l10n.mobileBotNew),
-            content: SizedBox(
-              width: 380,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: name,
-                      decoration: InputDecoration(labelText: context.l10n.mobileBotName),
-                    ),
-                    if (!group)
+          builder: (context, update) {
+            // A Bot needs a name; a group needs a name and at least one
+            // member. The button follows the fields instead of ignoring them.
+            final ready = name.text.trim().isNotEmpty && (!group || members.isNotEmpty);
+            return AlertDialog(
+              title: Text(group ? context.l10n.mobileBotGroup : context.l10n.mobileBotNew),
+              content: SizedBox(
+                width: 380,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       TextField(
-                        controller: role,
-                        maxLines: 3,
-                        decoration: InputDecoration(labelText: context.l10n.mobileBotRole),
+                        controller: name,
+                        onChanged: (_) => update(() {}),
+                        decoration: InputDecoration(labelText: context.l10n.mobileBotName),
                       ),
-                    if (group) ...[
-                      Text(context.l10n.mobileBotMembers),
-                      for (final member in bot.bots)
-                        CheckboxListTile(
-                          title: Text(member['name']?.toString() ?? ''),
-                          value: members.contains(member['id']),
-                          onChanged: (value) => update(() {
-                            if (value == true) {
-                              members.add(member['id'] as String);
-                            } else {
-                              members.remove(member['id']);
-                            }
-                          }),
+                      if (!group)
+                        TextField(
+                          controller: role,
+                          maxLines: 3,
+                          decoration: InputDecoration(labelText: context.l10n.mobileBotRole),
                         ),
+                      if (group) ...[
+                        Text(context.l10n.mobileBotMembers),
+                        for (final member in bot.bots)
+                          CheckboxListTile(
+                            title: Text(member['name']?.toString() ?? ''),
+                            value: members.contains(member['id']),
+                            onChanged: (value) => update(() {
+                              if (value == true) {
+                                members.add(member['id'] as String);
+                              } else {
+                                members.remove(member['id']);
+                              }
+                            }),
+                          ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: Text(context.l10n.mobileBotCancel)),
-              TextButton(
-                onPressed: () {
-                  if (name.text.trim().isNotEmpty && (!group || members.isNotEmpty)) Navigator.pop(context, true);
-                },
-                child: Text(context.l10n.mobileBotCreate),
-              ),
-            ],
-          ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: Text(context.l10n.mobileBotCancel)),
+                TextButton(
+                  onPressed: ready ? () => Navigator.pop(context, true) : null,
+                  child: Text(context.l10n.mobileBotCreate),
+                ),
+              ],
+            );
+          },
         ),
       );
       final accepted = await Navigator.of(context).push(route);
       await route.completed;
-      if (accepted != true || !mounted) return;
+      // Cancelling asks for nothing.
+      if (accepted != true) return;
       if (group) {
         await bot.createGroup(name.text, members.toList());
       } else {
         await bot.createBot(name.text, role.text);
       }
+      if (!mounted) return;
       _composer.clear();
     } catch (_) {
       if (mounted) {
@@ -111,6 +126,7 @@ class _BotHomeState extends State<BotHome> {
     } finally {
       name.dispose();
       role.dispose();
+      if (mounted) setState(() => _creating = false);
     }
   }
 
@@ -144,6 +160,7 @@ class _BotHomeState extends State<BotHome> {
               ),
               PopupMenuButton<bool>(
                 icon: const Icon(Icons.add),
+                enabled: !_creating,
                 onSelected: (group) => _create(group: group),
                 itemBuilder: (context) => [
                   PopupMenuItem(value: false, child: Text(context.l10n.mobileBotNew)),
