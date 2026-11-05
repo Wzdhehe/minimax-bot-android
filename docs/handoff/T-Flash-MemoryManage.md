@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Flash大任务：现有Bot记忆页的新增、编辑、删除
 
+状态：收到6d08ad7并快进纳入以便审查，**尚未审查接受**。以下文末三项修复为当前任务，不重做整卡。按用户最新反馈，本轮报告只留本机，不要求补交`docs/research/flash-bot-memory-manage.md`；共享交接由Codex维护。
+
 用户约一小时后断电。本卡授权你在本机Windows独立推进；实现约40分钟后必须进入验证/交接，至少预留10分钟提交推送。仍用feat/t-plugins，先fetch同步。不要等云端APK；Codex只做native授予撤销，不改本卡UI文件。
 
 前卡b36ade7已源码审查接受。本卡在现有BotMemoryPage上扩展，不新造记忆系统。目标是单Bot的记忆管理，团队scope/预算图表/实时事件订阅/插件/主入口不在本轮。
@@ -66,3 +68,33 @@ python tooling/docs-links/check_links.py --root . docs/research/flash-bot-memory
 按可验证阶段及时commit/push，可拆成「新增与删除」「修订编辑与失败恢复」等连贯提交，但不得将未完成入口伪装可用。每次fetch，自己的未推送提交可rebase，不force，不覆盖云端工作。仅显式暂存允许路径，不动main/dev/integration、不PR、不发布APK。
 
 若40分钟仍未完成全部：停止扩功能，完成当前可验证小阶段，其余动作保持禁用/不露入口，报告逐项写明剩余内容、实际SHA、实际测试及未验证；最后10分钟必须用于测试、文档与推送，不留未推送源码等断电。不要为了赶时间删除修订守卫、关闭失败提示或编造测试。
+
+## Codex审查6d08ad7：先修三项，不扩功能
+
+只允许改`bot_memory_page.dart`与其`minimax_bot_memory_page_test.dart`，其余沿用本机报告，不提交报告、不改文案/生成物/共享交接/本卡。可拆有证据的小提交，修完后运行原定向analyze及memory/profile/home/stream测试，推送回报。云端Codex正在做Windows验收工具，勿碰tooling/runtime/CI。
+
+### R1：写流程代次没有在scope/API切换时失效
+
+真实源码：didUpdateWidget仅清blocked/failure/draft/refreshNeeded并调用_load，没有递增_change；_runChange/_readAfter只比较change与_change，不核对当前scope/api。旧A写请求在等待中切到B，B读取完成后，A成功会调用api.memory(A)并把A条目写进B页；A失败则会把A错误/草稿写到B并锁住B。两个finally还无条件清_changing。现测试只测对话框确认前切Bot，不覆盖已发出的写请求。
+
+建立在流程打开时就捕获的代次（包含对话框阶段），切Bot或API时失效并恢复新上下文自己的流程状态。确认前、写回/错误、写后读、finally均检查代次；旧流程不能发起新的A读取、覆盖B结果或解除B正在进行的忙碌。不要仅在_runChange开始后才分配代次；否则A→B→A的旧对话框仍可误启动。
+
+回归：Completer挂起A写请求，切同一State到B并完成B读取，再让A成功/失败，B文本/错误/草稿不变、不得额外读A。另保持B自己的变更挂起，A的finally不能解锁B。补同botId但API实例变化及旧对话框跨上下文后确认的场景。
+
+### R2：写入准入遗漏读取状态，且手动读取可与写竞争
+
+_writesAllowed只有changing/blocked/scope/api，_load开始就设scope/api，因此初始读取尚未成功、读取失败、写后GET失败(_refreshNeeded)时新增仍可用；_readAfter失败未blocked，旧条目的编辑/删除也重新启用。_openForm/_confirmDelete方法入口只查changing，不校验完整写入准入。结果未核对时不能继续写。
+
+统一准入：同一已成功读取的上下文，且非loading/failed/refreshNeeded/blocked/changing，才允许新增/编辑/删除；按钮和方法入口都使用它，确认后还须复查上下文/代次。写后读取失败必须阻止后续写，直到成功的手动读取；保留原列表与正确提示，不显示假空态。
+
+现失败横幅在手动读成功后仍可能存在，retry按钮仅看_loading，因而写入期间可再_load，迟到的手动GET可能覆盖写后的结果。手动读的按钮和方法在变更流程期间均须拒绝；内部写后读取仍由同一变更流程执行并检查其代次。成功手动核对后正确清理过期失败提示，草稿可保留供复制，但不自动重发。
+
+回归：初次读取挂起/失败时无写；写成功但GET抛错或坏scope时三种写入口全禁用，重读成功后才恢复；写Completer等待中不能手动刷新发额外GET；旧读不覆盖较新结果。不要仅测出现提示文案。
+
+### R3：memory_pending的HTTP400不是明确拒绝
+
+实际memory.mjs的commit注释明确durable pending是acceptance point；finish在其后失败会抛MemoryError(code='memory_pending')。server.mjs把该已知错误映射为400。当前_kindOf把所有<500且非conflict的异常当rejected，会给已接受事务显示「服务端没有接受」。
+
+按业务code优先：memory_pending归结果不明/待恢复；memory_conflict仍冲突。只对白名单中明确拒绝的业务code/状态给rejected（如memory_invalid/full/too_long以及实际确认的前置拒绝），未知业务code和不认识的非2xx保守归unknown。不读取原始message，不改协议，也不因未知结果自动重试。
+
+回归至少注入MiniMaxBotException(400,'memory_pending','不可回显的内容')，显示结果不明、保留草稿、锁写等待成功手动读，不显示拒绝、不回显message、不重发。原memory_conflict、显式拒绝和5xx/timeout用例也保留。

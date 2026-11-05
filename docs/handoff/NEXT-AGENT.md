@@ -7,6 +7,10 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+Flash记忆管理6d08ad7已快进纳入用于审查，**尚未接受**。当前只修[T-Flash-MemoryManage](T-Flash-MemoryManage.md)文末R1/R2/R3：整个写流程的上下文代次、读取/写入的统一准入、memory_pending已接受事务不得当拒绝。不要根据26项假API测试通过声称无竞态；现有测试缺已发出变更跨scope的场景。Flash本机报告按最新要求留本地，不要求补交。
+
+本机环境已回报：API35 x86_64 emulator-5554已启动，实际SDK D:/android-sdk，NDK27.3与28.2、CMake3.22.1；默认JDK17，无WSL。验收工程要求JDK21/Gradle9.3.1，prepare-probe.py还硬编码Linux NDK路径，故需要独立Windows准备接线，不能将旧DSH rootfs或Flutter product APK当其前置。云端当前已有可编译的验收工程，产品APK仍不可用。不要为传产物把二进制提交Git或发布Release。
+
 当前新增[每代连接授予gate](T-BotConnectionGrants.md)：`awaitAccepted`限制并发与10秒截止，核对实际隔离UID，close撤销私有等待，迟到future不能重新授权。Android验收已经把它与桥组合、linkToDeath；另写真实Binder死亡+模拟未回回执的设备用例，尚未设备执行。JUnit69/Node56已实跑通过；生产launcher、完整生命周期与Endpoint发布仍缺，不能把本组件当成已完成启动器。
 
 Flash当前最新卡为[记忆管理](T-Flash-MemoryManage.md)（b59b9a3），覆盖单Bot新增/修订编辑/确认删除、冲突/未知结果与草稿保留，不改公共API或底层。用户约一小时后断电，卡要求40分钟后收束、留最后10分钟验证文档推送；不要按下文旧卡继续造第二套页面。

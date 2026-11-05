@@ -10,6 +10,7 @@ Flash首卡`ff363bc/5c44d43`及第二卡`5afbd76/0fc0315/16f6ba3`已纳入；接
 
 ## 当前已完成与未完成
 
+- Flash记忆管理6d08ad7已快进纳入用于审查，尚未接受：发现写流程切Bot/API未失效、写/读准入遗漏与memory_pending(HTTP400)误判明确拒绝三项，修复卡已追加到[T-Flash-MemoryManage](handoff/T-Flash-MemoryManage.md)。本机报告未提交（按最新反馈），不要求补交；仅记录Flash自报35+11项widget/analyze，云端无Flutter未复跑。Windows模拟器API35/x86_64可用，但当前默认JDK17不满足验收目标JDK21，且准备脚本硬编码Linux NDK，不能直接认定只缺APK。
 - 每代`BotConnectionGrants`已加入：有界授予等待、匹配真实隔离UID、截止、close立即撤销私有等待，迟到回执不恢复授权；现有验收链已加Binder死亡关闭gate/桥和新的设备用例，设备未执行。native回归JUnit69/Node56通过，见[授予撤销交接](handoff/T-BotConnectionGrants.md)；不是正式launcher或完整运行生命周期。
 - `BotSocketConnection`新增Android Main socketpair适配候选，已组合进Node验收工程：owner UID检查、同步授予回执、临时FD关闭、半关闭与停止唤醒；真实Bot脚本改用descriptor携带的Main实际端口。新增3项设备测试，仅编译/待设备执行；正式launcher、Binder死亡撤销、Flutter Endpoint组装仍缺。宿主精确脚本6/6、Python39/39通过，详见[Android桥适配交接](handoff/T-BotSocketConnection.md)。该项覆盖下条桥本体阶段尚无connector的旧状态。
 - Main侧新增`BotLoopbackBridge`候选：仅127.0.0.1、显式activate、连接数与跨代worker上限、双向背压/半关闭、停止及迟到连接关闭。JVM真实socket与native回归已过，尚未接Android socketpair connector、真实Bot/Flutter和正式launcher；见[桥接交接](handoff/T-BotLoopbackBridge.md)。
