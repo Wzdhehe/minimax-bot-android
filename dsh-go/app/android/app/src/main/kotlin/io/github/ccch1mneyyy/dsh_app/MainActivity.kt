@@ -61,6 +61,7 @@ class MainActivity : FlutterActivity() {
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.islands.IslandsPlugin())
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.nativemedia.NativeMediaPlugin())
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.nativefiles.NativeFilesPlugin())
+            engine.plugins.add(io.github.ccch1mneyyy.dsh_app.bot.BotRuntimePlugin())
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.web.WebFilesPlugin())
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.launch.LaunchPlugin())
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.launch.LaunchClipPlugin())
