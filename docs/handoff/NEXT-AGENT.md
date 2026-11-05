@@ -7,6 +7,12 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+当前已快进合入远端`a8b895d`，包含本机agent的pin路径修复、Endpoint/Flutter transport与rootfs下载修复；没有回退或覆盖这些提交。以下续写覆盖上轮「只打包、未调用服务」：固定Android验收脚本在Intl可用时现调用真实`startBotService`，以descriptor中的Bot会话token鉴权、共享native文件broker、`fileMode: 'unavailable'`和FD transport启动；Main逐次授予两条socket，验证匿名403、授权/api/state 200、不回显Key/会话token、guest不listen及取消。无Intl分支只跑原基础HTTP夹具，不能算真实Bot通过。测试任务设为2100年的固定once任务，避免服务第二次启动时调度虚假测试任务。
+
+宿主精确脚本6/6，包含真实Bot与无Intl两分支，以及两个独立进程中先启动/停止真实服务、再运行状态/记忆恢复块（文件能力仍为fake，stage删除仍由宿主模拟）；Python39/39，本地验收APK与仪器APK `BUILD SUCCESSFUL in 1m 12s`。Android API26/35新用例尚未执行，本机release仍无Intl/SQLite，构建成功不能算真实服务设备通过；完整mcode、真实provider、正式launcher和产品APK未完成。
+
+并行开发分工与架构纠正：本机agent先按[T-LocalEndpointLease](T-LocalEndpointLease.md)完成Endpoint运行代次保护，只写卡内目录。独立PRoot进程仍是App同UID，禁止用作Bot隔离；Linux glibc ARM64的better-sqlite3预编译不能用于Android bionic进程；isolated Bot当前通过Main授予的socket FD服务，Main侧Flutter loopback桥尚缺，不能轮询guest端口后直接publish。正式endpoint只能在Main桥和运行代次实际就绪后发布；descriptor写成功不是服务就绪。rootfs是旧DSH路径的产物，不能作为当前isolated验收的前置条件，也不是全部产品缺口的唯一阻塞。上轮Windows报告中的相关建议不作为实施授权。
+
 **App 侧 transport（本轮新增，`f762a44`）**：Kotlin 新增 `runtime/BotRuntimeEndpoint.kt`（只持有**运行中**的 Bot 服务 baseUrl+token；停止即 `clear()`，不留过期凭据；非 loopback 或非 session token 一律拒绝）与 `bot/BotRuntimePlugin.kt`（MethodChannel `minimax/bot-runtime`，方法 `descriptor`，无服务时返回 null）；Dart 新增 `lib/bot/bot_runtime_endpoint.dart`（`liveService()` 只认 native 报出的活服务，**不编造 URL**；用该 token 作 `Authorization: Bearer` 建 `MiniMaxBotApi`），`lib/dev/minimax_bot_main.dart` 改为向 native 要 endpoint，不再硬编码 `127.0.0.1:8788` 且不带凭据。验证：Dart 4/4（含真实本地 HTTP 抓到的 `Bearer` 头）、Kotlin `:app:testX64DebugUnitTest` 5/5（0失败0跳过）、`flutter analyze` 全量 **No issues found**。**仍没有任何生产代码调用 `RuntimeDescriptor.write`**——正式 launcher 还不存在，所以 native 目前不会报出活服务，UI 会显示"没有 Bot 服务在运行"。
 
 **产品里有两套 Bot 系统（关键，下一步的 UI 半边就在这里）**：`lib/ui/bots/*` 与 `lib/state/bots_state.dart` 走的是 **`DsBotApi`**（DSH 引擎自带的 DS Bot 插件，经 `activeConnectionProvider` 连本地/远程引擎）；官方 mbot 的 `MiniMaxBotApi`（`packages/dsh_client`）**只被 dev 入口使用**。产品决定是"复用官方 mbot 业务"，所以引擎切换在 UI/状态层就是**把 `bots_state.dart` 这套从 `DsBotApi` 换成 mbot 服务**，涉及模型与全部 Bot 页面——不是加一个入口就完事。上面的 transport 是这一步的前置条件。
