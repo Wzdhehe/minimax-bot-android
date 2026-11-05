@@ -23,6 +23,11 @@ class _BotProfilePageState extends State<BotProfilePage> {
   bool _notifications = true;
   bool _busy = false;
   bool _failed = false;
+
+  /// One edit flow at a time: the dialog, its close transition, the update
+  /// request and the reload that follows it. It is its own flag because the
+  /// reload resets [busy], and the flow has to stay closed across that reset.
+  bool _editing = false;
   @override
   void initState() {
     super.initState();
@@ -59,37 +64,47 @@ class _BotProfilePageState extends State<BotProfilePage> {
   }
 
   Future<void> _edit() async {
+    // The entry is closed while a flow runs; the guard here is what keeps a
+    // second flow from starting even if the entry is reached anyway.
+    if (_editing) return;
+    setState(() => _editing = true);
     final name = TextEditingController(text: _bot?['name']?.toString() ?? '');
     final role = TextEditingController(text: _bot?['role']?.toString() ?? '');
     try {
       final route = DialogRoute<bool>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: Text(context.l10n.mobileBotEdit),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                decoration: InputDecoration(labelText: context.l10n.mobileBotName),
+        builder: (context) => StatefulBuilder(
+          builder: (context, update) {
+            // A name that says something is the only requirement; the role
+            // may stay empty.
+            final ready = name.text.trim().isNotEmpty;
+            return AlertDialog(
+              title: Text(context.l10n.mobileBotEdit),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: name,
+                    onChanged: (_) => update(() {}),
+                    decoration: InputDecoration(labelText: context.l10n.mobileBotName),
+                  ),
+                  TextField(
+                    controller: role,
+                    minLines: 2,
+                    maxLines: 5,
+                    decoration: InputDecoration(labelText: context.l10n.mobileBotRole),
+                  ),
+                ],
               ),
-              TextField(
-                controller: role,
-                minLines: 2,
-                maxLines: 5,
-                decoration: InputDecoration(labelText: context.l10n.mobileBotRole),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(context.l10n.mobileBotCancel)),
-            TextButton(
-              onPressed: () {
-                if (name.text.trim().isNotEmpty) Navigator.pop(context, true);
-              },
-              child: Text(context.l10n.mobileBotSave),
-            ),
-          ],
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: Text(context.l10n.mobileBotCancel)),
+                TextButton(
+                  onPressed: ready ? () => Navigator.pop(context, true) : null,
+                  child: Text(context.l10n.mobileBotSave),
+                ),
+              ],
+            );
+          },
         ),
       );
       final accepted = await Navigator.of(context).push(route);
@@ -103,7 +118,12 @@ class _BotProfilePageState extends State<BotProfilePage> {
     } finally {
       name.dispose();
       role.dispose();
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _editing = false;
+        });
+      }
     }
   }
 
@@ -150,7 +170,7 @@ class _BotProfilePageState extends State<BotProfilePage> {
                 Center(child: Text(name, style: Theme.of(context).textTheme.headlineMedium)),
                 Center(
                   child: TextButton(
-                    onPressed: _busy || _bot == null ? null : _edit,
+                    onPressed: _busy || _editing || _bot == null ? null : _edit,
                     child: Text(context.l10n.mobileBotEdit),
                   ),
                 ),
