@@ -140,7 +140,7 @@ void main() {
 
   /// The add entry of the page.
   Finder addEntry() => find.byIcon(Icons.add);
-  Finder editEntry() => find.widgetWithText(TextButton, '编辑');
+  Finder editEntry() => find.widgetWithText(TextButton, '编辑').first;
   Finder deleteEntry() => find.widgetWithText(TextButton, '删除').first;
   Finder dialogDelete() =>
       find.descendant(of: find.byType(AlertDialog), matching: find.widgetWithText(TextButton, '删除'));
@@ -761,4 +761,349 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  // ── The review of 6d08ad7 ──────────────────────────────────────────────────
+
+  testWidgets('a change that was sent for the previous Bot cannot touch the new one', (tester) async {
+    final api = _Api();
+    api.answers['bot_a'] = {'scope': 'bot_a', 'entries': []};
+    api.answers['bot_b'] = {
+      'scope': 'bot_b',
+      'entries': [
+        {'text': 'B 的记忆'},
+      ],
+    };
+    final gate = Completer<Map<String, Object?>>();
+    api.writeGates['bot_a'] = gate;
+    addTearDown(api.close);
+    final key = GlobalKey();
+    await tester.pumpWidget(memory(api, botId: 'bot_a', key: key));
+    await pumpUntil(tester, () => find.text('还没有记忆').evaluate().isNotEmpty);
+
+    await tester.tap(addEntry());
+    await pumpUntil(tester, () => formField().evaluate().isNotEmpty);
+    await tester.enterText(formField(), 'A 的记忆');
+    await tester.pump();
+    await tester.tap(saveButton());
+    await pumpUntil(tester, () => api.remembers.isNotEmpty);
+
+    // The Bot changes while the request is on its way.
+    await tester.pumpWidget(memory(api, botId: 'bot_b', key: key));
+    await pumpUntil(tester, () => find.text('B 的记忆').evaluate().isNotEmpty);
+
+    // The old request answers late.
+    gate.complete({'entry': {'id': '10000000', 'revision': 'rev-1', 'text': 'A 的记忆'}});
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    // The new Bot is untouched: no other entry, no error, no draft.
+    expect(find.text('B 的记忆'), findsOneWidget);
+    expect(find.text('A 的记忆'), findsNothing);
+    expect(find.textContaining('无法确认'), findsNothing);
+    expect(find.textContaining('已经被改动'), findsNothing);
+    // The old Bot was not read again either.
+    expect(api.scopes, ['bot_a', 'bot_b']);
+  });
+
+  testWidgets('a change that failed for the previous Bot cannot lock the new one', (tester) async {
+    final api = _Api();
+    api.answers['bot_a'] = {'scope': 'bot_a', 'entries': []};
+    api.answers['bot_b'] = {
+      'scope': 'bot_b',
+      'entries': [
+        {'text': 'B 的记忆'},
+      ],
+    };
+    final gate = Completer<Map<String, Object?>>();
+    api.writeGates['bot_a'] = gate;
+    api.writeFailures['bot_a'] = MiniMaxBotException(500, 'internal', 'the service broke');
+    addTearDown(api.close);
+    final key = GlobalKey();
+    await tester.pumpWidget(memory(api, botId: 'bot_a', key: key));
+    await pumpUntil(tester, () => find.text('还没有记忆').evaluate().isNotEmpty);
+
+    await tester.tap(addEntry());
+    await pumpUntil(tester, () => formField().evaluate().isNotEmpty);
+    await tester.enterText(formField(), 'A 的记忆');
+    await tester.pump();
+    await tester.tap(saveButton());
+    await pumpUntil(tester, () => api.remembers.isNotEmpty);
+
+    await tester.pumpWidget(memory(api, botId: 'bot_b', key: key));
+    await pumpUntil(tester, () => find.text('B 的记忆').evaluate().isNotEmpty);
+
+    gate.completeError(MiniMaxBotException(500, 'internal', 'the service broke'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    // The new Bot has no error and no draft of the old one.
+    expect(find.text('B 的记忆'), findsOneWidget);
+    expect(find.textContaining('无法确认'), findsNothing);
+    expect(find.text('A 的记忆'), findsNothing);
+    // Its write entries are open: the old failure did not close them.
+    expect(addEnabled(tester), isTrue);
+    expect(api.scopes, ['bot_a', 'bot_b']);
+  });
+
+  testWidgets('the previous change does not unlock the one that is running now', (tester) async {
+    final api = _Api();
+    api.answers['bot_a'] = {'scope': 'bot_a', 'entries': []};
+    api.answers['bot_b'] = {'scope': 'bot_b', 'entries': []};
+    final gateA = Completer<Map<String, Object?>>();
+    final gateB = Completer<Map<String, Object?>>();
+    api.writeGates['bot_a'] = gateA;
+    api.writeGates['bot_b'] = gateB;
+    addTearDown(api.close);
+    final key = GlobalKey();
+    await tester.pumpWidget(memory(api, botId: 'bot_a', key: key));
+    await pumpUntil(tester, () => find.text('还没有记忆').evaluate().isNotEmpty);
+
+    await tester.tap(addEntry());
+    await pumpUntil(tester, () => formField().evaluate().isNotEmpty);
+    await tester.enterText(formField(), 'A 的记忆');
+    await tester.pump();
+    await tester.tap(saveButton());
+    await pumpUntil(tester, () => api.remembers.isNotEmpty);
+
+    // The new Bot starts a change of its own while the old one waits.
+    await tester.pumpWidget(memory(api, botId: 'bot_b', key: key));
+    // The new Bot was read, so its own writes are open.
+    await pumpUntil(tester, () => addEnabled(tester));
+    await tester.tap(addEntry());
+    await pumpUntil(tester, () => formField().evaluate().isNotEmpty);
+    await tester.enterText(formField(), 'B 的记忆');
+    await tester.pump();
+    await tester.tap(saveButton());
+    await pumpUntil(tester, () => api.remembers.length == 2);
+
+    // The old request answers and ends.
+    gateA.complete({'entry': {'id': '10000000', 'revision': 'rev-1', 'text': 'A 的记忆'}});
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    // The running change of the new Bot is still running.
+    expect(tester.widget<IconButton>(find.byType(IconButton)).onPressed, isNull);
+    expect(api.remembers.length, 2);
+
+    gateB.complete({'entry': {'id': '20000000', 'revision': 'rev-2', 'text': 'B 的记忆'}});
+    await pumpUntil(tester, () => find.text('B 的记忆').evaluate().isNotEmpty);
+    expect(find.text('B 的记忆'), findsOneWidget);
+  });
+
+  testWidgets('another service for the same Bot is another context', (tester) async {
+    final first = _Api();
+    final second = _Api();
+    first.answers['bot_a'] = {'scope': 'bot_a', 'entries': []};
+    second.answers['bot_a'] = {
+      'scope': 'bot_a',
+      'entries': [
+        {'text': '第二个服务的记忆'},
+      ],
+    };
+    final gate = Completer<Map<String, Object?>>();
+    first.writeGates['bot_a'] = gate;
+    addTearDown(first.close);
+    addTearDown(second.close);
+    final key = GlobalKey();
+    await tester.pumpWidget(memory(first, key: key));
+    await pumpUntil(tester, () => find.text('还没有记忆').evaluate().isNotEmpty);
+
+    await tester.tap(addEntry());
+    await pumpUntil(tester, () => formField().evaluate().isNotEmpty);
+    await tester.enterText(formField(), '旧服务的记忆');
+    await tester.pump();
+    await tester.tap(saveButton());
+    await pumpUntil(tester, () => first.remembers.isNotEmpty);
+
+    // The same Bot, another service.
+    await tester.pumpWidget(memory(second, key: key));
+    await pumpUntil(tester, () => find.text('第二个服务的记忆').evaluate().isNotEmpty);
+
+    gate.complete({'entry': {'id': '10000000', 'revision': 'rev-1', 'text': '旧服务的记忆'}});
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    // The new service's page is untouched.
+    expect(find.text('第二个服务的记忆'), findsOneWidget);
+    expect(find.text('旧服务的记忆'), findsNothing);
+    expect(find.textContaining('无法确认'), findsNothing);
+    // The old service was not read again.
+    expect(first.scopes, ['bot_a']);
+    expect(second.scopes, ['bot_a']);
+  });
+
+  testWidgets('a form that was opened before the Bot changed still does not write', (tester) async {
+    final api = _Api();
+    api.answers['bot_a'] = {'scope': 'bot_a', 'entries': []};
+    api.answers['bot_b'] = {'scope': 'bot_b', 'entries': []};
+    addTearDown(api.close);
+    final key = GlobalKey();
+    await tester.pumpWidget(memory(api, botId: 'bot_a', key: key));
+    await pumpUntil(tester, () => find.text('还没有记忆').evaluate().isNotEmpty);
+
+    await tester.tap(addEntry());
+    await pumpUntil(tester, () => formField().evaluate().isNotEmpty);
+    await tester.enterText(formField(), '旧的记忆');
+    await tester.pump();
+
+    // The Bot changes and comes back: the same Bot, but another context.
+    await tester.pumpWidget(memory(api, botId: 'bot_b', key: key));
+    await tester.pump();
+    await tester.pumpWidget(memory(api, botId: 'bot_a', key: key));
+    await tester.pump();
+
+    await tester.tap(saveButton());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(api.writes, 0);
+    expect(api.remembers, isEmpty);
+  });
+
+  testWidgets('no write is offered before the first read succeeded', (tester) async {
+    final api = _Api();
+    final gate = Completer<Map<String, Object?>>();
+    api.gates['bot_a'] = gate;
+    addTearDown(api.close);
+    await tester.pumpWidget(memory(api));
+    await tester.pump();
+
+    // The read has not answered: there is nothing to write to.
+    expect(addEnabled(tester), isFalse);
+
+    // The read fails: still nothing to write to.
+    gate.completeError(StateError('the service did not answer'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('没能读取记忆'), findsOneWidget);
+    expect(addEnabled(tester), isFalse);
+
+    // A read that works opens the entries.
+    api.gates.remove('bot_a');
+    api.answers['bot_a'] = {'scope': 'bot_a', 'entries': []};
+    await tester.tap(retryButton());
+    await pumpUntil(tester, () => addEnabled(tester));
+    expect(addEnabled(tester), isTrue);
+  });
+
+  testWidgets('a change that cannot be read again closes every write until a read succeeds', (tester) async {
+    final api = _Api();
+    api.answers['bot_a'] = {
+      'scope': 'bot_a',
+      'entries': [
+        {'id': 'a1b2c3d4', 'revision': 'rev-alpha', 'text': '第一条'},
+      ],
+    };
+    addTearDown(api.close);
+    await tester.pumpWidget(memory(api));
+    await pumpUntil(tester, () => find.text('第一条').evaluate().isNotEmpty);
+    expect(addEnabled(tester), isTrue);
+
+    await tester.tap(addEntry());
+    await pumpUntil(tester, () => formField().evaluate().isNotEmpty);
+    await tester.enterText(formField(), '新的记忆');
+    await tester.pump();
+    // The write succeeds but the read that follows does not.
+    api.failNextRead = true;
+    await tester.tap(saveButton());
+    await pumpUntil(tester, () => find.textContaining('没能重新读取记忆').evaluate().isNotEmpty);
+
+    // Every write entry is closed, the old ones included.
+    expect(tester.widget<IconButton>(find.byType(IconButton)).onPressed, isNull);
+    expect(tester.widget<TextButton>(editEntry()).onPressed, isNull);
+    expect(tester.widget<TextButton>(deleteEntry()).onPressed, isNull);
+    // The list is still there and not an empty memory.
+    expect(find.text('第一条'), findsOneWidget);
+    expect(find.text('还没有记忆'), findsNothing);
+
+    // A read that works opens them again.
+    await tester.tap(retryButton());
+    await pumpUntil(tester, () => addEnabled(tester));
+    expect(addEnabled(tester), isTrue);
+    expect(tester.widget<TextButton>(editEntry()).onPressed, isNotNull);
+    expect(tester.widget<TextButton>(deleteEntry()).onPressed, isNotNull);
+  });
+
+  testWidgets('a read does not run while a change waits', (tester) async {
+    final api = _Api();
+    api.answers['bot_a'] = {'scope': 'bot_a', 'entries': []};
+    final gate = Completer<Map<String, Object?>>();
+    api.writeGates['bot_a'] = gate;
+    addTearDown(api.close);
+    await tester.pumpWidget(memory(api));
+    await pumpUntil(tester, () => find.text('还没有记忆').evaluate().isNotEmpty);
+
+    await tester.tap(addEntry());
+    await pumpUntil(tester, () => formField().evaluate().isNotEmpty);
+    await tester.enterText(formField(), '新的记忆');
+    await tester.pump();
+    await tester.tap(saveButton());
+    await pumpUntil(tester, () => api.remembers.isNotEmpty);
+
+    // While the change waits, no read is made on its own and no read is
+    // offered either.
+    expect(api.scopes, ['bot_a']);
+    expect(retryButton().evaluate(), isEmpty);
+
+    // The change reads after itself, once.
+    gate.complete({'entry': {'id': '10000000', 'revision': 'rev-1', 'text': '新的记忆'}});
+    await pumpUntil(tester, () => find.text('新的记忆').evaluate().isNotEmpty);
+    expect(api.scopes, ['bot_a', 'bot_a']);
+  });
+
+  testWidgets('a pending memory is not shown as a refusal', (tester) async {
+    final api = _Api();
+    api.answers['bot_a'] = {'scope': 'bot_a', 'entries': []};
+    api.writeFailures['bot_a'] = MiniMaxBotException(400, 'memory_pending', '不可回显的内容');
+    addTearDown(api.close);
+    await tester.pumpWidget(memory(api));
+    await pumpUntil(tester, () => find.text('还没有记忆').evaluate().isNotEmpty);
+
+    await tester.tap(addEntry());
+    await pumpUntil(tester, () => formField().evaluate().isNotEmpty);
+    await tester.enterText(formField(), '新的记忆');
+    await tester.pump();
+    await tester.tap(saveButton());
+    await pumpUntil(tester, () => find.textContaining('无法确认').evaluate().isNotEmpty);
+
+    // One attempt, no resend, and the outcome is not a refusal.
+    expect(api.writes, 1);
+    expect(find.textContaining('无法确认'), findsOneWidget);
+    expect(find.textContaining('没有接受'), findsNothing);
+    // The message of the service is not on the screen.
+    expect(find.textContaining('不可回显的内容'), findsNothing);
+    // The draft stays and the writes wait for a read.
+    expect(find.text('新的记忆'), findsOneWidget);
+    expect(tester.widget<IconButton>(find.byType(IconButton)).onPressed, isNull);
+
+    // A read that works opens them again but repeats nothing.
+    api.writeFailures.remove('bot_a');
+    await tester.tap(retryButton());
+    await pumpUntil(tester, () => addEnabled(tester));
+    expect(api.writes, 1);
+    expect(addEnabled(tester), isTrue);
+  });
+
+  testWidgets('a refusal the service names is shown as a refusal', (tester) async {
+    final api = _Api();
+    api.answers['bot_a'] = {'scope': 'bot_a', 'entries': []};
+    api.writeFailures['bot_a'] = MiniMaxBotException(400, 'memory_invalid', '不可回显的内容');
+    addTearDown(api.close);
+    await tester.pumpWidget(memory(api));
+    await pumpUntil(tester, () => find.text('还没有记忆').evaluate().isNotEmpty);
+
+    await tester.tap(addEntry());
+    await pumpUntil(tester, () => formField().evaluate().isNotEmpty);
+    await tester.enterText(formField(), '新的记忆');
+    await tester.pump();
+    await tester.tap(saveButton());
+    await pumpUntil(tester, () => find.textContaining('没有接受').evaluate().isNotEmpty);
+
+    expect(api.writes, 1);
+    expect(find.textContaining('没有接受'), findsOneWidget);
+    expect(find.textContaining('无法确认'), findsNothing);
+    expect(find.textContaining('不可回显的内容'), findsNothing);
+    expect(find.text('新的记忆'), findsOneWidget);
+    expect(tester.widget<IconButton>(find.byType(IconButton)).onPressed, isNull);
+  });
 }

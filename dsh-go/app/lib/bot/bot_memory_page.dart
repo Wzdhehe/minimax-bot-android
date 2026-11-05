@@ -38,6 +38,16 @@ enum _ChangeFailure {
   unknown,
 }
 
+/// The service's own codes that mean it refused the change before it
+/// wrote anything. Every other code stays unknown: a service that fails
+/// after it accepted a change may say so with a code this client has
+/// never heard of, and that is not a refusal.
+const _refusedCodes = <String>{
+  'memory_invalid',
+  'memory_full',
+  'memory_too_long',
+};
+
 /// The memory of one Bot.
 ///
 /// The page owns nothing of the service: the caller keeps the API and this
@@ -74,6 +84,14 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
   MiniMaxBotApi? _api;
   /// The newest read. An older one may not write a result.
   int _read = 0;
+  /// A read of the current context succeeded, so its entries may be written
+  /// to. A context that has not been read yet has nothing to write.
+  bool _ready = false;
+
+  /// The context a flow belongs to. Another Bot or another service starts a
+  /// new one, and every flow of the old one is stale: it may not write, read
+  /// or clear the state of the new one.
+  int _generation = 0;
 
   /// One change at a time: the dialog, its close transition, the request and
   /// the read that follows it.
@@ -102,19 +120,27 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.api != widget.api || oldWidget.botId != widget.botId) {
       // Another Bot or another service: its write entries are their own.
+      // Every flow of the old context is stale from here on, so it may not
+      // write, may not read again and may not clear the state of this one.
       setState(() {
+        _generation++;
+        _changing = false;
         _blocked = false;
         _failure = null;
         _draft = null;
         _refreshNeeded = false;
+        _ready = false;
       });
       _load();
     }
   }
 
   /// Reads the current Bot's memory. A read that is already running for this
-  /// Bot and service is not repeated.
+  /// Bot and service is not repeated, and a read never competes with a
+  /// change that is on its way.
   Future<void> _load() async {
+    // A change reads after itself; a read on its own would race it.
+    if (_changing) return;
     final api = widget.api;
     final scope = widget.botId;
     if (_loading && _scope == scope && _api == api) return;
@@ -132,6 +158,7 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
         setState(() {
           _failed = true;
           _loading = false;
+          _ready = false;
         });
         return;
       }
@@ -139,15 +166,21 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
         _entries = entries;
         _failed = false;
         _loading = false;
+        _ready = true;
         // A read that worked closes the write entries again.
         _blocked = false;
         _refreshNeeded = false;
+        // The prompt of an old failure is stale now; its draft stays so the
+        // user can still copy it.
+        _failure = null;
       });
     } catch (_) {
       if (!mounted || read != _read) return;
       setState(() {
         _failed = true;
         _loading = false;
+        // Nothing was read, so nothing may be written.
+        _ready = false;
       });
     }
   }
@@ -174,16 +207,28 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
     return rows;
   }
 
+  /// Whether the current context may be written to at all: it was read
+  /// successfully, nothing is being read or changed right now, and the
+  /// service did not leave the result of an earlier change unverified.
+  bool get _contextWritable =>
+      !_blocked &&
+      !_refreshNeeded &&
+      !_loading &&
+      !_failed &&
+      _ready &&
+      _scope == widget.botId &&
+      _api == widget.api;
+
   /// Whether a write may be started for the current Bot.
-  bool get _writesAllowed =>
-      !_changing && !_blocked && _scope == widget.botId && _api == widget.api;
+  bool get _writesAllowed => _contextWritable && !_changing;
 
   /// Opens the form for a new or an existing entry. The same form does both:
   /// the text is prefilled for an existing entry.
   Future<void> _openForm({_MemoryEntry? entry}) async {
-    if (_changing) return;
+    if (!_writesAllowed) return;
     final api = widget.api;
     final scope = widget.botId;
+    final generation = _generation;
     final page = ModalRoute.of(context);
     setState(() => _changing = true);
     final text = TextEditingController(text: entry?.text ?? '');
@@ -225,8 +270,14 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
       if (!mounted) return;
       if (page == null || !page.isActive) return;
       if (widget.api != api || widget.botId != scope) return;
+      // The context moved on while the form was open: the form belongs to a
+      // generation that no longer exists, even if the Bot is the same again.
+      if (generation != _generation) return;
+      // The context may not be written to any more, for instance because a
+      // read failed while the form was open.
+      if (!_contextWritable) return;
       final body = text.text.trim();
-      await _runChange(api, scope, () {
+      await _runChange(api, scope, generation, () {
         if (entry == null) {
           return api.remember(scope, {'text': body});
         }
@@ -238,16 +289,19 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
       }, draft: body);
     } finally {
       text.dispose();
-      if (mounted) setState(() => _changing = false);
+      // Only the flow that owns the busy flag may clear it. A flow of an
+      // older context may not unlock a change of the current one.
+      if (mounted && generation == _generation) setState(() => _changing = false);
     }
   }
 
   /// Asks before removing an entry. The service's forget call takes no
   /// revision, so the confirmation says what it does and no more.
   Future<void> _confirmDelete(_MemoryEntry entry) async {
-    if (_changing) return;
+    if (!_writesAllowed) return;
     final api = widget.api;
     final scope = widget.botId;
+    final generation = _generation;
     final id = entry.id;
     final page = ModalRoute.of(context);
     if (id == null) return;
@@ -270,9 +324,11 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
       if (!mounted) return;
       if (page == null || !page.isActive) return;
       if (widget.api != api || widget.botId != scope) return;
-      await _runChange(api, scope, () => api.forget(scope, id));
+      if (generation != _generation) return;
+      if (!_contextWritable) return;
+      await _runChange(api, scope, generation, () => api.forget(scope, id));
     } finally {
-      if (mounted) setState(() => _changing = false);
+      if (mounted && generation == _generation) setState(() => _changing = false);
     }
   }
 
@@ -283,48 +339,65 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
   Future<void> _runChange(
     MiniMaxBotApi api,
     String scope,
+    int generation,
     Future<Map<String, Object?>> Function() write, {
     String? draft,
   }) async {
     final change = ++_change;
     try {
       await write();
-      if (!mounted || change != _change) return;
-      await _readAfter(api, scope, change);
+      if (!_isCurrent(change, generation)) return;
+      await _readAfter(api, scope, change, generation);
     } on MiniMaxBotException catch (error) {
-      if (!mounted || change != _change) return;
+      if (!_isCurrent(change, generation)) return;
       _onFailure(_kindOf(error), draft);
     } catch (_) {
-      if (!mounted || change != _change) return;
+      if (!_isCurrent(change, generation)) return;
       // A timeout, a dropped connection or a broken answer may already have
       // written. The outcome is unknown, never "it did not write".
       _onFailure(_ChangeFailure.unknown, draft);
     }
   }
 
+  /// Whether the result of a change still belongs to this page.
+  bool _isCurrent(int change, int generation) =>
+      mounted && change == _change && generation == _generation;
+
   /// Reads the entries again after a change the service accepted.
-  Future<void> _readAfter(MiniMaxBotApi api, String scope, int change) async {
+  Future<void> _readAfter(
+    MiniMaxBotApi api,
+    String scope,
+    int change,
+    int generation,
+  ) async {
     try {
       final payload = await api.memory(scope);
-      if (!mounted || change != _change) return;
+      if (!_isCurrent(change, generation)) return;
       final entries = _entriesOf(payload, scope);
       if (entries == null) {
-        setState(() => _refreshNeeded = true);
+        setState(() {
+          _refreshNeeded = true;
+          _blocked = true;
+        });
         return;
       }
       setState(() {
         _entries = entries;
         _failed = false;
         _loading = false;
+        _ready = true;
         _blocked = false;
         _refreshNeeded = false;
         _failure = null;
         _draft = null;
       });
     } catch (_) {
-      if (!mounted || change != _change) return;
+      if (!_isCurrent(change, generation)) return;
       // The change may be stored; the list cannot show what is stored.
-      setState(() => _refreshNeeded = true);
+      setState(() {
+        _refreshNeeded = true;
+        _blocked = true;
+      });
     }
   }
 
@@ -339,10 +412,20 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
 
   /// How a failure is read. The service's code decides; its message never
   /// does, because a message is written for a person.
+  ///
+  /// Only the codes that mean a refusal before anything was written read as
+  /// a refusal. `memory_pending` is a durable transaction that failed after
+  /// the service took it, and any code this client does not know may come
+  /// from a service that accepted the change: both are unknown.
   static _ChangeFailure _kindOf(MiniMaxBotException error) {
-    if (error.code == 'memory_conflict') return _ChangeFailure.conflict;
-    if (error.status >= 500) return _ChangeFailure.unknown;
-    return _ChangeFailure.rejected;
+    final code = error.code;
+    if (code == 'memory_conflict') return _ChangeFailure.conflict;
+    if (code.isNotEmpty) {
+      return _refusedCodes.contains(code) ? _ChangeFailure.rejected : _ChangeFailure.unknown;
+    }
+    // No code to go by: anything but a plain success is unknown, and a
+    // success that raised is not something this page can explain.
+    return _ChangeFailure.unknown;
   }
 
   @override
@@ -381,7 +464,7 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
           Text(context.l10n.botsMemoryReadFailed),
           const SizedBox(height: 8),
           TextButton(
-            onPressed: _loading ? null : _load,
+            onPressed: _loading || _changing ? null : _load,
             child: Text(context.l10n.botsTapRetry),
           ),
         ],
@@ -394,7 +477,10 @@ class _BotMemoryPageState extends State<BotMemoryPage> {
           if (_refreshNeeded) Text(context.l10n.mbotMemoryRefreshFailed),
           if (_failure != null) Text(_failureText(context)),
           const SizedBox(height: 8),
-          TextButton(onPressed: _loading ? null : _load, child: Text(context.l10n.botsTapRetry)),
+          TextButton(
+            onPressed: _loading || _changing ? null : _load,
+            child: Text(context.l10n.botsTapRetry),
+          ),
           const SizedBox(height: 8),
         ],
         if (_draft != null) ...[
