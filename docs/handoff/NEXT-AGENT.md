@@ -7,6 +7,10 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+最新阶段见[T-BotSocketConnection](T-BotSocketConnection.md)：生产Android socketpair适配器已加入，已有验收工程通过Main字节桥请求隔离Bot，grant等待核对既有Messenger的目标UID和接受回执，不再直接从Main手写socketpair请求。正式服务端口及Host取descriptor，返回旧FD读到的端口由Main核对代次。owner-only、双向/半关闭、流事件和关闭、失败回收测试已写，设备尚未执行；宿主精确脚本6/6、Python39/39通过。**目前只有验收代码组装，没有生产launcher、Binder死亡/等待授予撤销或Flutter Endpoint发布；Main桥实际设备行为仍未验证。**
+
+Flash第三卡3c1f50d已快进纳入；BotProfile编辑表单校验、独立编辑流程标记、生命周期守卫已源码复核。Flash报告本机analyze通过，新widget7项、既有profile2项、home/stream11项通过；云端无Flutter未复跑，真实服务/设备未验证。允许写入范围符合[T-Flash-ProfileEdit](T-Flash-ProfileEdit.md)。当前新卡为[Bot只读记忆页](T-Flash-BotMemoryRead.md)（3af233a）：仅既有memory读取API与界面，不含写入/公共API/底层。下文旧Flash待办已完成，不自行再开工。
+
 Codex当前完成Main loopback字节桥候选，详见[T-BotLoopbackBridge](T-BotLoopbackBridge.md)：只在可信activate后授予连接，默认4条/上限16，跨代共享32个worker无排队，双向16KiB背压及及时flush，EOF半关闭保留反向响应，关闭停止已有与迟到连接。它尚无Android PFD connector和实际UID授予确认，未接Flutter或自动publish Endpoint，不能当作正式launcher已完成。既有真实Bot authorizer仍必须验证token/Host/Origin，桥本身不解析HTTP。
 
 Flash第二卡5afbd76/0fc0315/16f6ba3及修复82343ad已快进纳入。Codex完成源码审查但未在云端复跑Flutter（当前无flutter命令）；72d06b7指出的_create在await route.completed后缺mounted检查已恢复，并增加「确认后退出过渡中页面被移除」回归用例。Flash本机自报analyze通过、相关widget共11项通过，且去掉守卫时新测试失败；不视为云端复验或设备证据。全量golden与产品设备仍未验证。该卡已交付，Flash下一卡须另行明确范围，勿自行扩展公共API/桥/Endpoint。

@@ -189,7 +189,7 @@ for (const useIntl of [true, false]) test(`the packaged ${useIntl ? 'real Bot' :
     const botIngressModuleUrl = ${JSON.stringify(ingressUrl)};
     const botServiceModuleUrl = ${serviceLine[1]};
     const botPersistenceModuleUrl = ${persistenceLine[1]};
-    const guestDescriptor = { token: 'a'.repeat(64) };
+    const guestDescriptor = { port: 49231, token: 'a'.repeat(64) };
     const fs = require('node:fs');
     const result = '5';
     let next = 3;
@@ -253,7 +253,7 @@ for (const useIntl of [true, false]) test(`the packaged ${useIntl ? 'real Bot' :
       child.stdio[5].write('A');
       const path = useIntl ? '/api/state' : '/fd-probe';
       const authorization = useIntl && index === 1 ? `Authorization: Bearer ${'a'.repeat(64)}\r\n` : '';
-      owner.write(`GET ${path} HTTP/1.1\r\nHost: 127.0.0.1:43117\r\n${authorization}Connection: close\r\n\r\n`);
+      owner.write(`GET ${path} HTTP/1.1\r\nHost: 127.0.0.1:49231\r\n${authorization}Connection: close\r\n\r\n`);
       await closed;
     }
     const [code] = await exited;

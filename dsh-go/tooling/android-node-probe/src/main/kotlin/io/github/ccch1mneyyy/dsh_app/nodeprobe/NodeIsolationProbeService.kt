@@ -21,6 +21,7 @@ import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDeletionResult
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimePublicationResult
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataCode
+import io.github.ccch1mneyyy.dsh_app.runtime.BotSocketConnection
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -141,10 +142,14 @@ class NodeIsolationProbeService : Service() {
                     val publicationDenied = try { RuntimeAtomicPublisher.open(this, listOf("forbidden")).close(); false }
                         catch (error: RuntimeDataFailure) { error.code == RuntimeDataCode.OWNER_ONLY }
                         catch (_: Exception) { false }
+                    val botConnectionDenied = try { BotSocketConnection.open(this) { }.close(); false }
+                        catch (error: IllegalStateException) { error.message == "bot_connection_owner_only" }
+                        catch (_: Exception) { false }
                     response.data = Bundle().apply {
                         putString("code", "ready")
                         putBoolean("database_owner_denied", denied)
                         putBoolean("publication_owner_denied", publicationDenied)
+                        putBoolean("bot_connection_owner_denied", botConnectionDenied)
                     }
                     try { message.replyTo?.send(response) } catch (_: Exception) { }
                 }

@@ -29,6 +29,8 @@ import io.github.ccch1mneyyy.dsh_app.model.ProviderCall
 import io.github.ccch1mneyyy.dsh_app.model.ProviderResponse
 import io.github.ccch1mneyyy.dsh_app.model.ProviderTransport
 import io.github.ccch1mneyyy.dsh_app.runtime.RuntimeDescriptor
+import io.github.ccch1mneyyy.dsh_app.runtime.BotLoopbackBridge
+import io.github.ccch1mneyyy.dsh_app.runtime.BotSocketConnection
 import io.github.ccch1mneyyy.dsh_app.runtime.RuntimeDescriptorSession
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -197,9 +199,13 @@ class IsolatedNodeModelTest {
                         val modelFds = listOf(modelFd("normal"), modelFd("stalled"), modelFd("echo"))
                         val resultPair = ParcelFileDescriptor.createSocketPair()
                         var descriptorFd: ParcelFileDescriptor? = null
+                        val grant = java.util.concurrent.atomic.AtomicReference<((ParcelFileDescriptor) -> Unit)?>()
+                        val bridge = BotLoopbackBridge.bind {
+                            BotSocketConnection.open(base) { fd -> checkNotNull(grant.get())(fd) }
+                        }
                         try {
                             val descriptorSession = RuntimeDescriptorSession(
-                                "/runtime/probe.mjs", "97818b2890b4acae1c6bd1200a226ff506680628", 43117,
+                                "/runtime/probe.mjs", "97818b2890b4acae1c6bd1200a226ff506680628", bridge.port,
                                 RuntimeDescriptorSession.randomToken(), catalogJson = store.guestCatalogJson())
                             val descriptorDirectory = File(dataDirectory, "descriptor")
                             descriptorFd = RuntimeDescriptor.writeForTransfer(descriptorDirectory, descriptorSession)
@@ -210,7 +216,7 @@ class IsolatedNodeModelTest {
                             // The granted FD must retain its generation even if
                             // the Main owner atomically publishes a new one.
                             val newerDescriptor = RuntimeDescriptorSession(
-                                descriptorSession.entryPath, descriptorSession.pinCommit, 43119,
+                                descriptorSession.entryPath, descriptorSession.pinCommit, bridge.port % 65535 + 1,
                                 RuntimeDescriptorSession.randomToken(), catalogJson = store.guestCatalogJson())
                             RuntimeDescriptor.write(descriptorDirectory, newerDescriptor)
                             Os.setsockoptTimeval(resultPair[0].fileDescriptor, OsConstants.SOL_SOCKET, OsConstants.SO_RCVTIMEO,
@@ -222,6 +228,13 @@ class IsolatedNodeModelTest {
                                 assertNotEquals(Process.myUid(), identity.uid)
                                 assertTrue(identity.data.getBoolean("database_owner_denied"))
                                 assertTrue(identity.data.getBoolean("publication_owner_denied"))
+                                assertTrue(identity.data.getBoolean("bot_connection_owner_denied"))
+                                grant.set { fd ->
+                                    val accepted = probe.offerBotConnection(fd).get(10, TimeUnit.SECONDS)
+                                    check(accepted.uid == identity.uid && accepted.data.getString("code") == "ok") {
+                                        "bot_grant_not_acknowledged"
+                                    }
+                                }
                                 NativeModelRequestHost(identity.uid, providerId!!, "normal", probe.peerBinder(), channels::open, channels::close).use { host ->
                                 RuntimeFileCommitHost.openBotState(context, "node-state", identity.uid, probe.peerBinder()).let { fileHost ->
                                 try {
@@ -266,31 +279,22 @@ class IsolatedNodeModelTest {
                                     foreignPair[1].close()
                                     assertEquals(0, Os.read(foreignPair[0].fileDescriptor, ByteArray(1), 0, 1))
                                 } finally { foreignPair.forEach { try { it.close() } catch (_: Exception) { } } }
+                                bridge.activate()
                                 repeat(2) { index ->
-                                    // Create and grant each socket only after Node has started;
-                                    // the second grant follows the first complete HTTP response.
-                                    val pair = ParcelFileDescriptor.createSocketPair()
-                                    try {
-                                        Os.setsockoptTimeval(pair[0].fileDescriptor, OsConstants.SOL_SOCKET, OsConstants.SO_RCVTIMEO,
-                                            StructTimeval.fromMillis(20_000))
-                                        val accepted = probe.offerBotConnection(pair[1]).get(10, TimeUnit.SECONDS)
-                                        assertEquals(identity.uid, accepted.uid)
-                                        assertEquals("ok", accepted.data.getString("code"))
-                                        pair[1].close()
+                                    // TCP is owned by Main. Its connector creates/grants
+                                    // each Unix socket only after the isolated ready byte.
+                                    java.net.Socket(java.net.InetAddress.getByName("127.0.0.1"), bridge.port).use { client ->
+                                        client.soTimeout = 20_000
                                         val authorization = if (genuineBot && index == 1) "Authorization: Bearer ${descriptorSession.token}\r\n" else ""
                                         val path = if (genuineBot) "/api/state" else "/fd-probe"
-                                        val request = "GET $path HTTP/1.1\r\nHost: 127.0.0.1:43117\r\n${authorization}Connection: close\r\n\r\n".toByteArray(Charsets.US_ASCII)
-                                        var written = 0
-                                        while (written < request.size) {
-                                            val count = Os.write(pair[0].fileDescriptor, request, written, request.size - written)
-                                            check(count > 0) { "bot_fd_request_failed" }
-                                            written += count
-                                        }
+                                        val request = "GET $path HTTP/1.1\r\nHost: 127.0.0.1:${bridge.port}\r\n${authorization}Connection: close\r\n\r\n".toByteArray(Charsets.US_ASCII)
+                                        client.getOutputStream().write(request)
+                                        client.getOutputStream().flush()
                                         val botBytes = ByteArrayOutputStream()
                                         val botChunk = ByteArray(1024)
                                         while (true) {
-                                            val count = Os.read(pair[0].fileDescriptor, botChunk, 0, botChunk.size)
-                                            if (count <= 0) break
+                                            val count = client.getInputStream().read(botChunk)
+                                            if (count < 0) break
                                             check(botBytes.size() + count <= 4096) { "bot_fd_response_too_large" }
                                             botBytes.write(botChunk, 0, count)
                                         }
@@ -299,8 +303,10 @@ class IsolatedNodeModelTest {
                                         assertTrue(if (genuineBot) index == 0 || botResponse.contains("\"bots\"") else botResponse.contains("fd-ok"))
                                         assertFalse(botResponse.contains(descriptorSession.token))
                                         assertFalse(botResponse.contains(secret))
-                                    } finally { pair.forEach { try { it.close() } catch (_: Exception) { } } }
+                                    }
                                 }
+                                bridge.close()
+                                grant.set(null)
                                 val reply = completion.get(50, TimeUnit.SECONDS)
                                 assertNotEquals(Process.myUid(), reply.uid)
                                 val text = readBoundedReport(resultPair[0])
@@ -365,7 +371,9 @@ class IsolatedNodeModelTest {
                                 assertEquals(reply.uid, report.getInt("uid"))
                                 assertTrue(report.getBoolean("privateDenied"))
                                 val descriptorReport = report.getJSONObject("descriptorTransfer")
-                                for (name in listOf("pin", "provider", "generation", "brokerAbsent", "closed")) assertTrue(descriptorReport.getBoolean(name))
+                                for (name in listOf("pin", "provider", "brokerAbsent", "closed")) assertTrue(descriptorReport.getBoolean(name))
+                                assertEquals(descriptorSession.port, descriptorReport.getInt("port"))
+                                assertNotEquals(newerDescriptor.port, descriptorReport.getInt("port"))
                                 val botTransportReport = report.getJSONObject("botFdTransport")
                                 assertEquals(genuineBot, botTransportReport.getBoolean("realBot"))
                                 if (expected.getBoolean("requiresIntl")) assertTrue(genuineBot)
@@ -453,6 +461,8 @@ class IsolatedNodeModelTest {
                                 }
                             }
                         } finally {
+                            bridge.close()
+                            grant.set(null)
                             try { descriptorFd?.close() } catch (_: Exception) { }
                             modelFds.forEach { try { it.close() } catch (_: Exception) { } }
                             resultPair.forEach { try { it.close() } catch (_: Exception) { } }

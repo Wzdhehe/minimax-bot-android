@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Main侧Bot loopback字节桥候选
 
-状态：实现与验证记录见下文。它是Main侧通信组件，尚未接入正式launcher或Android FD授予流程；新增代码不会自动启动监听或发布Endpoint。
+状态：下文记录桥本体阶段的实现与验证。后续已有[Android socketpair适配与验收组合](T-BotSocketConnection.md)，仅编译/宿主验证，设备未执行；仍未接入正式launcher，不会自动启动监听或发布Endpoint。下文「尚无适配器/下一步」是本阶段历史边界，不要据此重写后续已提交的候选。
 
 ## 固定合同
 

@@ -120,7 +120,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     report.descriptorTransfer = {
       pin: guestDescriptor.pinCommit === '97818b2890b4acae1c6bd1200a226ff506680628',
       provider: !!row && row.models.includes('normal') && row.apiFormat === 'openai-completions',
-      generation: guestDescriptor.port === 43117,
+      port: guestDescriptor.port,
       brokerAbsent: guestDescriptor.broker === null,
       closed: descriptorClosed,
     };
@@ -138,7 +138,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       candidate.prependListener('request', (request, response) => {
         const index = started++;
         const path = realBot ? '/api/state' : '/fd-probe';
-        const valid = request.method === 'GET' && request.url === path && request.headers.host === '127.0.0.1:43117';
+        const valid = request.method === 'GET' && request.url === path && request.headers.host === `127.0.0.1:${guestDescriptor.port}`;
         const auth = !realBot || (index === 0 ? request.headers.authorization === undefined : request.headers.authorization === `Bearer ${guestDescriptor.token}`);
         response.once('finish', () => {
           const expected = realBot && index === 0 ? 403 : 200;
@@ -154,12 +154,12 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
         const { createBotPersistence } = await import(botPersistenceModuleUrl);
         const dataDir = '/mbot-bot-store';
         const files = process._linkedBinding('mbot_files_bridge');
-        service = await startBotService({ port: 43117, dataDir, fileMode: 'unavailable', authToken: guestDescriptor.token,
+        service = await startBotService({ port: guestDescriptor.port, dataDir, fileMode: 'unavailable', authToken: guestDescriptor.token,
           ...createBotPersistence({ dataDir, files }), signal: new AbortController().signal,
           logger: { info() {}, warn() {}, error() {} }, fdTransport: { listenServer, close: () => botTransport.close() } });
       } else {
         await listenServer(require('node:http').createServer((request, response) => {
-          const valid = request.method === 'GET' && request.url === '/fd-probe' && request.headers.host === '127.0.0.1:43117';
+          const valid = request.method === 'GET' && request.url === '/fd-probe' && request.headers.host === `127.0.0.1:${guestDescriptor.port}`;
           response.writeHead(valid ? 200 : 400, { 'content-type': 'text/plain', connection: 'close' });
           response.end(valid ? 'fd-ok' : 'fd-invalid');
         }));
