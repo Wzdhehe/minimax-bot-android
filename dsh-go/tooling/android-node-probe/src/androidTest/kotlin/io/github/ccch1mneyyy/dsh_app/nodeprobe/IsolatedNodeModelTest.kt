@@ -47,6 +47,46 @@ import org.junit.runner.RunWith
 /** Actual Android Node/FD evidence, not a real provider or full mcode test. */
 @RunWith(AndroidJUnit4::class)
 class IsolatedNodeModelTest {
+    private fun offerFromForeignUid(context: Context, target: IBinder, fd: ParcelFileDescriptor): Reply {
+        val connected = CompletableFuture<IBinder>()
+        val response = CompletableFuture<Reply>()
+        val thread = HandlerThread("mbot-foreign-offer-client").apply { start() }
+        val receiver = Messenger(Handler(thread.looper, Handler.Callback { message ->
+            if (message.what == 8) response.complete(Reply(message.sendingUid, message.data))
+            true
+        }))
+        val connection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName, service: IBinder) { connected.complete(service) }
+            override fun onServiceDisconnected(name: ComponentName) { response.completeExceptionally(IllegalStateException("foreign_probe_disconnected")) }
+            override fun onNullBinding(name: ComponentName) { connected.completeExceptionally(IllegalStateException("foreign_probe_unavailable")) }
+            override fun onBindingDied(name: ComponentName) { response.completeExceptionally(IllegalStateException("foreign_probe_disconnected")) }
+        }
+        if (!context.bindService(Intent(context, ForeignOfferProbeService::class.java), connection, Context.BIND_AUTO_CREATE)) {
+            thread.quitSafely()
+            throw IllegalStateException("foreign_probe_unavailable")
+        }
+        var peer: IBinder? = null
+        try {
+            peer = connected.get(10, TimeUnit.SECONDS)
+            Messenger(peer).send(Message.obtain(null, 1).apply {
+                data = Bundle().apply { putBinder("peer", target); putParcelable("connection", fd) }
+                replyTo = receiver
+            })
+            return response.get(10, TimeUnit.SECONDS)
+        } finally {
+            val stopped = CountDownLatch(1)
+            val death = IBinder.DeathRecipient { stopped.countDown() }
+            if (peer != null) try { peer.linkToDeath(death, 0) } catch (_: Exception) { stopped.countDown() }
+            try {
+                context.unbindService(connection)
+                if (peer != null) check(stopped.await(10, TimeUnit.SECONDS)) { "foreign_process_exit_unverified" }
+            } finally {
+                if (peer != null) try { peer.unlinkToDeath(death, 0) } catch (_: Exception) { }
+                thread.quitSafely()
+            }
+        }
+    }
+
     private fun readBoundedReport(fd: ParcelFileDescriptor, first: Byte? = null): String {
         val bytes = ByteArrayOutputStream()
         if (first != null) bytes.write(first.toInt())
@@ -204,6 +244,20 @@ class IsolatedNodeModelTest {
                                     val report = try { JSONObject(diagnostic) } catch (_: Exception) { JSONObject() }
                                     throw probeFailure(report)
                                 }
+                                // A different isolated UID tries a syntactically valid offer
+                                // while Node is actively waiting. Its FD must be closed,
+                                // not consumed as either of the two authorized grants.
+                                val foreignPair = ParcelFileDescriptor.createSocketPair()
+                                try {
+                                    Os.setsockoptTimeval(foreignPair[0].fileDescriptor, OsConstants.SOL_SOCKET, OsConstants.SO_RCVTIMEO,
+                                        StructTimeval.fromMillis(8000))
+                                    val foreign = offerFromForeignUid(base, probe.peerBinder(), foreignPair[1])
+                                    assertNotEquals(Process.myUid(), foreign.uid)
+                                    assertNotEquals(identity.uid, foreign.uid)
+                                    assertEquals("sent", foreign.data.getString("code"))
+                                    foreignPair[1].close()
+                                    assertEquals(0, Os.read(foreignPair[0].fileDescriptor, ByteArray(1), 0, 1))
+                                } finally { foreignPair.forEach { try { it.close() } catch (_: Exception) { } } }
                                 val request = "GET /fd-probe HTTP/1.1\r\nHost: 127.0.0.1:43117\r\nConnection: close\r\n\r\n".toByteArray(Charsets.US_ASCII)
                                 repeat(2) {
                                     // Create and grant each socket only after Node has started;

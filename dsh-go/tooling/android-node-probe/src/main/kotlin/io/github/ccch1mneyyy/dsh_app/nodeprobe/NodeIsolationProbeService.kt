@@ -30,7 +30,7 @@ internal object NodeProbeRuntime {
     private val botConnections = GrantedConnectionQueue<ParcelFileDescriptor>()
     fun offerBotConnection(fd: ParcelFileDescriptor) = botConnections.offer(fd)
     fun takeBotConnection(): Int {
-        val fd = botConnections.take(15_000) ?: return -1
+        val fd = botConnections.take(30_000) ?: return -1
         return try { fd.detachFd() } catch (_: Exception) { try { fd.close() } catch (_: Exception) { }; -1 }
     }
     fun closeBotConnections() = botConnections.close()

@@ -3,9 +3,9 @@
 
 ## 运行中动态Bot socket交接候选（仅构建，设备未验证）
 
-验收工程`NodeIsolationProbeService`加入owner UID限定的socket消息与有界队列；`mbot_bot_ingress.next()`经JNI/libuv worker异步取PFD，Node用生产transport接收，保持HTTP服务器未listen。Main等Node ready后顺序交两条连接，第二条在第一条响应后创建；新增启动前拒绝并关闭的仪器测试。固定脚本仍用简单HTTP夹具，消息不能携带代码/命令。队列默认8、等待15秒，close只清未取FD；这不是生产服务的持续轮询/生命周期实现。
+验收工程`NodeIsolationProbeService`加入owner UID限定的socket消息与有界队列；`mbot_bot_ingress.next()`经JNI/libuv worker异步取PFD，Node用生产transport接收，保持HTTP服务器未listen。Main等Node ready后顺序交两条连接，第二条在第一条响应后创建；新增启动前拒绝并关闭的仪器测试，并编写另一isolated UID在Node等待中伪造合法格式消息应被拒绝/关闭的测试。固定脚本仍用简单HTTP夹具，消息不能携带代码/命令。队列默认8、等待30秒，close只清未取FD；这不是生产服务的持续轮询/生命周期实现。
 
-本地真实NDK r27d/API26/x86_64编译JNI成功；采用release pin的libnode，头文件逐个校验后构建验收APK/仪器APK `BUILD SUCCESSFUL in 1m 34s`，补诊断后再次构建 `BUILD SUCCESSFUL in 49s`，javap核对JNI两处签名。该release `requiresIntl=false`/`requiresSqlite=false`；精确脚本host 3/3、Python33/33、transport host 2/2通过。**本轮没有Android模拟器或真机执行。** GitHub Actions因账户支付/支出限额在job启动前被拦，详见[NEXT-AGENT](NEXT-AGENT.md)中的run号和原始annotation；先恢复Actions再对当前提交实跑，不能沿用下节旧版成功结果。
+本地真实NDK r27d/API26/x86_64编译JNI成功；采用release pin的libnode，头文件逐个校验后构建验收APK/仪器APK `BUILD SUCCESSFUL in 1m 34s`，补诊断后再次构建 `BUILD SUCCESSFUL in 49s`，外来UID负例后再次 `BUILD SUCCESSFUL in 1m 26s`，javap核对JNI两处签名。该release `requiresIntl=false`/`requiresSqlite=false`；精确脚本host 3/3、Python33/33、transport host 2/2通过。**本轮没有Android模拟器或真机执行。** GitHub Actions因账户支付/支出限额在job启动前被拦，详见[NEXT-AGENT](NEXT-AGENT.md)中的run号和原始annotation；先恢复Actions再对当前提交实跑，不能沿用下节旧版成功结果。
 
 
 ## Bot双向socket FD跨UID验收（API26/35模拟器通过）

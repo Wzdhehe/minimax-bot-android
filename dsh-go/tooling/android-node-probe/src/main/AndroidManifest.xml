@@ -6,5 +6,7 @@
         android:networkSecurityConfig="@xml/network_security_config">
         <service android:name="io.github.ccch1mneyyy.dsh_app.nodeprobe.NodeIsolationProbeService"
             android:exported="false" android:isolatedProcess="true" />
+        <service android:name="io.github.ccch1mneyyy.dsh_app.nodeprobe.ForeignOfferProbeService"
+            android:exported="false" android:isolatedProcess="true" android:process=":foreign_offer_probe" />
     </application>
 </manifest>
