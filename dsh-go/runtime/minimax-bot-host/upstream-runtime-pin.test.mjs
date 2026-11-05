@@ -197,6 +197,14 @@ test('an upstream file outside the fingerprint list is accepted when the pinned 
   assert.equal(pinnedTreeFileError({ source, tree, path: 'packages/extra/runtime.ts' }), null);
 });
 
+test('an upstream file addressed with the host separator still matches the pinned tree', (t) => {
+  const source = makeGitFixture(t, { 'packages/extra/runtime.ts': 'export const extra = 1;\n' });
+  const tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: source, encoding: 'utf8' }).trim();
+  // A host that separates path segments with a backslash must still address
+  // the same file: a git tree path is always slash separated.
+  assert.equal(pinnedTreeFileError({ source, tree, path: 'packages\\extra\\runtime.ts' }), null);
+});
+
 test('an upstream file that the pinned tree does not hold is refused', (t) => {
   const source = makeGitFixture(t, { 'packages/extra/runtime.ts': 'export const extra = 1;\n' });
   const tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: source, encoding: 'utf8' }).trim();

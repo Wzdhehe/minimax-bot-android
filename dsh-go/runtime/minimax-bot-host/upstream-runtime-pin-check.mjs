@@ -163,15 +163,17 @@ export function pinnedTreeFileError({ source, tree, path }) {
   if (typeof tree !== 'string' || !/^[0-9a-f]{40,64}$/.test(tree)) {
     return 'the pinned tree is not a tree object';
   }
-  if (typeof path !== 'string' || !path || path.startsWith('/') || path.split('/').includes('..')) {
+  // A git tree path is always slash separated, whatever the host separator is.
+  const treePath = typeof path === 'string' ? path.split(/[\\/]/).join('/') : '';
+  if (!treePath || treePath.startsWith('/') || treePath.split('/').includes('..')) {
     return `the upstream file path is not a tree path: ${path}`;
   }
-  const blob = runGit(source, ['rev-parse', `${tree}:${path}`]);
-  if (!blob.ok) return `the upstream file is not in the pinned tree: ${path}`;
-  const actual = runGit(source, ['hash-object', join(source, path)]);
-  if (!actual.ok) return `cannot hash the upstream file: ${path}`;
+  const blob = runGit(source, ['rev-parse', `${tree}:${treePath}`]);
+  if (!blob.ok) return `the upstream file is not in the pinned tree: ${treePath}`;
+  const actual = runGit(source, ['hash-object', join(source, treePath)]);
+  if (!actual.ok) return `cannot hash the upstream file: ${treePath}`;
   if (actual.stdout.trim() !== blob.stdout.trim()) {
-    return `the upstream file does not match the pinned tree bytes: ${path}`;
+    return `the upstream file does not match the pinned tree bytes: ${treePath}`;
   }
   return null;
 }
@@ -326,7 +328,8 @@ export function checkUpstreamRuntimePin({
         for (const inputPath of Object.keys(metafile.inputs || {})) {
           const absolute = resolve(base, inputPath);
           if (source && (absolute === source || absolute.startsWith(source + sep))) {
-            upstreamInputs.add(relative(source, absolute));
+            // The upstream tree addresses files with slashes on every host.
+            upstreamInputs.add(relative(source, absolute).split(/[\\/]/).join('/'));
           }
         }
         const pinnedPaths = Object.keys(UPSTREAM_RUNTIME_BUNDLE_SHA256);
