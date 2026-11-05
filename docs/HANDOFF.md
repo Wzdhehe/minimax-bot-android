@@ -4,7 +4,9 @@
 
 用户已要求继续开发。当前只在**feat/t-plugins**，阶段成果及时推送；不另起分支、不动main/dev/integration、不force、不PR、不发布APK。
 
-最新分工：Codex负责runtime、独立UID/文件/Key边界、broker、Endpoint及生命周期接口和集成审查；本机M3.1 Flash承担接口冻结后的界面实现、文案、定向验证和文档整理。此前Endpoint代次任务收回归Codex，本机当前任务见[Flash任务卡](handoff/T-Flash-UIInventory.md)。
+最新分工：Codex负责runtime、独立UID/文件/Key边界、broker、Endpoint及生命周期接口和集成审查；本机M3.1 Flash承担接口冻结后的界面实现、文案、定向验证和文档整理。此前Endpoint代次任务收回归Codex，本机当前任务见[Flash创建表单任务卡](handoff/T-Flash-CreateForms.md)。
+
+Flash首卡已交付`ff363bc/5c44d43`，Codex实查脚本仅mode变化、链接检查通过；报告有请求字段/能力映射错误需纠正，建议列表不直接作为开发计划。下一卡为[现有创建表单完善](handoff/T-Flash-CreateForms.md)，Codex继续底层，双方写入范围不重叠。
 
 ## 当前已完成与未完成
 

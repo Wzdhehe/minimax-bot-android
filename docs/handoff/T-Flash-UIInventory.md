@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # M3.1 Flash当前任务：UI迁移接口清点与执行位修复
 
-状态：待本机执行。用户已确定由Codex负责地基，Flash承担范围明确的外围工作。Endpoint代次、runtime runner、launcher、隔离和broker不在本任务内。
+状态：已交付ff363bc/5c44d43。Codex实查脚本仅mode变化，文档链接检查通过；报告存在部分字段/能力结论错误，按[下一卡](T-Flash-CreateForms.md)纠正。用户已确定由Codex负责地基，Flash承担范围明确的外围工作。Endpoint代次、runtime runner、launcher、隔离和broker不在本任务内。
 
 ## 交付一：执行位修复
 

@@ -7,6 +7,8 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+Flash已完成首卡，ff363bc仅修build-runtime.sh执行位，5c44d43新增接口报告；已快进纳入主线，Codex实查mode/链接。报告把Map接口能承载的isMain/记忆编辑误列为能力缺失，且混淆群PATCH字段与记录字段；不能据其建议直接重写UI/API。Flash下一卡见[T-Flash-CreateForms](T-Flash-CreateForms.md)：先纠正报告，再只完善现有创建表单即时校验/单次提交及widget测试。Codex已推Endpoint代次修复0a37a95（JUnit56/Node56过），继续底层，双方目录不重叠。
+
 Codex已完成Endpoint运行代次保护，见[T-LocalEndpointLease](T-LocalEndpointLease.md)实际输出。`publish`返回只给可信native持有的Closeable句柄，按对象身份清理；无条件`clear()`已移除，未发现生产调用方。迟到关闭不能清新运行，即使两个发布的URL/token相同；descriptor仍仅baseUrl/token。定向JUnit10/10、完整native脚本JUnit56/Node56均通过，脚本已覆盖本用例。它不检测服务存活，也不撤销Dart已持有的快照；正式Main桥/launcher仍须按代次发布、关闭并失效实际服务。产品构建、Flutter和设备本轮未验证。Flash继续原外围任务，勿修改Endpoint。
 
 用户最新分工优先：Codex负责地基（runtime、隔离、broker、存储恢复、Endpoint代次和launcher/桥的接口），M3.1 Flash负责边界固定后的UI/文案/定向验证和文档。先前派出的T-LocalEndpointLease收回给Codex；Flash当前仅执行[T-Flash-UIInventory](T-Flash-UIInventory.md)。历史分工与此冲突时以本段为准。Codex审查Flash交付后才进入主线，不以其自报测试替代必要核验。
