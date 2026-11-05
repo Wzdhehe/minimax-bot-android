@@ -166,15 +166,18 @@ test('the packaged scoped-model block routes two turns over actual inherited FDs
   }
 });
 
-test('the packaged Bot transport block serves two granted duplex FDs without listening', { timeout: 12_000 }, async (t) => {
+for (const useIntl of [true, false]) test(`the packaged ${useIntl ? 'real Bot' : 'no-Intl fallback'} serves granted FDs without listening`, { timeout: 15_000 }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'mbot-node-bot-fd-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   execFileSync('python3', [join(root, 'prepare-probe.py'), '--bundle-only', '--bundle-output', directory]);
   const script = await readFile(join(directory, 'node-fd-probe.cjs'), 'utf8');
   const moduleLine = /^const botTransportModuleUrl = (.+);$/m.exec(script);
   const ingressLine = /^const botIngressModuleUrl = (.+);$/m.exec(script);
+  const serviceLine = /^const botServiceModuleUrl = (.+);$/m.exec(script);
+  const persistenceLine = /^const botPersistenceModuleUrl = (.+);$/m.exec(script);
   assert.ok(moduleLine);
   assert.ok(ingressLine);
+  assert.ok(serviceLine && persistenceLine);
   const moduleUrl = JSON.parse(moduleLine[1]);
   const ingressUrl = JSON.parse(ingressLine[1]);
   const start = script.indexOf("    probePhase = 'bot_http_fd';");
@@ -184,12 +187,27 @@ test('the packaged Bot transport block serves two granted duplex FDs without lis
   const childScript = `
     const botTransportModuleUrl = ${JSON.stringify(moduleUrl)};
     const botIngressModuleUrl = ${JSON.stringify(ingressUrl)};
+    const botServiceModuleUrl = ${serviceLine[1]};
+    const botPersistenceModuleUrl = ${persistenceLine[1]};
+    const guestDescriptor = { token: 'a'.repeat(64) };
     const fs = require('node:fs');
     const result = '5';
     let next = 3;
     let cancelled = false, cancelPending;
+    const values = new Map();
+    const missing = () => Object.assign(Error('runtime_data_not_found'), { code: 'runtime_data_not_found' });
+    const files = {
+      async read(name) { if (!values.has(name)) throw missing(); return Uint8Array.from(values.get(name)); },
+      async size(name) { if (!values.has(name)) throw missing(); return values.get(name).length; },
+      async replace(name, bytes) { values.set(name, Buffer.from(bytes)); return 'published'; },
+      async append(name, bytes) { values.set(name, Buffer.concat([values.get(name) ?? Buffer.alloc(0), Buffer.from(bytes)])); return 'published'; },
+      async publish(name, bytes) { if (values.has(name)) return 'already_exists'; values.set(name, Buffer.from(bytes)); return 'published'; },
+      async rename(from, to) { if (!values.has(from)) throw missing(); values.set(to, values.get(from)); values.delete(from); return 'published'; },
+      async remove(name) { if (!values.delete(name)) throw missing(); return 'removed'; },
+    };
     const control = new (require('node:net').Socket)({ fd: 5, readable: true, writable: true });
     process._linkedBinding = (name) => {
+      if (name === 'mbot_files_bridge') return files;
       if (name !== 'mbot_bot_ingress') throw Error('unexpected binding');
       return { cancel() { cancelled = true; cancelPending?.(); }, next: () => new Promise((resolve, reject) => {
         cancelPending = () => reject(Error('cancelled'));
@@ -222,27 +240,30 @@ test('the packaged Bot transport block serves two granted duplex FDs without lis
     });
     const exited = once(child, 'exit');
     const ready = once(child.stdio[5], 'data');
-    child.stdin.end(childScript);
+    child.stdin.end((useIntl ? '' : 'const Intl = undefined;\n') + childScript);
     let stdout = '', stderr = '';
     child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
     child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
     await once(child, 'spawn');
     peers.forEach((socket) => socket.destroy());
-    assert.equal((await ready)[0].toString(), 'R');
-    for (const owner of owners) {
+    assert.equal((await ready)[0].toString(), useIntl ? 'B' : 'R');
+    for (let index = 0; index < owners.length; index++) {
+      const owner = owners[index];
       const closed = once(owner, 'close');
       child.stdio[5].write('A');
-      owner.write('GET /fd-probe HTTP/1.1\r\nHost: 127.0.0.1:43117\r\nConnection: close\r\n\r\n');
+      const path = useIntl ? '/api/state' : '/fd-probe';
+      const authorization = useIntl && index === 1 ? `Authorization: Bearer ${'a'.repeat(64)}\r\n` : '';
+      owner.write(`GET ${path} HTTP/1.1\r\nHost: 127.0.0.1:43117\r\n${authorization}Connection: close\r\n\r\n`);
       await closed;
     }
     const [code] = await exited;
     assert.equal(code, 0, stderr);
     assert.equal(stderr, '');
-    assert.deepEqual(JSON.parse(stdout), { request: true, noListener: true, connections: 2, cancelledWait: true, cancelled: true });
-    for (const response of responses) {
-      assert.match(response, /^HTTP\/1\.1 200/);
-      assert.ok(response.includes('fd-ok'));
-    }
+    assert.deepEqual(JSON.parse(stdout), { request: true, noListener: true, connections: 2, realBot: useIntl, cancelledWait: true, cancelled: true });
+    assert.match(responses[0], useIntl ? /^HTTP\/1\.1 403/ : /^HTTP\/1\.1 200/);
+    assert.match(responses[1], /^HTTP\/1\.1 200/);
+    assert.ok(responses[1].includes(useIntl ? '"bots"' : 'fd-ok'));
+    assert.ok(responses.every((response) => !response.includes('a'.repeat(64))));
   } finally {
     clearTimeout(timeout); child?.kill(); owners.forEach((socket) => socket.destroy()); peers.forEach((socket) => socket.destroy());
     await new Promise((resolve) => server.close(resolve));
@@ -275,7 +296,8 @@ test('the exact packaged Bot Store block survives two host processes using a fak
   const storeLine = /^const botStoreModuleUrl = (.+);$/m.exec(script);
   const memoryLine = /^const botMemoryModuleUrl = (.+);$/m.exec(script);
   const adapterLine = /^const botPersistenceModuleUrl = (.+);$/m.exec(script);
-  assert.ok(storeLine && memoryLine && adapterLine);
+  const serviceLine = /^const botServiceModuleUrl = (.+);$/m.exec(script);
+  assert.ok(storeLine && memoryLine && adapterLine && serviceLine);
   const start = script.indexOf("    probePhase = 'bot_store';");
   const end = script.indexOf('\n  }\n  // Owner inspects', start);
   assert.ok(start >= 0 && end > start);
@@ -284,6 +306,7 @@ test('the exact packaged Bot Store block survives two host processes using a fak
     const botStoreModuleUrl = ${storeLine[1]};
     const botMemoryModuleUrl = ${memoryLine[1]};
     const botPersistenceModuleUrl = ${adapterLine[1]};
+    const botServiceModuleUrl = ${serviceLine[1]};
     const fsp = require('node:fs/promises');
     const path = require('node:path');
     const directory = ${JSON.stringify(directory)};
@@ -320,7 +343,21 @@ test('the exact packaged Bot Store block survives two host processes using a fak
     };
     let probePhase;
     const report = {};
-    (async () => { ${block}
+    (async () => {
+      // Like the APK, start and stop the real service before the later Store
+      // block. On process two its MemoryStore must recover pending first.
+      if (typeof Intl !== 'undefined') {
+        const { startBotService } = await import(botServiceModuleUrl);
+        const { createBotPersistence } = await import(botPersistenceModuleUrl);
+        const dataDir = '/mbot-bot-store';
+        const service = await startBotService({ port: 43117, dataDir, fileMode: 'unavailable', authToken: 'a'.repeat(64),
+          ...createBotPersistence({ dataDir, files }), signal: new AbortController().signal,
+          logger: { info() {}, warn() {}, error() {} }, fdTransport: {
+            async listenServer(server) { if (server.listening) throw Error('unexpected listener'); }, close() {},
+          } });
+        await service.dispose();
+      }
+      ${block}
       process.stdout.write(JSON.stringify(report.botStore));
     })().catch(() => { process.exitCode = 1; });
   `;

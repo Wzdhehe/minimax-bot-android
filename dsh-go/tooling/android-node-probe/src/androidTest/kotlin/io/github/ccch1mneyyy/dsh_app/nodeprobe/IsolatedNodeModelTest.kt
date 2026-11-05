@@ -246,7 +246,8 @@ class IsolatedNodeModelTest {
                                 resultPair[1].close()
                                 val ready = ByteArray(1)
                                 assertEquals(1, Os.read(resultPair[0].fileDescriptor, ready, 0, 1))
-                                if (ready[0] != 'R'.code.toByte()) {
+                                val genuineBot = ready[0] == 'B'.code.toByte()
+                                if (!genuineBot && ready[0] != 'R'.code.toByte()) {
                                     val diagnostic = readBoundedReport(resultPair[0], ready[0])
                                     val report = try { JSONObject(diagnostic) } catch (_: Exception) { JSONObject() }
                                     throw probeFailure(report)
@@ -265,8 +266,7 @@ class IsolatedNodeModelTest {
                                     foreignPair[1].close()
                                     assertEquals(0, Os.read(foreignPair[0].fileDescriptor, ByteArray(1), 0, 1))
                                 } finally { foreignPair.forEach { try { it.close() } catch (_: Exception) { } } }
-                                val request = "GET /fd-probe HTTP/1.1\r\nHost: 127.0.0.1:43117\r\nConnection: close\r\n\r\n".toByteArray(Charsets.US_ASCII)
-                                repeat(2) {
+                                repeat(2) { index ->
                                     // Create and grant each socket only after Node has started;
                                     // the second grant follows the first complete HTTP response.
                                     val pair = ParcelFileDescriptor.createSocketPair()
@@ -277,6 +277,9 @@ class IsolatedNodeModelTest {
                                         assertEquals(identity.uid, accepted.uid)
                                         assertEquals("ok", accepted.data.getString("code"))
                                         pair[1].close()
+                                        val authorization = if (genuineBot && index == 1) "Authorization: Bearer ${descriptorSession.token}\r\n" else ""
+                                        val path = if (genuineBot) "/api/state" else "/fd-probe"
+                                        val request = "GET $path HTTP/1.1\r\nHost: 127.0.0.1:43117\r\n${authorization}Connection: close\r\n\r\n".toByteArray(Charsets.US_ASCII)
                                         var written = 0
                                         while (written < request.size) {
                                             val count = Os.write(pair[0].fileDescriptor, request, written, request.size - written)
@@ -292,8 +295,9 @@ class IsolatedNodeModelTest {
                                             botBytes.write(botChunk, 0, count)
                                         }
                                         val botResponse = botBytes.toString("UTF-8")
-                                        assertTrue(botResponse.startsWith("HTTP/1.1 200"))
-                                        assertTrue(botResponse.contains("fd-ok"))
+                                        assertTrue(botResponse.startsWith(if (genuineBot && index == 0) "HTTP/1.1 403" else "HTTP/1.1 200"))
+                                        assertTrue(if (genuineBot) index == 0 || botResponse.contains("\"bots\"") else botResponse.contains("fd-ok"))
+                                        assertFalse(botResponse.contains(descriptorSession.token))
                                         assertFalse(botResponse.contains(secret))
                                     } finally { pair.forEach { try { it.close() } catch (_: Exception) { } } }
                                 }
@@ -363,6 +367,8 @@ class IsolatedNodeModelTest {
                                 val descriptorReport = report.getJSONObject("descriptorTransfer")
                                 for (name in listOf("pin", "provider", "generation", "brokerAbsent", "closed")) assertTrue(descriptorReport.getBoolean(name))
                                 val botTransportReport = report.getJSONObject("botFdTransport")
+                                assertEquals(genuineBot, botTransportReport.getBoolean("realBot"))
+                                if (expected.getBoolean("requiresIntl")) assertTrue(genuineBot)
                                 assertTrue(botTransportReport.getBoolean("request"))
                                 assertTrue(botTransportReport.getBoolean("noListener"))
                                 assertEquals(2, botTransportReport.getInt("connections"))

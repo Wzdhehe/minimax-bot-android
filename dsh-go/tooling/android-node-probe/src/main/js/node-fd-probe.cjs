@@ -127,19 +127,43 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     probePhase = 'bot_http_fd';
     const { createBotFdTransport } = await import(botTransportModuleUrl);
     const botTransport = createBotFdTransport();
+    const realBot = typeof Intl !== 'undefined';
     let complete;
-    let connections = 0;
+    let connections = 0, started = 0;
     let allValid = true;
     const received = new Promise((resolve) => { complete = resolve; });
-    const server = require('node:http').createServer((request, response) => {
-      const valid = request.method === 'GET' && request.url === '/fd-probe' && request.headers.host === '127.0.0.1:43117';
-      response.writeHead(valid ? 200 : 400, { 'content-type': 'text/plain', connection: 'close' });
-      response.once('finish', () => { allValid &&= valid; if (++connections === 2) complete(allValid); });
-      response.end(valid ? 'fd-ok' : 'fd-invalid');
-    });
-    let timer, ingress, pump, pendingNative, nativeCalls = 0;
+    let server, service, timer, ingress, pump, pendingNative, nativeCalls = 0;
+    const listenServer = async (candidate) => {
+      server = candidate;
+      candidate.prependListener('request', (request, response) => {
+        const index = started++;
+        const path = realBot ? '/api/state' : '/fd-probe';
+        const valid = request.method === 'GET' && request.url === path && request.headers.host === '127.0.0.1:43117';
+        const auth = !realBot || (index === 0 ? request.headers.authorization === undefined : request.headers.authorization === `Bearer ${guestDescriptor.token}`);
+        response.once('finish', () => {
+          const expected = realBot && index === 0 ? 403 : 200;
+          allValid &&= valid && auth && response.statusCode === expected;
+          if (++connections === 2) complete(allValid);
+        });
+      });
+      await botTransport.listenServer(candidate);
+    };
     try {
-      await botTransport.listenServer(server);
+      if (realBot) {
+        const { startBotService } = await import(botServiceModuleUrl);
+        const { createBotPersistence } = await import(botPersistenceModuleUrl);
+        const dataDir = '/mbot-bot-store';
+        const files = process._linkedBinding('mbot_files_bridge');
+        service = await startBotService({ port: 43117, dataDir, fileMode: 'unavailable', authToken: guestDescriptor.token,
+          ...createBotPersistence({ dataDir, files }), signal: new AbortController().signal,
+          logger: { info() {}, warn() {}, error() {} }, fdTransport: { listenServer, close: () => botTransport.close() } });
+      } else {
+        await listenServer(require('node:http').createServer((request, response) => {
+          const valid = request.method === 'GET' && request.url === '/fd-probe' && request.headers.host === '127.0.0.1:43117';
+          response.writeHead(valid ? 200 : 400, { 'content-type': 'text/plain', connection: 'close' });
+          response.end(valid ? 'fd-ok' : 'fd-invalid');
+        }));
+      }
       ingress = process._linkedBinding('mbot_bot_ingress');
       const { startBotFdIngress } = await import(botIngressModuleUrl);
       pump = startBotFdIngress({ transport: botTransport, next: () => {
@@ -148,11 +172,11 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
         return pendingNative;
       } });
       // One private byte tells Main Node is running before it sends either FD.
-      fs.writeSync(Number(result), 'R');
+      fs.writeSync(Number(result), realBot ? 'B' : 'R');
       const request = await Promise.race([received, pump.done.then(() => { throw Object.assign(new Error('bot_transport_unavailable'), { code: 'bot_transport_unavailable' }); }), new Promise((_, reject) => {
         timer = setTimeout(() => reject(Object.assign(new Error('bot_transport_timeout'), { code: 'bot_transport_timeout' })), 45_000);
       })]);
-      report.botFdTransport = { request, noListener: !server.listening, connections };
+      report.botFdTransport = { request, noListener: !server.listening, connections, realBot };
     } finally {
       clearTimeout(timer);
       let cancelledWait = false;
@@ -169,7 +193,9 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
         }
       } finally {
         if (report.botFdTransport) report.botFdTransport.cancelledWait = cancelledWait;
-        botTransport.close(); server.close(() => {});
+        botTransport.close();
+        if (service) await service.dispose();
+        else server?.close(() => {});
       }
     }
     probePhase = 'model_dynamic';
@@ -343,7 +369,8 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       const before = (await store.getMessages(chat)).filter((message) => message.kind === 'node-probe').length;
       await store.appendMessage(chat, { role: 'user', text: 'node-store-probe', kind: 'node-probe' });
       if (!store.state.schedules.some((schedule) => schedule.id === 'schedule_node_probe')) {
-        store.state.schedules.push({ id: 'schedule_node_probe', botId: chief.id, prompt: 'probe', enabled: true });
+        store.state.schedules.push({ id: 'schedule_node_probe', botId: chief.id, prompt: 'probe', enabled: true,
+          kind: 'once', runAt: 4102444800000, nextRunAt: 4102444800000 });
         await store.save();
       }
       const recorded = await store.recordUsageOnce({ ts: 123, turnId: 'node-store-turn', botId: chief.id });

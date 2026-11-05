@@ -22,8 +22,11 @@ exposed to JS. It checks an 84KiB offset-view snapshot, exclusive publication,
 replacement, empty files and rejection of shared/resizable/detached buffers.
 The owner verifies exact files across both Node PIDs and extends Key assertions
 to these files and the file capability. Real Bot Store and MemoryStore are
-also exercised by the fixed script; a bundled Bot service has not yet been
-started there. This is still not a complete `node:fs` adapter or runtime.
+also exercised by the fixed script. With Intl available it now starts the
+real restricted Bot service over granted FDs, checks anonymous rejection and
+authorized state access, then disposes it before the later persistence checks.
+Without Intl it uses only the basic HTTP fixture. The new device assertions
+have not yet run; this is still not a complete `node:fs` adapter or runtime.
 Device results for this revision must be
 checked separately from the earlier 25-test Kotlin-only run41769936256.
 
@@ -55,7 +58,7 @@ Omit `--archive` to download the exact pinned HTTPS archive and verify its diges
 `--bundle-only` builds just the fixed JS asset for host checks; Gradle refuses to
 build a target without the prepared native libraries and notices. Preparation
 also bundles the real Bot service into a fixed verification-only data URL; this
-does not yet mean it is started on Android. Install the locked esbuild input
+does not establish Android execution. Install the locked esbuild input
 first using `npm ci --ignore-scripts --no-audit --no-fund --prefix
 dsh-go/tooling/model-sdk-probe`. The exact Bot and workspace-guard MIT notices
 are included in the verification assets.
