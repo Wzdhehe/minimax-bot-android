@@ -6,6 +6,7 @@ import ast
 import base64
 import hashlib
 import json
+import platform
 import re
 from pathlib import Path, PurePosixPath
 import shutil
@@ -16,12 +17,33 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent
 DSH = ROOT.parent.parent
-PIN = json.loads((ROOT / 'node-runtime-pin.json').read_text())
+PIN = json.loads((ROOT / 'node-runtime-pin.json').read_text(encoding='utf-8'))
 
 
 def digest(path):
     with path.open('rb') as source:
         return hashlib.file_digest(source, 'sha256').hexdigest()
+
+
+def ndk_host_tools(ndk, system=None):
+    """Select the pinned NDK's host compiler, always targeting Android x64.
+
+    Use the Windows executable directly: .cmd wrappers require shell handling
+    and cannot safely be treated as an executable with arbitrary path quoting.
+    No shell is involved, and no caller-selected Android target is accepted.
+    """
+    system = platform.system() if system is None else system
+    if system == 'Linux':
+        toolchain = ndk / 'toolchains/llvm/prebuilt/linux-x86_64'
+        command = [str(toolchain / 'bin/x86_64-linux-android26-clang++')]
+    elif system == 'Windows':
+        toolchain = ndk / 'toolchains/llvm/prebuilt/windows-x86_64'
+        command = [str(toolchain / 'bin/clang++.exe'), '--target=x86_64-linux-android26']
+    else:
+        raise RuntimeError('Verification preparation supports Linux or Windows hosts only')
+    if not Path(command[0]).is_file() or not (toolchain / 'sysroot/usr/lib/x86_64-linux-android/libc++_shared.so').is_file():
+        raise RuntimeError('Missing pinned NDK compiler or Android x86_64 runtime')
+    return toolchain, command
 
 
 def bundle(output_dir=None):
@@ -45,7 +67,7 @@ def bundle(output_dir=None):
     }
     def module_url(name):
         if name not in urls:
-            text = (host / name).read_text()
+            text = (host / name).read_text(encoding='utf-8')
             for dependency in dependencies[name]:
                 specifier = "'./" + dependency + "'"
                 assert text.count(specifier) == 1
@@ -67,14 +89,14 @@ def bundle(output_dir=None):
     def vendor_module_url(name):
         if name not in vendor_urls:
             path, dependencies = vendor_sources[name]
-            content = (vendor_root / path).read_text()
+            content = (vendor_root / path).read_text(encoding='utf-8')
             for specifier, dependency in dependencies:
                 quoted = "'" + specifier + "'"
                 assert content.count(quoted) == 1
                 content = content.replace(quoted, json.dumps(vendor_module_url(dependency)))
             vendor_urls[name] = 'data:text/javascript;base64,' + base64.b64encode(content.encode()).decode()
         return vendor_urls[name]
-    template = (ROOT / 'src/main/js/node-fd-probe.cjs').read_text()
+    template = (ROOT / 'src/main/js/node-fd-probe.cjs').read_text(encoding='utf-8')
     placeholder = '"__MBOT_FD_MODULE_URL__"'
     assert template.count(placeholder) == 1
     assets = output_dir or ROOT / 'build/verified-assets'
@@ -106,11 +128,11 @@ def bundle(output_dir=None):
     template = template.replace(bot_persistence_placeholder, json.dumps(module_url('bot-persistence.mjs')))
     bot_service_placeholder = '"__MBOT_BOT_SERVICE_MODULE_URL__"'
     assert template.count(bot_service_placeholder) == 1
-    bot_service = subprocess.run(['node', str(ROOT / 'bundle-bot-service.mjs')], capture_output=True, text=True, check=True).stdout
+    bot_service = subprocess.run(['node', str(ROOT / 'bundle-bot-service.mjs')], capture_output=True, text=True, encoding='utf-8', check=True).stdout
     if not bot_service.startswith('data:text/javascript;base64,') or len(bot_service) > 3 * 1024 * 1024:
         raise RuntimeError('Unexpected verification Bot service bundle')
     template = template.replace(bot_service_placeholder, json.dumps(bot_service))
-    (assets / 'node-fd-probe.cjs').write_text(template)
+    (assets / 'node-fd-probe.cjs').write_text(template, encoding='utf-8')
     bot_notice = assets / 'third_party/minimax-bot'
     bot_notice.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(DSH / 'runtime/vendor/minimax-bot/LICENSE', bot_notice / 'LICENSE')
@@ -132,7 +154,7 @@ def prepare(ndk, archive, source_sha=None):
         partial.replace(archive)
     if digest(archive) != (source_sha or PIN['sha256']):
         raise RuntimeError('Node archive digest mismatch')
-    revision = (ndk / 'source.properties').read_text()
+    revision = (ndk / 'source.properties').read_text(encoding='utf-8')
     if f"Pkg.Revision = {PIN['ndkRevision']}" not in revision:
         raise RuntimeError('Use the pinned NDK revision')
     source_dir = ROOT / 'build/node-headers'
@@ -149,7 +171,7 @@ def prepare(ndk, archive, source_sha=None):
         assert metadata['source']['tree'] == PIN['nodeTree']
         assert metadata['source']['version'] == PIN['version']
         if source_sha is not None:
-            source_pin = json.loads((ROOT / 'node-source-build.json').read_text())
+            source_pin = json.loads((ROOT / 'node-source-build.json').read_text(encoding='utf-8'))
             build = metadata.get('mbotSourceBuild', {})
             if any(build.get(key) != value for key, value in source_pin.items()):
                 raise RuntimeError('Unexpected source build recipe')
@@ -181,18 +203,18 @@ def prepare(ndk, archive, source_sha=None):
     assert digest(jni / 'libnode.so') == binary_sha
     if source_sha is not None:
         assert digest(source_dir / 'config.gypi') == config_sha
-        variables = ast.literal_eval((source_dir / 'config.gypi').read_text())['variables']
+        variables = ast.literal_eval((source_dir / 'config.gypi').read_text(encoding='utf-8'))['variables']
         if variables.get('v8_enable_i18n_support') not in (1, True, '1', 'true') or variables.get('icu_small') not in (0, False, '0', 'false'):
             raise RuntimeError('Source build must include full ICU')
     (ROOT / 'build/node-headers.json').write_text(json.dumps({
         'nodeArchiveSha256': digest(archive),
-        'files': {str(path.relative_to(source_dir)): digest(path) for path in sorted(source_dir.rglob('*')) if path.is_file()},
-    }) + '\n')
-    toolchain = ndk / 'toolchains/llvm/prebuilt/linux-x86_64'
+        'files': {path.relative_to(source_dir).as_posix(): digest(path) for path in sorted(source_dir.rglob('*')) if path.is_file()},
+    }) + '\n', encoding='utf-8')
+    toolchain, compiler = ndk_host_tools(ndk)
     shutil.copyfile(toolchain / 'sysroot/usr/lib/x86_64-linux-android/libc++_shared.so', jni / 'libc++_shared.so')
     (notices / 'ndk').mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ndk / 'NOTICE', notices / 'ndk/NOTICE')
-    command = [str(toolchain / 'bin/x86_64-linux-android26-clang++'), '-std=c++20', '-fPIC', '-shared',
+    command = compiler + ['-std=c++20', '-fPIC', '-shared',
                '-fvisibility=hidden', '-O2', '-Wl,-z,max-page-size=16384', '-Wl,-z,common-page-size=16384',
                '-I', str(source_dir), str(ROOT / 'src/main/cpp/node_probe.cpp'),
                '-L', str(jni), '-lnode', '-o', str(jni / 'libmbot_node_probe.so')]
@@ -203,7 +225,7 @@ def prepare(ndk, archive, source_sha=None):
     bundle()
     (ROOT / 'build/verified-assets/node-validation.json').write_text(json.dumps({
         'requiresIntl': source_sha is not None, 'sourceArchiveSha256': source_sha, 'requiresSqlite': False,
-    }) + '\n')
+    }) + '\n', encoding='utf-8')
     print('Prepared pinned Node', PIN['version'], PIN['abi'], 'and JNI verification glue')
 
 

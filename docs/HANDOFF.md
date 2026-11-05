@@ -10,6 +10,9 @@ Flash首卡`ff363bc/5c44d43`及第二卡`5afbd76/0fc0315/16f6ba3`已纳入；接
 
 ## 当前已完成与未完成
 
+最新：Flash审查修复09bc6bb已快进纳入，Codex复核上下文代次、统一读写准入及memory_pending未知结果分类，R1/R2/R3源码审查接受。Flash自报45+11项widget及analyze/l10n通过，云端无Flutter未复跑。本机下一步可按[API35验收卡](handoff/T-Flash-API35Probe.md)构建独立验收包、仅跑6项；默认无Intl包不是完整Bot。记忆页「手动刷新失败时草稿暂不可复制」作为非阻断后续已记录在原卡，不宣称UI全部边界已验完。
+
+- Windows Node验收准备候选已接出：同pin/NDK27d、原Linux编译命令不变，Windows直接clang++.exe固定Android26 x86_64目标，UTF-8资产和正斜杠header inventory。Linux实际native准备、Python45/45、host6/6通过；Windows构建和设备未验证。本机执行卡见[T-Flash-API35Probe](handoff/T-Flash-API35Probe.md)，先修记忆管理审查项，再有时间执行6项定向设备测试。JDK21是已有验证基线；此前将默认17直接视为不满足构建的表述过强，源码target17，17是否可用须实际构建确认，不改依赖/target绕过。
 - Flash记忆管理6d08ad7已快进纳入用于审查，尚未接受：发现写流程切Bot/API未失效、写/读准入遗漏与memory_pending(HTTP400)误判明确拒绝三项，修复卡已追加到[T-Flash-MemoryManage](handoff/T-Flash-MemoryManage.md)。本机报告未提交（按最新反馈），不要求补交；仅记录Flash自报35+11项widget/analyze，云端无Flutter未复跑。Windows模拟器API35/x86_64可用，但当前默认JDK17不满足验收目标JDK21，且准备脚本硬编码Linux NDK，不能直接认定只缺APK。
 - 每代`BotConnectionGrants`已加入：有界授予等待、匹配真实隔离UID、截止、close立即撤销私有等待，迟到回执不恢复授权；现有验收链已加Binder死亡关闭gate/桥和新的设备用例，设备未执行。native回归JUnit69/Node56通过，见[授予撤销交接](handoff/T-BotConnectionGrants.md)；不是正式launcher或完整运行生命周期。
 - `BotSocketConnection`新增Android Main socketpair适配候选，已组合进Node验收工程：owner UID检查、同步授予回执、临时FD关闭、半关闭与停止唤醒；真实Bot脚本改用descriptor携带的Main实际端口。新增3项设备测试，仅编译/待设备执行；正式launcher、Binder死亡撤销、Flutter Endpoint组装仍缺。宿主精确脚本6/6、Python39/39通过，详见[Android桥适配交接](handoff/T-BotSocketConnection.md)。该项覆盖下条桥本体阶段尚无connector的旧状态。

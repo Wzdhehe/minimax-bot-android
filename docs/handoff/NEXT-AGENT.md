@@ -7,6 +7,10 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+最新已纳入Flash修复09bc6bb，R1/R2/R3源码复核通过：代次从打开流程开始、上下文切换使其失效，finally不解锁新scope，只有读取成功且无待核对状态才准入写，memory_pending按unknown处理。Flash自报45+11项widget/analyze/l10n通过，云端无Flutter未复跑。以下「尚未接受、先修R1—R3」已过时，保留为历史。当前本机执行[T-Flash-API35Probe](T-Flash-API35Probe.md)的6项设备验收；UI有一处非阻断后续（手动刷新失败时错误页隐藏保留草稿），已记录原卡，之后再明确派修。
+
+Windows准备候选及完整本机命令见[T-Flash-API35Probe](T-Flash-API35Probe.md)：prepare-probe支持NDK Windows exe固定Android26/x86_64目标，文本UTF-8、头inventory正斜杠。Linux实际重新编译JNI、Python45/45、host6/6已过，Windows和设备未执行。先让Flash修记忆管理R1—R3，之后够时间才执行本卡6项设备测试，默认无Intl/SQLite包仅基础夹具，不宣称真实Bot。JDK21为已验证基线，target17；当前默认JDK17还没实跑，不能仅凭版本就断言完全无法构建。
+
 Flash记忆管理6d08ad7已快进纳入用于审查，**尚未接受**。当前只修[T-Flash-MemoryManage](T-Flash-MemoryManage.md)文末R1/R2/R3：整个写流程的上下文代次、读取/写入的统一准入、memory_pending已接受事务不得当拒绝。不要根据26项假API测试通过声称无竞态；现有测试缺已发出变更跨scope的场景。Flash本机报告按最新要求留本地，不要求补交。
 
 本机环境已回报：API35 x86_64 emulator-5554已启动，实际SDK D:/android-sdk，NDK27.3与28.2、CMake3.22.1；默认JDK17，无WSL。验收工程要求JDK21/Gradle9.3.1，prepare-probe.py还硬编码Linux NDK路径，故需要独立Windows准备接线，不能将旧DSH rootfs或Flutter product APK当其前置。云端当前已有可编译的验收工程，产品APK仍不可用。不要为传产物把二进制提交Git或发布Release。

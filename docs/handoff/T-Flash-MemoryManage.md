@@ -1,7 +1,9 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Flash大任务：现有Bot记忆页的新增、编辑、删除
 
-状态：收到6d08ad7并快进纳入以便审查，**尚未审查接受**。以下文末三项修复为当前任务，不重做整卡。按用户最新反馈，本轮报告只留本机，不要求补交`docs/research/flash-bot-memory-manage.md`；共享交接由Codex维护。
+状态：6d08ad7及审查修复09bc6bb已快进纳入。Codex已复核R1/R2/R3修复，原三项通过源码审查；Flash本机自报memory/profile共45项、home/stream11项及analyze/l10n检查通过，云端无Flutter未复跑。以下R1/R2/R3保留为历史验收要求，不重做。当前可执行[T-Flash-API35Probe](T-Flash-API35Probe.md)的6项设备验收，不代表本UI/真实Bot已在设备验证。按用户最新反馈报告只留本机，不要求补交；共享交接由Codex维护。
+
+非阻断后续：当前_failed的早退错误页不会展示_draft；未知写入保留草稿后，若手动刷新再失败，草稿仍在State里但暂不能复制。后续须补「手动刷新失败仍能查看/复制草稿」小修和用例，不扩大到持久化；先完成本轮设备验收，有余量再明确派该项，不将它说成草稿已丢失。
 
 用户约一小时后断电。本卡授权你在本机Windows独立推进；实现约40分钟后必须进入验证/交接，至少预留10分钟提交推送。仍用feat/t-plugins，先fetch同步。不要等云端APK；Codex只做native授予撤销，不改本卡UI文件。
 

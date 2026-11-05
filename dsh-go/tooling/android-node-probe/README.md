@@ -42,7 +42,16 @@ gradle --no-daemon -p dsh-go/tooling/android-node-probe assembleDebug assembleDe
 bash dsh-go/tooling/android-node-probe/run-device-tests.sh
 ```
 
-JDK21/Gradle9.3.1/platform36/BuildTools36 and NDK27.3.13750724 are required.
+The exercised build baseline is JDK21/Gradle9.3.1/platform36/BuildTools36;
+NDK27.3.13750724 is pinned and required.
+JDK21 is the previously exercised build baseline; this does not establish that
+JDK17 is incompatible (the source target remains Java17). Windows preparation
+now selects the NDK's `clang++.exe` with an explicit Android26 x86_64 target,
+keeps all archive/source/binary checks, and uses explicit UTF-8 for JS assets.
+Linux native preparation and host tests have passed; Windows compilation and
+device execution still require the local run. See the scoped
+[Windows API35 verification card](../../../docs/handoff/T-Flash-API35Probe.md).
+This target does not need Flutter, WSL or the old DSH rootfs.
 SDK CMake3.22.1 is also required: both this target and the App build the same
 production `mbot_runtime_files` library from the App's CMakeLists. No separate
 publication-probe implementation remains. Its x86_64/arm64-v8a compilation,
