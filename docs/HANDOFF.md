@@ -6,10 +6,11 @@
 
 最新分工：Codex负责runtime、独立UID/文件/Key边界、broker、Endpoint及生命周期接口和集成审查；本机M3.1 Flash承担接口冻结后的界面实现、文案、定向验证和文档整理。此前Endpoint代次任务收回归Codex，本机当前任务见[Flash创建表单任务卡](handoff/T-Flash-CreateForms.md)。
 
-Flash首卡已交付`ff363bc/5c44d43`，Codex实查脚本仅mode变化、链接检查通过；报告有请求字段/能力映射错误需纠正，建议列表不直接作为开发计划。下一卡为[现有创建表单完善](handoff/T-Flash-CreateForms.md)，Codex继续底层，双方写入范围不重叠。
+Flash首卡`ff363bc/5c44d43`及第二卡`5afbd76/0fc0315/16f6ba3`已纳入；接口报告已纠正，现有创建表单加入校验与单次提交流程。Codex审出关闭过渡后mounted守卫被删，Flash在`82343ad`恢复并补特定回归用例；源码已复核，本机Flash自报analyze与相关widget11项通过，云端无Flutter未复跑，设备未验证。见[创建表单任务卡](handoff/T-Flash-CreateForms.md)和[本机报告](research/flash-bot-create-forms.md)。双方写入范围不重叠。
 
 ## 当前已完成与未完成
 
+- Main侧新增`BotLoopbackBridge`候选：仅127.0.0.1、显式activate、连接数与跨代worker上限、双向背压/半关闭、停止及迟到连接关闭。JVM真实socket与native回归已过，尚未接Android socketpair connector、真实Bot/Flutter和正式launcher；见[桥接交接](handoff/T-BotLoopbackBridge.md)。
 - Codex已完成Endpoint代次保护：publish返回native所有权Lease，旧运行退出不能清除新运行；相同URL/token仍区分代次，无效发布不覆盖现有连接。Flutter字段不变，启动器就绪/死亡检测尚未接入。定向JUnit10项，完整native回归JUnit56/Node56通过；见[Endpoint记录](handoff/T-LocalEndpointLease.md)。
 - 最新验收脚本在Intl可用时已调用真实官方Bot服务，经native文件能力启动并通过运行中授予的socket处理匿名403与授权状态200；缺Intl时明确只跑基础HTTP夹具。宿主精确脚本6/6、Python39/39，本地验收APK/仪器APK构建通过；**新Android设备用例未执行**。Endpoint代次保护由Codex负责，不用等待rootfs，不另起PRoot runner。
 - 真实官方Bot服务增加受限启动候选：不打开主应用工作区，以已授予的状态/记忆能力运行；附件、上传和自定义图片明确返回不可用，默认工作区模式不变。宿主用真实Bot、已连接FD和假文件broker验证HTTP/SSE与鉴权，并从内存模块启动服务；验收APK已打包该模块，**尚未在Android加载/启动真实服务**，也未接产品启动器。

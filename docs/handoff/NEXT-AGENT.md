@@ -7,6 +7,10 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+Codex当前完成Main loopback字节桥候选，详见[T-BotLoopbackBridge](T-BotLoopbackBridge.md)：只在可信activate后授予连接，默认4条/上限16，跨代共享32个worker无排队，双向16KiB背压及及时flush，EOF半关闭保留反向响应，关闭停止已有与迟到连接。它尚无Android PFD connector和实际UID授予确认，未接Flutter或自动publish Endpoint，不能当作正式launcher已完成。既有真实Bot authorizer仍必须验证token/Host/Origin，桥本身不解析HTTP。
+
+Flash第二卡5afbd76/0fc0315/16f6ba3及修复82343ad已快进纳入。Codex完成源码审查但未在云端复跑Flutter（当前无flutter命令）；72d06b7指出的_create在await route.completed后缺mounted检查已恢复，并增加「确认后退出过渡中页面被移除」回归用例。Flash本机自报analyze通过、相关widget共11项通过，且去掉守卫时新测试失败；不视为云端复验或设备证据。全量golden与产品设备仍未验证。该卡已交付，Flash下一卡须另行明确范围，勿自行扩展公共API/桥/Endpoint。
+
 Flash已完成首卡，ff363bc仅修build-runtime.sh执行位，5c44d43新增接口报告；已快进纳入主线，Codex实查mode/链接。报告把Map接口能承载的isMain/记忆编辑误列为能力缺失，且混淆群PATCH字段与记录字段；不能据其建议直接重写UI/API。Flash下一卡见[T-Flash-CreateForms](T-Flash-CreateForms.md)：先纠正报告，再只完善现有创建表单即时校验/单次提交及widget测试。Codex已推Endpoint代次修复0a37a95（JUnit56/Node56过），继续底层，双方目录不重叠。
 
 Codex已完成Endpoint运行代次保护，见[T-LocalEndpointLease](T-LocalEndpointLease.md)实际输出。`publish`返回只给可信native持有的Closeable句柄，按对象身份清理；无条件`clear()`已移除，未发现生产调用方。迟到关闭不能清新运行，即使两个发布的URL/token相同；descriptor仍仅baseUrl/token。定向JUnit10/10、完整native脚本JUnit56/Node56均通过，脚本已覆盖本用例。它不检测服务存活，也不撤销Dart已持有的快照；正式Main桥/launcher仍须按代次发布、关闭并失效实际服务。产品构建、Flutter和设备本轮未验证。Flash继续原外围任务，勿修改Endpoint。

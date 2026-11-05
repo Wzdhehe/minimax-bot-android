@@ -27,6 +27,8 @@ done
   "$root_dir/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/bot/GuestProviderCatalogTest.kt" \
   "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/RuntimeDescriptorPayload.kt" \
   "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/BotRuntimeEndpoint.kt" \
+  "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/BotLoopbackBridge.kt" \
+  "$root_dir/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/bot/BotLoopbackBridgeTest.kt" \
   "$root_dir/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/bot/BotRuntimeEndpointTest.kt" \
   "$root_dir/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/RuntimeDescriptorPayloadTest.kt" \
   -d "$test_dir/tests.jar"
@@ -40,7 +42,8 @@ classpath="$test_dir/tests.jar:$classpath"
   io.github.ccch1mneyyy.dsh_app.isolation.GrantedConnectionQueueTest \
   io.github.ccch1mneyyy.dsh_app.bot.GuestProviderCatalogTest \
   io.github.ccch1mneyyy.dsh_app.runtime.RuntimeDescriptorPayloadTest \
-  io.github.ccch1mneyyy.dsh_app.bot.BotRuntimeEndpointTest
+  io.github.ccch1mneyyy.dsh_app.bot.BotRuntimeEndpointTest \
+  io.github.ccch1mneyyy.dsh_app.bot.BotLoopbackBridgeTest
 MBOT_NATIVE_CLASSPATH="$classpath" MBOT_JAVA="$java_bin" node --test --test-reporter=tap \
   "$root_dir/runtime/minimax-bot-host/model-broker.test.mjs" \
   "$root_dir/runtime/minimax-bot-host/model-fd-client.test.mjs" \
