@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Flash任务：Bot设置页编辑表单
 
+状态：3c1f50d已交付并快进纳入。Codex复核编辑流程守卫、即时禁用与允许路径，未发现需退回的源码问题；云端无Flutter，未复跑本机自报的7+2+11项widget与analyze。设备/真实服务未验证。以下保留任务与验收合同，不重复执行。
+
 执行地点：用户的本机Windows电脑。云端Codex负责Android socketpair连接桥，不等它的工具链或APK。沿用feat/t-plugins；先读根AGENTS.md、dsh-go/AGENTS.md及本卡，再fetch并快进到远端，不覆盖未推送工作。
 
 ## 目标与已核对源码
