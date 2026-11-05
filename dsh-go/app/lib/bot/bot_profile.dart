@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mbot_settings/mbot_settings.dart';
 
 import '../l10n/l10n.dart';
+import 'bot_memory_page.dart';
 import 'bot_schedules.dart';
 import 'bot_notification_prefs.dart';
 
@@ -195,6 +196,26 @@ class _BotProfilePageState extends State<BotProfilePage> {
                               MaterialPageRoute<void>(
                                 builder: (_) =>
                                     MbotScheduleSettingsPage(port: BotSchedulesPort(widget.api, widget.botId)),
+                              ),
+                            );
+                            if (mounted) await _reload();
+                          },
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Card(
+                  child: ListTile(
+                    key: const Key('mbot.bot.memory'),
+                    leading: const Icon(Icons.psychology_outlined),
+                    title: Text(context.l10n.botsMemory),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _bot == null
+                        ? null
+                        : () async {
+                            // The page borrows the service; the parent keeps it.
+                            await Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => BotMemoryPage(api: widget.api, botId: widget.botId),
                               ),
                             );
                             if (mounted) await _reload();
