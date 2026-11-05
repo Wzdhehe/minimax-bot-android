@@ -8,6 +8,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
@@ -35,12 +36,17 @@ internal class BotLoopbackBridge private constructor(
     private var closed = false
     private var active = false
     private val sessions = mutableSetOf<Session>()
+    private val closedSignal = CompletableFuture<Unit>()
     private val acceptor = Thread({ acceptLoop() }, "mbot-bridge-accept").apply { isDaemon = true; start() }
 
     fun activate() = synchronized(lock) {
         check(!closed) { "bot_bridge_closed" }
         active = true
     }
+
+    /** Trusted lifecycle hook, including an already-closed listener. Handlers
+     * must return promptly; no HTTP request data or credentials are passed. */
+    fun whenClosed(action: () -> Unit) { closedSignal.thenRun { action() } }
 
     private fun acceptLoop() {
         try {
@@ -117,6 +123,7 @@ internal class BotLoopbackBridge private constructor(
         }
         quietly { listener.close() }
         retired.forEach { it.close() }
+        closedSignal.complete(Unit)
         // A connector blocked in foreign IPC may return later. Session.run
         // closes that late connection; close never waits on uncooperative IPC.
         // Workers are globally bounded across generations so repeated restart
