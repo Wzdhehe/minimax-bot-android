@@ -317,7 +317,21 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       const { MemoryStore } = await import(botMemoryModuleUrl);
       const { createBotPersistence } = await import(botPersistenceModuleUrl);
       const root = '/mbot-bot-store'; // virtual name; no directory is opened.
-      const { storePersistence, memoryFilesystem } = createBotPersistence({ dataDir: root, files });
+      // The first process deliberately loses one journal append receipt AFTER
+      // the native file operation succeeds. This exercises pending recovery
+      // after Main retires the lease and cleans the temporary document.
+      let loseAppendReceipt = false;
+      const probeFiles = {
+        read: (...args) => files.read(...args), size: (...args) => files.size(...args),
+        replace: (...args) => files.replace(...args), publish: (...args) => files.publish(...args),
+        rename: (...args) => files.rename(...args), remove: (...args) => files.remove(...args),
+        async append(...args) {
+          const result = await files.append(...args);
+          if (loseAppendReceipt && result === 'published') { loseAppendReceipt = false; return 'outcome_unknown'; }
+          return result;
+        },
+      };
+      const { storePersistence, memoryFilesystem } = createBotPersistence({ dataDir: root, files: probeFiles });
       const store = new Store(root, storePersistence);
       const memory = new MemoryStore(root, memoryFilesystem);
       await store.init();
@@ -343,7 +357,17 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
         available: true, before, after: (await store.getMessages(chat)).filter((message) => message.kind === 'node-probe').length,
         schedules: store.state.schedules.filter((schedule) => schedule.id === 'schedule_node_probe').length, usage: usage.filter((row) => row.turnId === 'node-store-turn').length, recorded,
         memoryBefore, memoryAfter: memories.length, memoryJournal: journal.length, memoryBackup,
+        memoryRecovery: memoryBefore ? priorMemory.text === 'node-memory-recovered' : false,
       };
+      if (!memoryBefore) {
+        loseAppendReceipt = true;
+        try { await memory.remember('team', { text: 'node-memory-recovered', key: 'node.probe' }); }
+        catch (error) {
+          if (error?.code === 'memory_pending' && error?.details?.causeCode === 'runtime_data_outcome_unknown') report.botStore.memoryRecovery = true;
+          else throw error;
+        }
+        if (!report.botStore.memoryRecovery) throw Object.assign(new Error('memory_pending'), { code: 'memory_pending' });
+      }
     }
   }
   // Owner inspects the bounded result privately. No console/log response dump.

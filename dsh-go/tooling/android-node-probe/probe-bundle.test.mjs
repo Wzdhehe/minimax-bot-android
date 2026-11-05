@@ -323,10 +323,20 @@ test('the exact packaged Bot Store block survives two host processes using a fak
     return JSON.parse(stdout);
   }
   assert.deepEqual(await run(), { available: true, before: 0, after: 1, schedules: 1, usage: 1, recorded: true,
-    memoryBefore: 0, memoryAfter: 1, memoryJournal: 1, memoryBackup: true });
-  assert.equal((await readdir(directory)).filter((name) => /^bot-memory-[a-f0-9]{64}\.bin$/.test(name)).length, 2);
+    memoryBefore: 0, memoryAfter: 1, memoryJournal: 1, memoryBackup: true, memoryRecovery: true });
+  const afterFirst = await readdir(directory);
+  const pending = `bot-memory-${createHash('sha256').update('.pending.json').digest('hex')}.bin`;
+  assert.ok(afterFirst.includes(pending));
+  assert.equal(afterFirst.filter((name) => /^bot-memory-[a-f0-9]{64}\.bin$/.test(name)).length, 4);
+  const stages = afterFirst.filter((name) => /^bot-memory-stage-[a-f0-9]{64}\.bin$/.test(name));
+  assert.equal(stages.length, 1);
+  // Host-side simulation of the native cleanup between separate processes;
+  // the production C++ cleanup itself has independent Linux/device tests.
+  await rm(join(directory, stages[0]));
   assert.deepEqual(await run(), { available: true, before: 1, after: 2, schedules: 1, usage: 1, recorded: false,
-    memoryBefore: 1, memoryAfter: 1, memoryJournal: 2, memoryBackup: true });
-  assert.equal((await readdir(directory)).filter((name) => /^bot-memory-[a-f0-9]{64}\.bin$/.test(name)).length, 3);
+    memoryBefore: 1, memoryAfter: 1, memoryJournal: 3, memoryBackup: true, memoryRecovery: true });
+  const afterSecond = await readdir(directory);
+  assert.equal(afterSecond.filter((name) => /^bot-memory-[a-f0-9]{64}\.bin$/.test(name)).length, 3);
+  assert.ok(!afterSecond.includes(pending));
   assert.deepEqual(await run(true), { available: false });
 });

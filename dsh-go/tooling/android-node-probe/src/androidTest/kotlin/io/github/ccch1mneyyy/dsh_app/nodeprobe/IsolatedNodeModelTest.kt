@@ -33,6 +33,7 @@ import io.github.ccch1mneyyy.dsh_app.runtime.RuntimeDescriptorSession
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
+import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
@@ -154,6 +155,7 @@ class IsolatedNodeModelTest {
         assertTrue(marker.inputStream().use { it.read() } >= 0)
         var providerId: String? = null
         var previousPid = -1
+        var expectsMemoryRecovery = false
         try {
             databaseOwner = RuntimeDatabaseFiles.open(context)
             dataFiles = databaseOwner.physicalFiles
@@ -223,6 +225,10 @@ class IsolatedNodeModelTest {
                                 NativeModelRequestHost(identity.uid, providerId!!, "normal", probe.peerBinder(), channels::open, channels::close).use { host ->
                                 RuntimeFileCommitHost.openBotState(context, "node-state", identity.uid, probe.peerBinder()).let { fileHost ->
                                 try {
+                                if (attempt == 1 && expectsMemoryRecovery) {
+                                    val restoredRoot = File(dataDirectory, "minimax-bot-runtime/bot-state/node-state")
+                                    assertEquals(0, restoredRoot.list()!!.count { it.matches(Regex("bot-memory-stage-[a-f0-9]{64}\\.bin")) })
+                                }
                                 val id = UUID.randomUUID().toString()
                                 val data = Bundle().apply {
                                     putString("id", id)
@@ -321,8 +327,10 @@ class IsolatedNodeModelTest {
                                     assertEquals(attempt == 0, botStore.getBoolean("recorded"))
                                     assertEquals(attempt, botStore.getInt("memoryBefore"))
                                     assertEquals(1, botStore.getInt("memoryAfter"))
-                                    assertEquals(attempt + 1, botStore.getInt("memoryJournal"))
+                                    assertEquals(if (attempt == 0) 1 else 3, botStore.getInt("memoryJournal"))
                                     assertTrue(botStore.getBoolean("memoryBackup"))
+                                    assertTrue(botStore.getBoolean("memoryRecovery"))
+                                    expectsMemoryRecovery = true
                                 } else assertFalse(botStore.getBoolean("available"))
                                 if (expected.optBoolean("requiresSqlite")) {
                                     val sqlite = report.getJSONObject("sqlite")
@@ -418,8 +426,13 @@ class IsolatedNodeModelTest {
                                     assertEquals(1, chatFiles.size)
                                     expectedNames.addAll(listOf("bot-state.json", "bot-usage.jsonl", chatFiles.single()))
                                     val memoryFiles = names.filter { it.matches(Regex("bot-memory-[a-f0-9]{64}\\.bin")) }
-                                    assertEquals(if (attempt == 0) 2 else 3, memoryFiles.size)
+                                    assertEquals(if (attempt == 0) 4 else 3, memoryFiles.size)
                                     expectedNames.addAll(memoryFiles)
+                                    val pendingHash = MessageDigest.getInstance("SHA-256").digest(".pending.json".toByteArray()).joinToString("") { "%02x".format(it) }
+                                    assertEquals(attempt == 0, names.contains("bot-memory-$pendingHash.bin"))
+                                    val memoryStages = names.filter { it.matches(Regex("bot-memory-stage-[a-f0-9]{64}\\.bin")) }
+                                    assertEquals(if (attempt == 0) 1 else 0, memoryStages.size)
+                                    expectedNames.addAll(memoryStages)
                                 }
                                 assertEquals(expectedNames.sorted(), names)
                                 assertTrue(fileProbeBytes(false).contentEquals(File(committed, "node-snapshot.bin").readBytes()))

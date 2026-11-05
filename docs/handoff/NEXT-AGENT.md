@@ -7,6 +7,8 @@
 
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
+Android验收脚本新增跨进程故障恢复联合用例：首个Node进程经真实Store/MemoryStore与文件broker写入记忆，再由**仅验收脚本内**的包装器在journal append实际返回published后模拟回执丢失，断言产生`memory_pending`；Main检查pending和一个临时stage存在，关闭并等待fileHost退役。第二进程取得同一scope时，先断言native清理已移除stage，MemoryStore再从pending恢复正确内容并验证journal无重复、备份及聊天/用量/Key边界。精确APK脚本用两个宿主进程和磁盘假文件能力通过4/4：它在两进程之间**由测试模拟删除stage**，不证明Android Binder或native清理；Python39/39，补pending文件存在/消失断言后的验收APK与仪器APK `BUILD SUCCESSFUL in 57s`。full-ICU时设备才执行上述业务分支，本地release无Intl；**API26/35设备未执行**，不能算联合验收通过。
+
 新增native临时文件清理候选：`openBotState`取得独占目录锁后、创建publisher/reader和授予guest之前调用`cleanupBotStages`，只识别严格格式的`bot-memory-stage-<64位小写摘要>.bin`和`.native-publish-<UUID>.tmp`。在held目录FD内逐批扫描，不递归、不向guest提供枚举能力；每批先验证全部待删项为当前UID拥有、私有权限、单链接普通文件，再unlink并fsync目录。匹配项若为软链接/硬链接/公开权限等则拒绝启动并保留该批；返回固定错误，不输出文件名或数据。每次扫描最多65536项、每批最多1024项、一次打开最多4批；超过4批时已安全清理部分后返回`runtime_data_unavailable`，之后可重试继续；扫描预算耗尽也拒绝，不伪称完成。它依赖下述协作锁及所有可信写者遵循同一scope，不约束绕开锁的同UID写者。
 
 Linux针对真实C++原语的清理测试验证只删精确临时名、保留旧摘要/持久文件、拒绝软硬链接和公开文件、不在问题批次做部分删除、预算和分批续跑；`python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_*.py'` 39/39。双ABI NDK交叉编译及JNI/16KiB检查通过；验收APK与仪器APK `BUILD SUCCESSFUL in 1m 1s`。第一次构建在新增仪器测试使用Android不存在的`Os.unlink`时报Kotlin编译错误；已改用`File.delete`并重编通过。新增Android仪器用例覆盖软链接拒绝及清理/持久文件保留，**设备未运行**；Android上的清理与官方pending恢复组合、断电恢复、ARM64/真机都未验证。历史`bot-memory-<摘要>.bin`孤儿仍无法区别于持久文件，不能清理或用宽匹配删除。
@@ -21,7 +23,7 @@ native Bot数据排他候选：`RuntimeFileCommitHost.openBotState`只接可信M
 
 Android验收脚本现同时打包真实官方`Store`、`MemoryStore`和生产`createBotPersistence`，经`mbot_files_bridge`共用同一JS文件lease。设备用例已写：两次独立isolated Node进程应依次恢复同一Bot、聊天、任务配置、去重用量、团队记忆、日志和初始内容备份，并检查随机Key不进入报告或已授权持久文件；宿主的精确脚本使用磁盘假文件能力确实跑过两个独立进程。官方Bot MIT LICENSE随验收asset打包。执行结果：`node --test --test-reporter=tap dsh-go/tooling/android-node-probe/probe-bundle.test.mjs` 4/4；`python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_*.py'` 33/33；本地验收APK与仪器APK `BUILD SUCCESSFUL in 58s`。本地Node release的`requiresIntl=false`和`requiresSqlite=false`，无Intl时脚本明确报告`available:false`并跳过业务断言。**API26/35设备新用例未执行；本地编译和假能力不能证明Android Binder、full-ICU分支或产品运行成功。**
 
-后续先在账户计费限制解除后对最新提交运行设备workflow，核对API26/35实际执行、native锁和清理用例、full-ICU分支和XML/artifact；补真实Android broker上「清理后从pending恢复」联合用例，另行设计1MiB上限和账本增长，再推进附件/媒体、mcode完整FS、正式独立UID launcher与Flutter桥。随后验证真实provider、ARM64/物理设备和官方插件市场；不得以同UID shell或放宽Key边界绕过隔离。产品APK尚不可用。
+后续先在账户计费限制解除后对最新提交运行设备workflow，核对API26/35实际执行、native锁/清理及「清理后从pending恢复」联合用例、full-ICU分支和XML/artifact；另行设计1MiB上限和账本增长，再推进附件/媒体、mcode完整FS、正式独立UID launcher与Flutter桥。随后验证真实provider、ARM64/物理设备和官方插件市场；不得以同UID shell或放宽Key边界绕过隔离。产品APK尚不可用。
 
 新增`bot-memory-filesystem.mjs`和`bot-persistence.mjs`：后者一次建立同一`bot-file-lease`并同时产出Store/MemoryStore两个宿主适配器；前者只映射官方MemoryStore的team/bot文档、pending、journal、backup和archive虚拟路径到专用摘要basename。vendor `MemoryStore`新增可选filesystem接缝，默认仍用Node文件系统；现有事务、日志operationId去重和恢复流程保留。原版备份用copy+hardlink，受控实现使用只读快照+独占publish两次复制，依赖同一可信runtime单写者，不是POSIX hardlink或跨进程原子事务。`startBotService`可选接两个适配器，必须通过`createBotPersistence`共同创建；真实Bot JSON服务用假文件能力在**无物理Bot dataDir**的宿主创建/恢复记忆通过。
 
