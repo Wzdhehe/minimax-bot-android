@@ -98,7 +98,7 @@
 | `testProvider(providerId, modelId)` | `POST /api/providers/test` | 探针；503 归一成 `{ok:false, code:'provider_unavailable'}` |
 | `updateSettings(settings)` | `PUT /api/settings` | `{settings, locale}` |
 | `createBot(properties)` | `POST /api/bots` | `{bot}` |
-| `updateBot(id, properties)` | `PATCH /api/bots/{bot_*}` | `{bot}` |
+| `updateBot(id, properties)` | `PATCH /api/bots/{bot_*}` | `{bot}`；**patch 是自由 JSON**，可含 `name`/`role`/`instructions`/`skin`/`face`/`autoHelper`/`pinned`/`model`/`effort`/`isMain`/`avatar` |
 | `deleteBot(id)` | `DELETE /api/bots/{bot_*}` | — |
 | `createGroup(properties)` | `POST /api/groups` | `{group}` |
 | `updateGroup(id, properties)` | `PATCH /api/groups/{grp_*}` | `{group}` |
@@ -112,7 +112,7 @@
 | `react(chat, message, emoji:, selected:)` | `PUT /api/chats/{chat}/messages/{msg_*}/reactions` | 表情；随后广播 `message.reactions` |
 | `answerQuestion(chat, message, answers)` | `POST /api/chats/{chat}/messages/{msg_*}/answer` | `{ok:true}` |
 | `memory(scope)` | `GET /api/memory/{team\|bot_*}` | 记忆视图 |
-| `remember(scope, entry)` | `POST /api/memory/{team\|bot_*}` | 记忆视图 + `entry` + `unchanged` |
+| `remember(scope, entry)` | `POST /api/memory/{team\|bot_*}` | 记忆视图 + `entry` + `unchanged`；**entry 是自由 JSON**，可含 `text`/`key`/`scope`/`targetBot`/`source`/`replaceId`/`pinned`/`expectedRevision` |
 | `forget(scope, entry)` | `DELETE /api/memory/{team\|bot_*}/{8位hex}` | 记忆视图 |
 | `createSchedule(schedule)` | `POST /api/schedules` | `{schedule}` |
 | `deleteSchedule(id)` | `DELETE /api/schedules/{sch_*}` | `{ok:true}` |
@@ -129,7 +129,8 @@
 | 记录 | 字段 | 出处 |
 |---|---|---|
 | Bot | `id`/`name`/`role`(≤60)/`instructions`(≤4000)/`skin`/`color`/`face`/`autoHelper`/`model`/`effort`/`isMain`/`pinned`/`rev`/`createdAt`/`updatedAt`/`avatar?` | `team.mjs` `createBot` |
-| 群 | `id`/`name`/`notice`(≤500)/`adminId`/`memberIds`/`replyMode`(`admin`\|`everyone`)/`pinned`/`createdAt`/`maxHops`/`handover`/`notes` | `team.mjs` `createGroup` |
+| 群**记录**字段 | `id`/`name`/`notice`(≤500)/`adminId`/`memberIds`/`replyMode`(`admin`\|`everyone`)/`pinned`/`createdAt`/`maxHops`/`handover`/`notes` | `team.mjs` `createGroup` |
+| 群**请求**字段 | `name`/`notice`/`replyMode`/`pinned`/`maxHops`/`handover`/`notes`/`clearNotes`/`members`/`admin` —— **请求用 `members`/`admin`，返回的记录才是 `memberIds`/`adminId`** | `team.mjs` `updateGroup` |
 | 消息 | `id`/`chatId`/`ts`/`status`(`done`\|`streaming`\|`pass`)/`seq`/`role`/`botId`/`text`/`parts`/`kind`/`question?`/`answered?`/`taskId?`/`sourceMessageId?`/`startedAt?` | `store.mjs` `appendMessage` |
 | 聊天摘要 | `preview`/`lastTs`/`lastRole`/`pending`/`count` | `store.mjs` `summary` |
 
@@ -166,15 +167,15 @@
 | Bot 列表 | `state()` → `team.bots` | `state()` → `bots` | mbot 的 bot 记录**没有** `sessionId`/`parts`/`waiting`/`appliedModel`/`workDir`/`shape`/`imageRef`；多出 `skin`/`face`/`autoHelper`/`isMain`/`pinned`/`rev`/`avatar` |
 | 群列表 | `state()` → `team.rooms` | `state()` → `groups` | mbot 群没有 `parts`/`pausedCallIds`/`preview`/`relayLimit`；用 `adminId`/`memberIds`/`replyMode`/`maxHops`/`handover`/`notes` |
 | 建 Bot | `createBot(name, role, instructions, color, model, effort, brief)`（页面只传 name/role/instructions/color/model/effort） | `createBot({name, role, ...})` | mbot 收的是**自由 JSON**（`team.mjs` 读 `skin`/`face`/`autoHelper`/`model`/`effort`/`isMain`/`avatar`），无 `brief`；旧路有 `color` |
-| 改 Bot | `updateBot(id, name/role/instructions/color/model/effort)` | `updateBot(id, {name, role})` | mbot `PATCH` 接受自由 patch（`team.mjs` 逐字段校验） |
+| 改 Bot | `updateBot(id, name/role/instructions/color/model/effort)` | `updateBot(id, {...})` | mbot `PATCH` 接受自由 patch（`team.mjs` 逐字段校验），可改的字段比旧路多 |
 | 删 Bot | `deleteBot(id)` | `deleteBot(id)` | 一致 |
 | 复制 Bot | `duplicateBot(id)` | **无** | 缺口 |
-| 置主 Bot | `setMain(id, main)` | **无**；mbot 用 `isMain` 字段 | 缺口（`createBot` 可带 `isMain`，但没有独立的置主接口） |
+| 置主 Bot | `setMain(id, main)` | `updateBot(id, {'isMain': true/false})` | **不是缺口**：`Team.updateBot` 处理 `patch.isMain`（取消置主时若这是最后一个主 Bot，服务端报 `invalid`） |
 | 建群 | `createRoom(members, name, admin, greet)` | `createGroup({name, members})` | mbot 无 `greet`；管理员用 `admin` 字段，缺省取首个成员 |
-| 改群 | `updateRoom(id, name/notice/mode/admin/add/remove)` | `updateGroup(id, {...})` | mbot 群字段名不同：`admin`→`adminId`、`mode`→`replyMode`、`add/remove`→`memberIds` |
+| 改群 | `updateRoom(id, name/notice/mode/admin/add/remove)` | `updateGroup(id, {name/notice/replyMode/pinned/maxHops/handover/notes/clearNotes/members/admin})` | **请求字段与返回记录字段不同**：请求用 `members`（整表）与 `admin`，服务端算出的记录字段才是 `memberIds`/`adminId`；`mode` 在 mbot 叫 `replyMode` |
 | 删群 | `deleteRoom(id)` | `deleteGroup(id)` | 一致 |
 | 群接续 | `continueRoom(roomId)` | **无** | 缺口（mbot 的 `busyChats`/`turns` 能表达占用，但没有「解除限流接续」接口） |
-| 群接龙上限 | `setRoomRelayLimit(roomId, limit)` | **无** | 缺口（mbot 用 `maxHops`/`handover`/`notes`，且这三个只在建群时设置） |
+| 群接龙上限 | `setRoomRelayLimit(roomId, limit)` | `updateGroup(id, {'maxHops': n})` | **不是缺口**：`Team.updateGroup` 处理 `patch.maxHops`（0 = 不限），另有 `handover`/`notes` 同为可更新字段 |
 | 停成员工作 | `stopMemberWork(roomId, botId)` | `cancelChat(chat)` | 粒度不同：mbot 只能按 chat 取消 |
 | 发消息 | `send(conversationId, text)` | `sendMessage(chat, text, clientMessageId:, attachments:)` | mbot 强制 `clientMessageId`；支持 `attachments` |
 | 消息历史 | `chat(botId, cursor:)` → `{sessionId, items, cursor}` | `messages(chat, limit:, before:)` → `{chatId, messages, hasMore, nextBefore}` | 游标语义不同（旧：`cursor` 泛型；新：`before` = 消息 id，`nextBefore`） |
@@ -190,7 +191,7 @@
 | 审批 | `answerApproval(id, allow:)` | **无**；mbot 审批在 `state.approvals` 里，但 `MiniMaxBotApi` 没有审批回复方法 | 缺口（服务端有 `POST /api/approvals/{id}`，客户端没暴露） |
 | 记忆（读） | `memory(botId:/roomId:)` | `memory(scope)`，scope ∈ `team`/`bot_*` | mbot 无「按群记忆」scope，只有 team / 单 Bot |
 | 记忆（写） | `addMemory(text, scope:)` | `remember(scope, entry)` | 入参不同 |
-| 记忆（改） | `editMemory(entry, next)` | **无** | 缺口（服务端 `POST /api/memory/...` 接受 `replaceId`/`expectedRevision`/`requireRevision`，客户端未暴露） |
+| 记忆（改） | `editMemory(entry, next)` | `remember(scope, {'text': next, 'replaceId': id, 'expectedRevision': rev})` | **不是缺口**：客户端的 `remember` 收自由 JSON，服务端记忆路由接受 `replaceId`/`expectedRevision` 并要求 revision 一致 |
 | 记忆（删） | `forgetMemory(entry)` | `forget(scope, entry)` | 一致 |
 | 记忆摘要 | `DsBotMemoryView.summary`/`summarizing` | 记忆视图字段形状未在客户端建模 | 缺口（客户端是裸 Map，无 Dart 模型） |
 | 定时任务 | **无** | `createSchedule`/`deleteSchedule`/`runSchedule` | **mbot 独有** |
@@ -208,36 +209,48 @@
 
 ## 5. 缺口小结（按功能域）
 
-1. **Bot 复制**、**置主 Bot**：mbot 侧无接口。
+**不是缺口**（客户端的自由 JSON + 服务端的 patch 处理已经能表达，见第 4 节）：置主 Bot、记忆编辑、群接龙上限（`maxHops`）、群成员/管理员调整。
+
+真正的缺口：
+
+1. **Bot 复制**：mbot 侧没有对应接口。
 2. **卡片 / view 回复**、**关闭待答**、**审批回复**：mbot 客户端未暴露（服务端 `/api/approvals/{id}` 存在）。
-3. **记忆编辑**（改一条已有记忆）：客户端未暴露，服务端能力在（`replaceId`/`expectedRevision`）。
-4. **群接续**、**群接龙上限**、**停单个成员的工作**：mbot 无对应粒度。
-5. **流式增量文本**（attempt 级）：mbot 只有整条 `message.upsert`。
-6. **离线通知补齐**（按 seq）：mbot 无。
-7. **事件流自动重连**：mbot 客户端无。
-8. **工作目录**、**长文读取**、**头像读取接口**：mbot 客户端无。
-9. **模型/记忆/用量全部是裸 `Map`**，没有 Dart 模型类；旧路的 `DsBotTeam`/`DsBotItem`/`DsBotMemoryView` 等类型在 mbot 侧没有对应物。
-10. **插件写操作**（安装/启停/卸载/导入）在 Android 上一律未实现。
-11. **Bot 入口**：产品 App 里没有 mbot 的 Bot 入口，只有 dev 入口。
+3. **群接续**、**停单个成员的工作**：mbot 无对应粒度。
+4. **流式增量文本**（attempt 级）：mbot 只有整条 `message.upsert`。
+5. **离线通知补齐**（按 seq）：mbot 无。
+6. **事件流自动重连**：mbot 客户端无。
+7. **工作目录**、**长文读取**、**头像读取接口**：mbot 客户端无。
+8. **模型/记忆/用量全部是裸 `Map`**，没有 Dart 模型类；旧路的 `DsBotTeam`/`DsBotItem`/`DsBotMemoryView` 等类型在 mbot 侧没有对应物。
+9. **插件写操作**（安装/启停/卸载/导入）在 Android 上一律未实现（读与预览可用）。
+10. **Bot 入口**：产品 App 里没有 mbot 的 Bot 入口，只有 dev 入口。
 
 ## 6. 后续可单独派出的 UI 小任务
 
-每项都只依赖**已经存在**的接口，不新增协议、不造凭据字段、不假设已连接。**建议按此顺序派发**，前面的不依赖后面的。
+### 6.1 已有实现，不要重复造页面
+
+以下行为**已经在仓库里**，本报告早前版本把它们列成待办是错的：
+
+| 行为 | 已有实现的位置 |
+|---|---|
+| Bot 列表 / 群列表（mbot 版） | [`bot_home.dart`](../../dsh-go/app/lib/bot/bot_home.dart) 的 `_list()` |
+| 单 Bot 聊天页（mbot 版） | [`bot_home.dart`](../../dsh-go/app/lib/bot/bot_home.dart) 的 `_chat()` |
+| 群聊页（mbot 版）+ 群成员名标注 | [`bot_home.dart`](../../dsh-go/app/lib/bot/bot_home.dart) 的 `_chat()`（`isGroup` 分支，用 `message['botId']` 反查 Bot 名） |
+| 建 Bot / 建群对话框 | [`bot_home.dart`](../../dsh-go/app/lib/bot/bot_home.dart) 的 `_create()` |
+| 事件流 → 状态同步 | [`bot_controller.dart`](../../dsh-go/app/lib/bot/bot_controller.dart) 的 `_applyEvent()`（`message.upsert` / `chat.summary` / `chat.reset`） |
+| 定时任务设置页接到 mbot | [`bot_profile.dart`](../../dsh-go/app/lib/bot/bot_profile.dart) 打开 `MbotScheduleSettingsPage(port: BotSchedulesPort(...))`，端口在 [`bot_schedules.dart`](../../dsh-go/app/lib/bot/bot_schedules.dart) |
+| 插件市场写操作的禁用态与说明 | [`packages/mbot_settings/lib/src/ui/plugin_settings_page.dart`](../../packages/mbot_settings/lib/src/ui/plugin_settings_page.dart) 已按 `MbotPluginPort.canMutate` 禁用安装/启停/卸载/导入并给出说明文案 |
+
+### 6.2 仍可独立派出的任务
+
+以下是**建议**，不是已授权的计划；是否开工由 Codex 逐项派发。每项都只依赖**已经存在**的接口，不新增协议、不造凭据字段、不假设已连接。
 
 | # | 任务 | 精确文件 | 依赖的已存在接口 | 验收方式 |
 |---|---|---|---|---|
-| U1 | 把 `MiniMaxBotApi` 的裸 `Map` 换成 Dart 模型（Bot / Group / Message / Summary / Memory） | 新增 `dsh-go/packages/dsh_client/lib/src/minimax_bot_models.dart`；改 [`minimax_bot_api.dart`](../../dsh-go/packages/dsh_client/lib/src/minimax_bot_api.dart) 的返回类型 | 现有 HTTP 路由与字段（3.1 / 3.2） | `packages/dsh_client` 的 `dart analyze` + `dart test`；新增模型解析单测（用 3.2 的真实字段名做 fixture） |
-| U2 | 给 `events()` 加自动重连（对齐 `DsBotFeed` 的 backoff） | [`minimax_bot_api.dart`](../../dsh-go/packages/dsh_client/lib/src/minimax_bot_api.dart) | 现有 `events()` | 单测：断开后按 backoff 重订；未知 `type` 仍原样透出 |
-| U3 | Bot 列表 / 群列表页面（mbot 版） | 新增 `dsh-go/app/lib/bot/bot_list_page.dart`；参照 [`bot_home.dart`](../../dsh-go/app/lib/bot/bot_home.dart) 的布局 | `state()`（U1 后是类型化字段） | widget 测试：空列表 / 有 Bot / 有群 / 加载中 / 错误重试 四态 |
-| U4 | 单 Bot 聊天页（mbot 版）：历史 + 发送 + 取消 | 新增 `dsh-go/app/lib/bot/bot_chat_page.dart` | `messages()`、`sendMessage()`、`cancelChat()`、`events()` 的 `message.upsert` / `chat.reset` | widget 测试：消息渲染、`status=='streaming'` 显示进行中、取消按钮调 `cancelChat` |
-| U5 | 群聊页（mbot 版）+ 群成员名标注 | 新增 `dsh-go/app/lib/bot/bot_group_chat_page.dart` | 同 U4，chat id 用 `group:grp_*` | widget 测试：`message.botId` → Bot 名的映射 |
-| U6 | 建 Bot / 建群对话框（mbot 版） | 新增 `dsh-go/app/lib/bot/bot_create_sheet.dart` | `createBot()`、`createGroup()` | widget 测试：空名不可提交；建群至少选一个成员 |
 | U7 | 记忆面板（mbot 版） | 新增 `dsh-go/app/lib/bot/bot_memory_card.dart` | `memory()`、`remember()`、`forget()` | widget 测试：读/写/删三条路径 |
-| U8 | 消息重发 / 重置会话按钮 | 改 U4/U5 的聊天页 | `retryMessage()`、`resetChat()` | widget 测试：按钮分别调对应方法 |
+| U8 | 消息重发 / 重置会话按钮 | 改 [`bot_home.dart`](../../dsh-go/app/lib/bot/bot_home.dart) 的 `_chat()` | `retryMessage()`、`resetChat()` | widget 测试：按钮分别调对应方法 |
 | U9 | 产品 App 里的 Bot 入口（把 mbot 界面接到抽屉/功能目录） | [`dsh-go/app/lib/ui/features/feature_catalog.dart`](../../dsh-go/app/lib/ui/features/feature_catalog.dart)、[`dsh-go/app/lib/ui/shell/sessions_drawer.dart`](../../dsh-go/app/lib/ui/shell/sessions_drawer.dart) | `BotRuntimeEndpoint` 报出活服务后才有真实数据 | 功能目录项可达；**无服务时显示「没有 Bot 服务在运行」而不是假列表** |
-| U10 | 事件流 → 状态同步（mbot 版 `state.changed` / `chat.summary` 落到 UI） | 改 [`bot_controller.dart`](../../dsh-go/app/lib/bot/bot_controller.dart) | `events()` 的 `state.changed`、`chat.summary`、`approval.removed` | 单测：收到 `state.changed` 后刷新一次；`chat.summary` 只更新对应 chat |
-| U11 | 定时任务设置页接到 mbot | [`packages/mbot_settings/lib/src/ui/schedule_settings_page.dart`](../../packages/mbot_settings/lib/src/ui/schedule_settings_page.dart) + [`bot_schedules.dart`](../../dsh-go/app/lib/bot/bot_schedules.dart) | `BotSchedulesPort`（已实现 `createSchedule`/`deleteSchedule`/`runSchedule`） | widget 测试：三个操作分别落到对应 API |
-| U12 | 插件市场「安装/启停/卸载」按钮的禁用态与说明文案 | [`packages/mbot_settings/lib/src/ui/plugin_settings_page.dart`](../../packages/mbot_settings/lib/src/ui/plugin_settings_page.dart) | `MbotPluginPort.canMutate == false` | widget 测试：`canMutate=false` 时写操作按钮不可用，并显示「Android 暂不支持」 |
+
+U1（把裸 `Map` 换成 Dart 模型，会改公共 API 的返回类型）与 U2（事件流自动重连，会改公共 API 的行为）都动公共客户端 API，**需 Codex 另行设计后再派**，本报告不自行开工。
 
 ## 7. 本报告的边界
 
