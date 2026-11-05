@@ -1,4 +1,4 @@
-# 开发接手入口（2026-11-04收尾）
+# 开发接手入口（2026-11-05续写）
 
 **先读[当前接手合同与完整快照](handoff/NEXT-AGENT.md)**。该文已重写为单一当前版本，列明提交/CI、唯一下一项、允许修改面、验收及禁止推断；旧交接保留在Git历史。下面大表和专题内的逐轮记录只作证据背景，不能当当前TODO。
 
@@ -6,9 +6,10 @@
 
 ## 当前已完成与未完成
 
-- Android独立Node验收新增双向Bot socket FD用例：Main传入socketpair并发HTTP，isolated Node用生产FD transport和简单HTTP夹具回复，断言无监听、请求/响应与Key边界。宿主精确脚本3项、Python33项和验收APK编译通过；**新API26/35执行待CI，真实Bot业务的Android运行仍未验证**。
+- 为运行中动态交付连接增加有界`GrantedConnectionQueue`：最多64项，实际默认8项；满/关闭时关闭未接收的连接，退出关闭剩余连接，取出后所有权转交消费者。单元测试覆盖顺序、超时、关闭唤醒、拒收及竞争；**尚未接入Binder/JNI或产品启动器**，不是动态传输闭环。具体下一步见[NEXT-AGENT](handoff/NEXT-AGENT.md)。
+- Android独立Node验收新增双向Bot socket FD用例：Main在启动时传入socketpair并发HTTP，isolated Node用生产FD transport和简单HTTP夹具回复，断言无监听、请求/响应与Key边界。宿主精确脚本3项、Python33项和验收APK编译通过；**fd80f3b / run 41864552047整体success，API26/35各t49/f0/e0/s0；真实Bot业务的Android运行仍未验证**。
 - 新增Bot的已连接FD服务接缝：真实官方Bot HTTP/鉴权/创建/ SSE可消费可信启动器交来的Unix连接，不在guest开启监听；保留原TCP模式。宿主实际跨进程FD测试及84项host回归通过，**Android传FD/Flutter桥/完整产品尚未接入或验证**，停止时活动SSE可能收到连接中断。
-- 已实现隔离descriptor只读FD交接组件：Main原子写入、校验owner和权限后提供只读FD，isolated Node按可信owner UID、大小、文件类型和字段白名单验证并关闭；支持已被替换的旧inode。Kotlin允许broker为null，不伪造isolated无法使用的loopback模型broker。新跨UID仪器用例的API26/35执行步骤和结果统计步骤均success，run41861262297 artifact均t49/f0/e0/s0（查询时整体job仍在收尾）；正式launcher仍未接入。
+- 已实现隔离descriptor只读FD交接组件：Main原子写入、校验owner和权限后提供只读FD，isolated Node按可信owner UID、大小、文件类型和字段白名单验证并关闭；支持已被替换的旧inode。Kotlin允许broker为null，不伪造isolated无法使用的loopback模型broker。8df623b / run 41861262297整体success，API26/35 artifact均t49/f0/e0/s0；正式launcher仍未接入。
 - Android隔离Node验收已增加生产`native-model-binding`的真实JNI/Binder模型链：无scope先拒绝，两个binding先后经过相同授权模型/流，关闭一个后另一个继续；仪器用例核对工具事件、生成Key只在native注入且不进入报告/文件。Linux实际FD夹具2项、Python32、SQLite VFS宿主验证和两个验收APK编译已通过；**a3c2056 / 41856965389 API26/35模拟器均success，artifact各t49/f0/e0/s0；真实provider/产品launcher仍未完成**。
 - 本轮修复多个runtime共享fetch时的路由冲突：共享AsyncLocalStorage、按target引用计数与在飞operation收尾，任一runtime关闭不能让另一runtime退回原始fetch；未绑定请求拒绝。此路由仍不是进程/UID隔离，孤儿异步任务及真实launcher的进程终止须另行处理。
 - 本轮修复缺失native binding时的绕过：Bot的run/answer现在返回`native_binding_unavailable`，不会调用上游gateway；带绑定的turn仍走scope。真实gateway生命周期新增负例。目录仍可展示；native broker接线与正式启动器尚未完成。

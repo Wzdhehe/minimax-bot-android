@@ -2,11 +2,11 @@
 # Android Node 加载关口（2026-11-03，正在开发）
 
 
-## Bot双向socket FD跨UID验收（已编译，设备待CI）
+## Bot双向socket FD跨UID验收（API26/35模拟器通过）
 
 验收APK内嵌生产`bot-fd-transport.mjs`。Main通过既有isolated服务交付socketpair并发送固定HTTP请求；隔离Node用该transport将FD接到一个**简单HTTP夹具**，不调用listen，Main读取HTTP响应，双方各断言请求/响应和未监听。保留真实Keystore Key/模型JNI、descriptor旧generation、SQLite/WAL/full-ICU等既有断言；真实Bot服务鉴权/SSE已在单独Linux跨进程FD测试验证，**此Android用例尚未启动真实Bot业务**。
 
-本地：精确打包脚本宿主3项、Python33项通过；固定Node/NDK JNI重编、默认release的验收APK和仪器APK `BUILD SUCCESSFUL in 2m 5s`（71 tasks/17 executed），javap证实JNI start签名匹配。该本地APK `requiresIntl=false`、`requiresSqlite=false`，不把它当组合测试；本机无adb/KVM/物理设备。推送后须实查API26/35的当前CI及artifact，不把历史49项算成本次通过。
+本地：精确打包脚本宿主3项、Python33项通过；固定Node/NDK JNI重编、默认release的验收APK和仪器APK `BUILD SUCCESSFUL in 2m 5s`（71 tasks/17 executed），javap证实JNI start签名匹配。该本地APK `requiresIntl=false`、`requiresSqlite=false`，不把它当组合测试；本机无adb/KVM/物理设备。**fd80f3b / run 41864552047整体success，API26/35各t49/f0/e0/s0**。目前socket仅在Node启动时传入，运行后动态交付还未接通。
 
 ## scoped模型binding → JNI/Binder 验收（模拟器已通过）
 

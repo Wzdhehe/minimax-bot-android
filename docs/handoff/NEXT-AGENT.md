@@ -1,17 +1,21 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 当前开发接手合同与完整快照
 
-更新时间：2026-11-04 12:28 UTC。**本文件已重新整理为当前状态，不再向前堆叠互相冲突的历史TODO。** 历史版可看[3d686ee之前的交接](https://github.com/Wzdhehe/minimax-bot-android/blob/3d686ee5b9d0ee81863ab5fea548819da5be519e/docs/handoff/NEXT-AGENT.md)。旧专题里的「当前/下一步」须结合本文件和对应commit/run理解，不能见一句TODO就重做。
+更新时间：2026-11-05。文首续写覆盖下文历史TODO。历史版可看[3d686ee之前的交接](https://github.com/Wzdhehe/minimax-bot-android/blob/3d686ee5b9d0ee81863ab5fea548819da5be519e/docs/handoff/NEXT-AGENT.md)。旧专题里的「当前/下一步」须结合本文件和对应commit/run理解，不能见一句TODO就重做。
 
 用户最新要求继续开发；本文件文首「当前续写」覆盖旧轮次的暂停指令与TODO。遇到没有实查的接口，先读源码/写清缺口，不得为展示进度虚构协议或开通入口。
 
-## 当前续写（覆盖下文历史TODO，2026-11-04）
+## 当前续写（覆盖下文历史TODO，2026-11-05）
+
+新加入`isolation/GrantedConnectionQueue.kt`与4项JUnit测试，是未来运行中交付已授权socket FD的有界队列：默认8、上限64；被队列接纳的FD在take前由队列管理，take后由消费者管理，溢出/关闭时立即关闭，close唤醒等待并关闭尚未取走的FD。队列**不鉴权**，调用方必须先核验Binder调用UID；它尚未接服务，也不撤销已经取走的FD。当前环境使用本机`/workspace/toolchains/kotlinc`、系统JDK 21和按CI SHA校验的临时JAR，native回归JUnit 46/Node 56通过；Android接入和设备验证未做。
+
+下一项：在**验收工程**中让通过owner UID验证的Main于isolated Node启动后，经Binder发送一个或多个已连接socket FD；在隔离进程用上述队列有界接收，经JNI异步取出，交`bot-fd-transport.mjs`；用双向HTTP夹具和严格超时验证无需重启的多次交付、关闭及Key边界。不得让消息携带任意代码/命令，队列不代替UID验证，也不能将夹具说成真实Bot或正式launcher。随后才可整合真实Bot与产品桥，继续处理进程死亡、FD回收、真实provider、ARM64/真机。
 
 用户已要求继续开发；本轮从远端20c4516快进。实查41847283176重跑后整体success：API26/35结果artifact均t49/f0/e0/s0；首次API35模拟器包下载损坏的失败历史保留。41850609902等是GitHub Android模拟器，不能称物理真机。
 
-新descriptor FD组件已加入：Main `RuntimeDescriptor.writeForTransfer`生成只读PFD，Node `readRuntimeDescriptorFd`按可信owner UID验收并消费；1MiB、owner/mode/单链接及字段白名单均限制，已替换的旧inode nlink=0允许，broker可为null。Android仪器用例已写：Main发布旧FD后覆盖新generation，isolated Node读取旧版本并核provider/FD关闭；8df623b/run41861262297的API26/35仪器执行及统计步骤已success，artifact均t49/f0/e0/s0；查询时整体job仍在收尾。此组件尚未接产品launcher，也不能解决全部runtime文件或Bot listener传输。 本地JUnit42/Node56、descriptor单测18、真实fork工厂FD读回1项、probe宿主2项/Python33通过；broker和Node两个验收工程各自debug+instrumentation APK编译通过（Node本地默认release无Intl/SQLite）。broker离线Gradle单元任务因缺依赖缓存失败，独立JUnit脚本42项通过；本机无设备。
+新descriptor FD组件已加入：Main `RuntimeDescriptor.writeForTransfer`生成只读PFD，Node `readRuntimeDescriptorFd`按可信owner UID验收并消费；1MiB、owner/mode/单链接及字段白名单均限制，已替换的旧inode nlink=0允许，broker可为null。Android仪器用例已写：Main发布旧FD后覆盖新generation，isolated Node读取旧版本并核provider/FD关闭；8df623b/run41861262297整体success，API26/35 artifact均t49/f0/e0/s0。此组件尚未接产品launcher，也不能解决全部runtime文件或Bot listener传输。 本地JUnit42/Node56、descriptor单测18、真实fork工厂FD读回1项、probe宿主2项/Python33通过；broker和Node两个验收工程各自debug+instrumentation APK编译通过（Node本地默认release无Intl/SQLite）。broker离线Gradle单元任务因缺依赖缓存失败，独立JUnit脚本42项通过；本机无设备。
 
-Bot传输的Android验收已添加：Main socketpair → isolated Node内生产FD transport → 简单HTTP夹具 → Main响应，验证双向与不listen；这不是Android上启动真实Bot业务。精确脚本宿主3项、Python33和默认release验收APK/仪器APK编译通过；新API26/35结果以本轮CI为准，见[T-AndroidNode](T-AndroidNode.md)。
+Bot传输的Android验收已添加：Main启动时传入socketpair → isolated Node内生产FD transport → 简单HTTP夹具 → Main响应，验证双向与不listen；这不是Android上启动真实Bot业务。精确脚本宿主3项、Python33和默认release验收APK/仪器APK编译通过；**fd80f3b / 41864552047整体success，API26/35均t49/f0/e0/s0**，见[T-AndroidNode](T-AndroidNode.md)。
 
 新Bot FD传输：`bot-fd-transport.mjs`将可信启动器交来的已连接socket FD交给原版Bot HTTP server，不自行listen；vendor仅加可选listenServer宿主接缝，原TCP路径保留。64连接上限、类型/所有权/关闭处理；HTTP鉴权和Host/Origin检查不变。真实Bot宿主跨进程Unix FD测试覆盖匿名/错误Origin/Host拒绝、创建Bot、SSE state.changed和stop；完整host回归84项通过。**仅宿主组件**：Android Binder/JNI/Flutter连接交付尚未实现，停止会销毁活动连接、SSE可能异常结束，完整runtime FS和product launcher仍缺。不要把传输组件当可用APK。
 
