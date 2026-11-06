@@ -68,6 +68,19 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
       addon.exports.setFdVfs(...dataFds);
       // Remove input aliases before SQLite creates locks; registry owns dup FDs.
       dataFds.forEach((fd) => fs.closeSync(fd)); dataFds.length = 0;
+      probePhase = 'vfs_metadata';
+      if (typeof addon.exports.fdVfsMetadata !== 'function') throw Object.assign(Error('fd_vfs_metadata_unavailable'), { code: 'fd_vfs_metadata_unavailable' });
+      const describe = (slot) => addon.exports.fdVfsMetadata(slot);
+      const directoryInfo = describe(4);
+      const metadata = {
+        directoryPrivate: directoryInfo.present && directoryInfo.mode === 0o40700,
+        filesPrivate: [0, 1, 2, 3].every((slot) => describe(slot).mode === 0o100600),
+        invalidRefused: 0,
+      };
+      for (const args of [[], [-1], [5], ['state.db'], [0.5], [0, 1]]) {
+        try { addon.exports.fdVfsMetadata(...args); }
+        catch (error) { if (error?.code === 'fd_vfs_metadata_unavailable') metadata.invalidRefused++; }
+      }
       probePhase = 'vfs_open';
       const disk = new Database('state.db', options);
       let verify;
@@ -84,7 +97,12 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
         verify.close(); verify = null;
         probePhase = 'vfs_write';
         if (initialRows.length === 0) disk.transaction(() => { disk.prepare('INSERT INTO durable VALUES (?)').run('second'); })();
-        persistent = { mode, initialRows, parallelRows: parallelRows.map((row) => row.text), count: disk.prepare('SELECT count(*) AS n FROM durable').get().n };
+        // Force a real WAL write on both processes, including the clean reopen
+        // where the durable fixture already has its two rows.
+        disk.exec('CREATE TABLE IF NOT EXISTS fd_metadata_probe(value INTEGER); INSERT INTO fd_metadata_probe VALUES(1)');
+        const walInfo = describe(1);
+        metadata.walLive = walInfo.present && walInfo.size > 0 && walInfo.mode === 0o100600;
+        persistent = { mode, initialRows, parallelRows: parallelRows.map((row) => row.text), count: disk.prepare('SELECT count(*) AS n FROM durable').get().n, metadata };
       } finally { verify?.close(); disk.close(); }
       probePhase = 'vfs_reopen';
       const reopened = new Database('state.db', options);
@@ -92,6 +110,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
         persistent.reopened = reopened.prepare('SELECT text FROM durable').all().map((row) => row.text);
         persistent.integrity = reopened.pragma('integrity_check', { simple: true });
       } finally { reopened.close(); }
+      metadata.walRetired = !describe(1).present && describe(1).size === 0;
     }
   }
   dataFds.forEach((fd) => fs.closeSync(fd));
@@ -403,7 +422,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
   fs.closeSync(Number(result));
 })().catch((error) => {
   const codes = new Set(['SQLITE_CANTOPEN', 'SQLITE_IOERR', 'SQLITE_IOERR_SHMOPEN', 'SQLITE_BUSY', 'SQLITE_READONLY',
-    'SQLITE_ERROR', 'SQLITE_PERM', 'SQLITE_MISUSE', 'SQLITE_NOTFOUND', 'fd_vfs_unavailable', 'fd_vfs_input_invalid',
+    'SQLITE_ERROR', 'SQLITE_PERM', 'SQLITE_MISUSE', 'SQLITE_NOTFOUND', 'fd_vfs_unavailable', 'fd_vfs_input_invalid', 'fd_vfs_metadata_unavailable',
     'runtime_data_invalid', 'runtime_data_denied', 'runtime_data_closed', 'runtime_data_unavailable',
     'runtime_data_not_found', 'runtime_data_too_large', 'runtime_data_outcome_unknown', 'runtime_data_reload_required', 'descriptor_invalid', 'descriptor_permissions',
     'descriptor_not_a_regular_file', 'bot_transport_timeout', 'bot_transport_invalid', 'bot_transport_unavailable', 'memory_pending', 'memory_backup_failed']);

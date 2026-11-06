@@ -15,6 +15,8 @@
 
 native备份复制内核已在真实SQLite/FD宿主回归通过，见 [README](../../dsh-go/runtime/native-sqlite/README.md) 的严格调用前提和尚未接线项；它不等于Android备份完成，不取消当前真实factory探针的missing-snapshot拒绝。下一步是可信native owner/IPC/只读snapshot授予与上游FS，不得将备份可写FD给Agent后声称能撤销。
 
+本机新卡为 [FD metadata直接设备验收](T-Flash-FDMetadataProbe.md)，替代上一卡已完成的A/B/R1。Codex已在固定Node脚本和IsolatedNodeModelTest中新增真实metadata调用/断言（私有mode、6次非法输入、运行中WAL大小、关闭后WAL状态），并有旧API缺失的宿主拒绝负例。需要本机从最新HEAD重新准备full-ICU和SQLite、构建并执行；**当前设备未验证**。Codex同时推进备份native owner/IPC，不改本机并行任务。
+
 昨晚已推送的核心代码与实际证据：
 
 | 提交 | 实现和验证 | 尚不能据此声称 |

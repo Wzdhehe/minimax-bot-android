@@ -109,10 +109,10 @@ class IsolatedNodeModelTest {
     private fun probeFailure(report: JSONObject): AssertionError {
         // Failure messages include only finite allowlisted codes, never a raw
         // report, provider response, path, session token or generated Key.
-        val phases = setOf("bootstrap", "sqlite_load", "sqlite_memory", "vfs_register", "vfs_open", "vfs_wal",
+        val phases = setOf("bootstrap", "sqlite_load", "sqlite_memory", "vfs_register", "vfs_metadata", "vfs_open", "vfs_wal",
             "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "descriptor_transfer", "bot_http_fd", "model_dynamic", "sdk_route", "scoped_model_route", "file_commit", "file_read", "file_mutation", "file_append", "bot_store")
         val codes = setOf("SQLITE_CANTOPEN", "SQLITE_IOERR", "SQLITE_IOERR_SHMOPEN", "SQLITE_BUSY", "SQLITE_READONLY",
-            "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "sqlite_parent_missing",
+            "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "fd_vfs_metadata_unavailable", "sqlite_parent_missing",
             "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable", "runtime_data_not_found", "runtime_data_too_large", "runtime_data_outcome_unknown", "runtime_data_reload_required",
             "descriptor_invalid", "descriptor_permissions", "descriptor_not_a_regular_file", "bot_transport_timeout", "bot_transport_invalid", "bot_transport_unavailable", "memory_pending", "memory_backup_failed")
         val phase = report.optString("failedPhase").takeIf { it in phases } ?: "unknown"
@@ -370,6 +370,11 @@ class IsolatedNodeModelTest {
                                     assertEquals("你好", persistent.getJSONArray("reopened").getString(0))
                                     assertEquals("second", persistent.getJSONArray("reopened").getString(1))
                                     assertEquals("ok", persistent.getString("integrity"))
+                                    val metadata = persistent.getJSONObject("metadata")
+                                    for (name in listOf("directoryPrivate", "filesPrivate", "walLive", "walRetired")) {
+                                        assertTrue(metadata.getBoolean(name))
+                                    }
+                                    assertEquals(6, metadata.getInt("invalidRefused"))
                                     assertTrue(dataFiles[0].length() > 0)
                                     assertTrue(dataFiles.none { it.readBytes().toString(Charsets.UTF_8).contains(secret) })
                                 }
