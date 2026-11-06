@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createInterface } from 'node:readline';
-import { closeSync, existsSync, mkdirSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, mkdirSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 
 const [bundle, root] = process.argv.slice(2);
@@ -16,9 +17,11 @@ const { startBuiltinBotRuntimeFromFd } = await import(pathToFileURL(join(bundle,
 const Database = createRequire(import.meta.url)('better-sqlite3');
 const physicalDatabase = join(root, 'v2/sqlite/runtime-state.sqlite');
 mkdirSync(join(root, 'v2/sqlite'), { recursive: true, mode: 0o700 });
+mkdirSync(join(root, 'v2/sqlite/backups'), { mode: 0o700 });
 writeFileSync(physicalDatabase, '', { flag: 'wx', mode: 0o600 });
 const databases = [];
 const backupMethods = new WeakMap();
+const snapshots = new Map();
 const nativeSqlite = { open(options) {
   assert.equal(this, nativeSqlite);
   assert.equal(arguments.length, 1);
@@ -37,12 +40,24 @@ const nativeSqlite = { open(options) {
     if (slot > 0 && slot < 4 && error.code === 'ENOENT') return { present: false, mode: 0o100600, size: 0 };
     throw error;
   }
-}, backup(database, { fileName }) {
-  return backupMethods.get(database)(join(root, 'v2/sqlite/backups', fileName));
+}, async backup(database, { fileName }) {
+  const destination = join(root, 'v2/sqlite/backups', fileName);
+  assert.equal(existsSync(destination), false);
+  await backupMethods.get(database)(destination);
+  chmodSync(destination, 0o600);
+  snapshots.set(fileName, { fileName, bytes: statSync(destination).size, createdAtMs: Date.now(), identity: randomBytes(16).toString('hex') });
+  return 'published';
 }, openBackup({ fileName, options }) {
   const database = new Database(join(root, 'v2/sqlite/backups', fileName), options);
   databases.push(database);
   return database;
+}, snapshots: {
+  catalog() { return [...snapshots.values()]; },
+  remove({ fileName, identity }) {
+    assert.equal(snapshots.get(fileName)?.identity, identity);
+    unlinkSync(join(root, 'v2/sqlite/backups', fileName)); snapshots.delete(fileName);
+    return 'removed';
+  },
 } };
 const values = new Map();
 const missing = () => Object.assign(Error('runtime_data_not_found'), { code: 'runtime_data_not_found' });

@@ -62,7 +62,7 @@ jobs:
         working-directory: dsh-go
         run: node --test runtime/minimax-bot-host/agent-port.test.mjs runtime/minimax-bot-host/service.test.mjs runtime/minimax-bot-host/bot-runtime-start.test.mjs runtime/minimax-bot-host/bot-fd-transport.test.mjs runtime/minimax-bot-host/bot-fd-ingress.test.mjs runtime/minimax-bot-host/bot-file-lease.test.mjs runtime/minimax-bot-host/bot-store-persistence.test.mjs runtime/minimax-bot-host/bot-memory-filesystem.test.mjs runtime/minimax-bot-host/runtime-descriptor.test.mjs runtime/minimax-bot-host/workspace.test.mjs runtime/minimax-bot-host/provider-broker.test.mjs runtime/minimax-bot-host/usage-quota.test.mjs runtime/minimax-bot-host/schedule.test.mjs runtime/minimax-bot-host/model-catalog-projection.test.mjs runtime/minimax-bot-host/native-model-binding.test.mjs runtime/minimax-bot-host/native-model-runtime.test.mjs
       - name: Test the native-only runtime SQLite loader
-        run: node --test dsh-go/runtime/minimax-bot-host/runtime-sqlite-binding.test.mjs dsh-go/runtime/minimax-bot-host/runtime-sqlite-fs.test.mjs
+        run: node --test dsh-go/runtime/minimax-bot-host/runtime-sqlite-binding.test.mjs dsh-go/runtime/minimax-bot-host/runtime-sqlite-fs.test.mjs dsh-go/runtime/minimax-bot-host/runtime-snapshot-port.test.mjs dsh-go/runtime/minimax-bot-host/runtime-sqlite-snapshot-fs.test.mjs
       - name: Test the native SQLite backup kernel with pinned source and real FDs
         run: python3 dsh-go/tooling/android-node-probe/test-sqlite-backup.py
       - name: Test private snapshot stage and production JNI primitives on Linux

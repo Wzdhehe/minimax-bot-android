@@ -6,6 +6,7 @@ import { createBotRuntimeSession } from './runtime-host-session.mjs';
 import { catalogFromDescriptor, readRuntimeDescriptor, readRuntimeDescriptorFd } from './runtime-descriptor.mjs';
 import { startBotRuntimeFromFd } from './bot-runtime-start.mjs';
 import { bindRuntimeSqlite } from './runtime-sqlite-binding.mjs';
+export { createNativeSnapshotSqlitePort } from './runtime-snapshot-port.mjs';
 export { createWebuiRuntimeHost };
 
 // The guest reads the descriptor the Android host wrote into its own private
@@ -25,7 +26,8 @@ export async function createBuiltinBotRuntime({ dataDir, appVersion, signal, des
     open: typeof nativeSqlite?.open === 'function' ? nativeSqlite.open.bind(nativeSqlite) : null,
     backup: typeof nativeSqlite?.backup === 'function' ? nativeSqlite.backup.bind(nativeSqlite) : nativeSqlite?.backup,
     openBackup: typeof nativeSqlite?.openBackup === 'function' ? nativeSqlite.openBackup.bind(nativeSqlite) : nativeSqlite?.openBackup,
-    metadata: typeof nativeSqlite?.metadata === 'function' ? nativeSqlite.metadata.bind(nativeSqlite) : nativeSqlite?.metadata });
+    metadata: typeof nativeSqlite?.metadata === 'function' ? nativeSqlite.metadata.bind(nativeSqlite) : nativeSqlite?.metadata,
+    snapshots: nativeSqlite?.snapshots });
   try {
     const runtime = await createBotRuntimeSession({ dataDir, signal, catalog: catalogFromDescriptor(descriptor), probe, nativeBinding, startHost: ({ dataDir: root }) =>
       createWebuiRuntimeHost({ dataDir: root, appVersion, mcodeToolsRequested: false }) });

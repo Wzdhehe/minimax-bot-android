@@ -72,7 +72,7 @@ def run(archive=None, ndk=None, node_probe=False, runtime_bundle=None):
                              '[os.dup2(fd, 3+i, inheritable=True) for i,fd in enumerate(fds)]; '
                              '[os.close(fd) for fd in {*fds,*originals} if fd not in (3,4,5,6)]; '
                              'os.execvp("node", ["node", *sys.argv[5:]])')
-                    for attempt in range(2):
+                    for attempt in range(3):
                         subprocess.run([sys.executable, '-c', remap, *[str(handle.fileno()) for handle in handles],
                                         str(ROOT / 'runtime-sqlite-fd-child.mjs'), str(library),
                                         str(ROOT / 'build/sqlite-probe/wrapper.cjs'), str(runtime_bundle.resolve()),

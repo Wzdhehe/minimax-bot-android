@@ -56,6 +56,9 @@ test('the pinned full host and actual Bot graph compile without installing or la
   assert.ok(Object.hasOwn(metafile.inputs, join(here, 'bot-runtime-start.mjs')));
   assert.ok(Object.hasOwn(metafile.inputs, join(here, 'runtime-sqlite-binding.mjs')));
   assert.ok(Object.hasOwn(metafile.inputs, join(here, 'runtime-sqlite-fs.mjs')));
+  assert.ok(Object.hasOwn(metafile.inputs, join(here, 'runtime-sqlite-snapshot-fs.mjs')));
+  const backup = metafile.inputs[join(source, 'packages/local-runtime-v2/src/infra/db/backup.ts')];
+  assert.ok(backup.imports.some((entry) => resolve(source, entry.path) === join(here, 'runtime-sqlite-snapshot-fs.mjs')));
   const dbClient = metafile.inputs[join(source, 'packages/local-runtime-v2/src/infra/db/client.ts')];
   assert.ok(dbClient.imports.some((entry) => resolve(source, entry.path) === join(here, 'runtime-sqlite-module.mjs')));
   assert.ok(dbClient.imports.some((entry) => resolve(source, entry.path) === join(here, 'runtime-sqlite-fs.mjs')));
