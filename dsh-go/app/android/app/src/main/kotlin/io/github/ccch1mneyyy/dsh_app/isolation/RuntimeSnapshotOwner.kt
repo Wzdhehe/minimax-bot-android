@@ -23,7 +23,7 @@ internal class RuntimeSnapshotOwner private constructor(
 ) : Closeable {
     enum class Status { PUBLISHED, ALREADY_EXISTS, NOT_PUBLISHED, OUTCOME_UNKNOWN }
     data class Info(val fileName: String, val bytes: Long, val createdAtMs: Long, val identity: String)
-    private class Record(val info: Info, val file: ParcelFileDescriptor, val device: Long, val inode: Long)
+    private class Record(val info: Info, val file: ParcelFileDescriptor, val device: Long, val inode: Long, var grants: Int = 0)
     private val records = mutableMapOf<String, Record>()
     private val closed = AtomicBoolean(false)
     private val busy = AtomicBoolean(false)
@@ -173,6 +173,7 @@ internal class RuntimeSnapshotOwner private constructor(
             if (closed.get() || uncertain.get()) throw RuntimeDataFailure(RuntimeDataCode.CLOSED)
             val record = records[fileName] ?: throw RuntimeDataFailure(RuntimeDataCode.NOT_FOUND)
             if (record.info.identity != identity) throw RuntimeDataFailure(RuntimeDataCode.DENIED)
+            if (record.grants >= 8) throw RuntimeDataFailure(RuntimeDataCode.TOO_LARGE)
             try {
                 val info = Os.fstat(record.file.fileDescriptor)
                 if (info.st_dev != record.device || info.st_ino != record.inode || info.st_size != record.info.bytes ||
@@ -180,7 +181,7 @@ internal class RuntimeSnapshotOwner private constructor(
                     (Os.fcntlInt(record.file.fileDescriptor, OsConstants.F_GETFL, 0) and OsConstants.O_ACCMODE) != OsConstants.O_RDONLY) {
                     throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
                 }
-                record.file.dup()
+                record.file.dup().also { record.grants++ }
             } catch (failure: RuntimeDataFailure) { throw failure }
             catch (_: Exception) { throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }
         }
