@@ -18,14 +18,17 @@ class BotSettingsPlugin : FlutterPlugin {
                         "providers" -> result.success(providers.catalog())
                         "saveProvider" -> {
                             providers.save(call.arguments as? Map<*, *> ?: throw IllegalArgumentException())
+                            io.github.ccch1mneyyy.dsh_app.runtime.BotRuntimeManager.catalogChanged(binding.applicationContext)
                             result.success(providers.catalog())
                         }
                         "deleteProvider" -> {
                             providers.delete(call.argument<String>("providerId") ?: throw IllegalArgumentException())
+                            io.github.ccch1mneyyy.dsh_app.runtime.BotRuntimeManager.catalogChanged(binding.applicationContext)
                             result.success(providers.catalog())
                         }
                         "selectDefaultProviderModel" -> {
                             providers.selectDefault(call.argument<String>("providerId") ?: "", call.argument<String>("modelId") ?: "")
+                            io.github.ccch1mneyyy.dsh_app.runtime.BotRuntimeManager.catalogChanged(binding.applicationContext)
                             result.success(providers.catalog())
                         }
                         "load" -> result.success(store.load())

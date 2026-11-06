@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 package io.github.ccch1mneyyy.dsh_app.bot
 
-import io.github.ccch1mneyyy.dsh_app.runtime.BotRuntimeEndpoint
+import io.github.ccch1mneyyy.dsh_app.runtime.BotRuntimeManager
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -15,14 +15,21 @@ import io.flutter.plugin.common.MethodChannel
  */
 internal class BotRuntimePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private var methods: MethodChannel? = null
+    private var context: android.content.Context? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        context = binding.applicationContext
+        BotRuntimeManager.attach(binding.applicationContext)
         methods = MethodChannel(binding.binaryMessenger, CHANNEL).also { it.setMethodCallHandler(this) }
+        BotRuntimeManager.requestStart(binding.applicationContext)
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "descriptor" -> result.success(BotRuntimeEndpoint.descriptor())
+            "descriptor" -> BotRuntimeManager.descriptorWhenSettled { result.success(it) }
+            "status" -> result.success(BotRuntimeManager.status())
+            "start" -> { context?.let { BotRuntimeManager.requestStart(it) }; result.success(null) }
+            "stop" -> { BotRuntimeManager.stop(); result.success(null) }
             else -> result.notImplemented()
         }
     }
@@ -30,6 +37,7 @@ internal class BotRuntimePlugin : FlutterPlugin, MethodChannel.MethodCallHandler
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         methods?.setMethodCallHandler(null)
         methods = null
+        context = null
     }
 
     companion object {

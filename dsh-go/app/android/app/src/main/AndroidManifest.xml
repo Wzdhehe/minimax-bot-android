@@ -213,6 +213,13 @@
         </service>
 
         <!-- Keeps the local DSH process alive while the app is in the background. -->
+        <service android:name=".runtime.BotRuntimeService" android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Runs the user's local MiniMax Bot conversations and scheduled tasks" />
+        </service>
+        <service android:name=".runtime.IsolatedBotService" android:exported="false"
+            android:isolatedProcess="true" android:process=":mbot_runtime" />
         <service
             android:name=".runtime.DshService"
             android:exported="false"

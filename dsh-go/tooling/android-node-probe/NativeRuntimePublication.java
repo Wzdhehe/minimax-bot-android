@@ -16,6 +16,7 @@ public final class NativeRuntimePublication {
     private native int publishNoReplace(int directory, String source, String target);
     private native int replace(int directory, String source, String target);
     private native int tryDirectoryLease(int directory);
+    private native int tryDatabaseLease(int descriptor);
     private native int cleanupBotStages(int directory);
     private native int openRead(int directory, String name);
     private native int openChildDirectory(int directory, String name, boolean create);

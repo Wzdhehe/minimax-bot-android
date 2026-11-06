@@ -53,6 +53,12 @@ jint Replace(JNIEnv* env, jobject, jint directory, jstring source, jstring targe
 jint TryDirectoryLease(JNIEnv*, jobject, jint directory) {
   return try_runtime_directory_lease(directory);
 }
+jint TryDatabaseLease(JNIEnv*, jobject, jint fd) {
+  struct stat info{};
+  if (fd < 3 || fstat(fd, &info) != 0) return EINVAL;
+  if (!S_ISREG(info.st_mode) || info.st_uid != getuid() || info.st_nlink != 1 || (info.st_mode & 07777) != 0600) return EACCES;
+  return flock(fd, LOCK_EX | LOCK_NB) == 0 ? 0 : errno;
+}
 jint CleanupBotStages(JNIEnv*, jobject, jint directory) {
   return mbot_stage_cleanup::sweep(directory);
 }
@@ -147,6 +153,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     {const_cast<char*>("publishNoReplace"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Publish)},
     {const_cast<char*>("replace"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;)I"), reinterpret_cast<void*>(Replace)},
     {const_cast<char*>("tryDirectoryLease"), const_cast<char*>("(I)I"), reinterpret_cast<void*>(TryDirectoryLease)},
+    {const_cast<char*>("tryDatabaseLease"), const_cast<char*>("(I)I"), reinterpret_cast<void*>(TryDatabaseLease)},
     {const_cast<char*>("cleanupBotStages"), const_cast<char*>("(I)I"), reinterpret_cast<void*>(CleanupBotStages)},
     {const_cast<char*>("openRead"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(OpenRead)},
     {const_cast<char*>("openChildDirectory"), const_cast<char*>("(ILjava/lang/String;Z)I"), reinterpret_cast<void*>(OpenChildDirectory)},

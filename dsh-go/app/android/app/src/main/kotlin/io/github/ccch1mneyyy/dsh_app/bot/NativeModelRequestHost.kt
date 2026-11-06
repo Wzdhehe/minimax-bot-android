@@ -34,7 +34,9 @@ internal class NativeModelRequestHost(
     private val openChannel: (String) -> ParcelFileDescriptor,
     private val closeChannels: () -> Unit,
     private val readTimeoutMs: Long = 5_000,
+    allowedModels: Set<Pair<String, String>>? = null,
 ) : Binder(), Closeable {
+    private val permittedModels = (allowedModels ?: setOf(providerId to modelId)).toSet()
     val session = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
     private val closed = AtomicBoolean()
     private val lock = Any()
@@ -45,6 +47,9 @@ internal class NativeModelRequestHost(
         require(readTimeoutMs in 100..10_000)
         require(isolatedUid > 0 && isolatedUid != Process.myUid())
         require(providerId.isNotBlank() && providerId.length <= 200 && modelId.isNotBlank() && modelId.length <= 256)
+        require(permittedModels.size <= 512 && permittedModels.all { (provider, model) ->
+            provider.isNotBlank() && provider.length <= 200 && model.isNotBlank() && model.length <= 256
+        })
         peer.linkToDeath(death, 0)
     }
     override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
@@ -94,7 +99,9 @@ internal class NativeModelRequestHost(
                     }
                     requireNativeJsonBudget(body, ModelBrokerCode.INVALID_REQUEST)
                     val request = JSONObject(body)
-                    if (request.get("providerId") != providerId || request.get("modelId") != modelId) {
+                    val provider = request.get("providerId")
+                    val model = request.get("modelId")
+                    if (provider !is String || model !is String || (provider to model) !in permittedModels) {
                         throw ModelBrokerFailure(ModelBrokerCode.INVALID_PROVIDER)
                     }
                     if (revoked.get() || closed.get()) throw ModelBrokerFailure(ModelBrokerCode.CANCELLED)

@@ -34,6 +34,19 @@ internal class RuntimeDatabaseFiles private constructor(
 ) : Closeable {
     private var closed = false
 
+    /** Product launcher lease on the primary file's open-file-description.
+     * Binder/VFS duplicates keep it held across Main death until the old guest
+     * and any backup worker actually retire. No directory grant is required.
+     * Never explicitly unlock while a transferred duplicate could survive. */
+    @Synchronized fun acquireExecutionLease() {
+        if (closed) throw RuntimeDataFailure(RuntimeDataCode.CLOSED)
+        when (NativeRuntimePublication.tryDatabaseLease(descriptors[0].fd)) {
+            0 -> Unit
+            OsConstants.EAGAIN -> throw RuntimeDataFailure(RuntimeDataCode.BUSY)
+            else -> throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+        }
+    }
+
     /** Caller owns these duplicates. No physical path or directory is returned. */
     @Synchronized fun duplicateForTransfer(): List<ParcelFileDescriptor> {
         if (closed) throw RuntimeDataFailure(RuntimeDataCode.CLOSED)

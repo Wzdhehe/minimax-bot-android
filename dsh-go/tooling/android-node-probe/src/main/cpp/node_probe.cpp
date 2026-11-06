@@ -356,6 +356,9 @@ void MoveFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args
 void RenameFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, 5); }
 void RemoveFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, 6); }
 void AppendFile(const v8::FunctionCallbackInfo<v8::Value>& args) { CommitFile(args, 7); }
+#ifdef MBOT_PRODUCT_NODE
+#include "synchronous_files.inc"
+#endif
 void InitializeFiles(v8::Local<v8::Object> exports, v8::Local<v8::Value>, v8::Local<v8::Context> context, void*) {
   auto* isolate = context->GetIsolate();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "publish"), v8::Function::New(context, PublishFile).ToLocalChecked()).Check();
@@ -366,6 +369,10 @@ void InitializeFiles(v8::Local<v8::Object> exports, v8::Local<v8::Value>, v8::Lo
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "rename"), v8::Function::New(context, RenameFile).ToLocalChecked()).Check();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "remove"), v8::Function::New(context, RemoveFile).ToLocalChecked()).Check();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "append"), v8::Function::New(context, AppendFile).ToLocalChecked()).Check();
+#ifdef MBOT_PRODUCT_NODE
+  exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "readSync"), v8::Function::New(context, ReadFileSync).ToLocalChecked()).Check();
+  exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "replaceSync"), v8::Function::New(context, ReplaceFileSync).ToLocalChecked()).Check();
+#endif
 }
 // Node's macro emits a TU-local `_module` regardless of the public module name.
 // Keep the second registration in its own namespace rather than duplicating it.
@@ -385,6 +392,9 @@ std::string ReadString(JNIEnv* env, jstring value) {
 
 // This is a fixed-script test entry, loaded only by a private isolated service.
 // No credential, network endpoint or arbitrary command is accepted here.
+#ifdef MBOT_PRODUCT_NODE
+#include "product_entry.inc"
+#else
 jint Start(JNIEnv* env, jobject owner, jstring script, jint normal, jint stalled,
            jint echo, jint result, jstring private_path, jstring native_dir, jstring provider_id,
            jint descriptor_fd, jint owner_uid, jintArray data_fds) {
@@ -414,13 +424,18 @@ jint Start(JNIEnv* env, jobject owner, jstring script, jint normal, jint stalled
   env->DeleteGlobalRef(dispatcher); dispatcher = nullptr;
   return exit_code;
 }
+#endif
 }  // namespace
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   java_vm = vm;
   JNIEnv* env = nullptr;
   if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return JNI_ERR;
+#ifdef MBOT_PRODUCT_NODE
+  jclass type = env->FindClass("io/github/ccch1mneyyy/dsh_app/runtime/EmbeddedBotNode");
+#else
   jclass type = env->FindClass("io/github/ccch1mneyyy/dsh_app/nodeprobe/NodeProbeRuntime");
+#endif
   if (!type) return JNI_ERR;
   open_method = env->GetMethodID(type, "openModelFd", "(Ljava/lang/String;Ljava/lang/String;)I");
   cancel_method = env->GetMethodID(type, "cancelModelFd", "(Ljava/lang/String;)V");
@@ -438,8 +453,18 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   snapshot_remove_method = env->GetMethodID(type, "removeRuntimeSnapshot", "(Ljava/lang/String;Ljava/lang/String;)I");
   if (!open_method || !cancel_method || !bot_connection_method || !bot_connection_close_method || !file_method || !file_read_method || !file_size_method || !file_move_method || !file_remove_method || !file_append_method) return JNI_ERR;
   if (!snapshot_copy_method || !snapshot_catalog_method || !snapshot_open_method || !snapshot_remove_method) return JNI_ERR;
+#ifdef MBOT_PRODUCT_NODE
+  asset_read_method = env->GetMethodID(type, "readStaticAsset", "(Ljava/lang/String;)[B");
+  ready_method = env->GetMethodID(type, "markReady", "()Z");
+  failure_method = env->GetMethodID(type, "reportFailure", "(Ljava/lang/String;)V");
+  wait_stop_method = env->GetMethodID(type, "waitForStop", "()I");
+  if (!asset_read_method || !ready_method || !failure_method || !wait_stop_method) return JNI_ERR;
+  JNINativeMethod method{const_cast<char*>("start"),
+      const_cast<char*>("(Ljava/lang/String;IILjava/lang/String;[I)I"), reinterpret_cast<void*>(StartProduct)};
+#else
   JNINativeMethod method{const_cast<char*>("start"),
       const_cast<char*>("(Ljava/lang/String;IIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;II[I)I"), reinterpret_cast<void*>(Start)};
+#endif
   if (env->RegisterNatives(type, &method, 1) != JNI_OK) return JNI_ERR;
   return JNI_VERSION_1_6;
 }
