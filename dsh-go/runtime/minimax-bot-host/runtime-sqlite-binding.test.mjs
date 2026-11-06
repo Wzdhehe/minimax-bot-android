@@ -187,4 +187,10 @@ test('the build intercepts node:module only at the two pinned SQLite loaders', (
   assert.match(resolver.callback({ importer: legacy, path: 'node:module' }).path, /runtime-sqlite-module\.mjs$/);
   assert.equal(resolver.callback({ importer: join(source, 'packages/other.ts'), path: 'node:module' }), undefined);
   assert.ok(wiring.adaptations.some((entry) => entry.importer.endsWith('infra/db/client.ts')));
+  const fsResolver = resolvers.find((entry) => entry.filter.test('node:fs'));
+  for (const importer of [join(source, 'packages/local-runtime/src/persistence/db.ts'),
+    join(source, 'packages/local-runtime-v2/src/infra/db/client.ts')]) {
+    assert.match(fsResolver.callback({ importer, path: 'node:fs' }).path, /runtime-sqlite-fs\.mjs$/);
+  }
+  assert.equal(fsResolver.callback({ importer: join(source, 'packages/other.ts'), path: 'node:fs' }), undefined);
 });

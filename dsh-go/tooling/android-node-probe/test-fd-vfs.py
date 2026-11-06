@@ -62,6 +62,7 @@ def run(archive=None, ndk=None, node_probe=False, runtime_bundle=None):
                 handles = [path.open('w+b') for path in files]
                 try:
                     for handle in handles:
+                        os.fchmod(handle.fileno(), 0o600)
                         os.fsync(handle.fileno())
                     # Popen pass_fds preserves the original descriptor numbers;
                     # a tiny exec wrapper remaps them without a shell or env Keys.
@@ -79,10 +80,10 @@ def run(archive=None, ndk=None, node_probe=False, runtime_bundle=None):
                                        pass_fds=tuple(handle.fileno() for handle in handles),
                                        env={'PATH': os.environ.get('PATH', ''), 'HOME': str(stage)},
                                        check=True, timeout=60)
-                    # The legacy metadata check fails before any migration
-                    # writes. Even SQLite sidecars must remain untouched.
-                    assert all(path.stat().st_size == 0 for path in files)
-                    print('PASS: real runtime missing-metadata refusal and intact FD database across independent host processes; not Android')
+                    # Metadata allows original legacy schema initialization,
+                    # but the v2 migration must still stop without a snapshot.
+                    assert files[0].stat().st_size > 0
+                    print('PASS: real runtime FD metadata advances startup to the mandatory backup boundary; not Android')
                 finally:
                     for handle in handles:
                         handle.close()

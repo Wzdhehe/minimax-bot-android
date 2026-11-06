@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createInterface } from 'node:readline';
-import { closeSync, existsSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
 const [bundle, root] = process.argv.slice(2);
@@ -15,6 +15,8 @@ const { startBuiltinBotRuntimeFromFd } = await import(pathToFileURL(join(bundle,
 // Android, virtual filesystem or FD VFS execution evidence.
 const Database = createRequire(import.meta.url)('better-sqlite3');
 const physicalDatabase = join(root, 'v2/sqlite/runtime-state.sqlite');
+mkdirSync(join(root, 'v2/sqlite'), { recursive: true, mode: 0o700 });
+writeFileSync(physicalDatabase, '', { flag: 'wx', mode: 0o600 });
 const databases = [];
 const backupMethods = new WeakMap();
 const nativeSqlite = { open(options) {
@@ -25,6 +27,16 @@ const nativeSqlite = { open(options) {
   databases.push(database);
   backupMethods.set(database, database.backup.bind(database));
   return database;
+}, metadata(slot) {
+  const names = ['runtime-state.sqlite', 'runtime-state.sqlite-wal', 'runtime-state.sqlite-shm', 'runtime-state.sqlite-journal', '.'];
+  assert.ok(Number.isInteger(slot) && slot >= 0 && slot < names.length);
+  try {
+    const stat = statSync(join(root, 'v2/sqlite', names[slot]));
+    return { present: slot === 0 || slot === 4 || stat.size > 0, mode: stat.mode, size: stat.size };
+  } catch (error) {
+    if (slot > 0 && slot < 4 && error.code === 'ENOENT') return { present: false, mode: 0o100600, size: 0 };
+    throw error;
+  }
 }, backup(database, { fileName }) {
   return backupMethods.get(database)(join(root, 'v2/sqlite/backups', fileName));
 }, openBackup({ fileName, options }) {

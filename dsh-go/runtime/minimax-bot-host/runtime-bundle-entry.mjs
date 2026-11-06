@@ -24,7 +24,8 @@ export async function createBuiltinBotRuntime({ dataDir, appVersion, signal, des
   const sqlite = nativeSqlite === null ? null : bindRuntimeSqlite({ dataDir,
     open: typeof nativeSqlite?.open === 'function' ? nativeSqlite.open.bind(nativeSqlite) : null,
     backup: typeof nativeSqlite?.backup === 'function' ? nativeSqlite.backup.bind(nativeSqlite) : nativeSqlite?.backup,
-    openBackup: typeof nativeSqlite?.openBackup === 'function' ? nativeSqlite.openBackup.bind(nativeSqlite) : nativeSqlite?.openBackup });
+    openBackup: typeof nativeSqlite?.openBackup === 'function' ? nativeSqlite.openBackup.bind(nativeSqlite) : nativeSqlite?.openBackup,
+    metadata: typeof nativeSqlite?.metadata === 'function' ? nativeSqlite.metadata.bind(nativeSqlite) : nativeSqlite?.metadata });
   try {
     const runtime = await createBotRuntimeSession({ dataDir, signal, catalog: catalogFromDescriptor(descriptor), probe, nativeBinding, startHost: ({ dataDir: root }) =>
       createWebuiRuntimeHost({ dataDir: root, appVersion, mcodeToolsRequested: false }) });

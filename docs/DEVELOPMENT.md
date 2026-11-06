@@ -4,6 +4,19 @@
 
 ## 当前验证入口（2026-11-04）
 
+2026-11-06 SQLite metadata 接线的新增验证（仍不是产品 APK/Android 证明，范围见 [T-RuntimeFS](handoff/T-RuntimeFS.md)）：
+
+```bash
+node --test dsh-go/runtime/minimax-bot-host/runtime-sqlite-binding.test.mjs \
+  dsh-go/runtime/minimax-bot-host/runtime-sqlite-fs.test.mjs \
+  dsh-go/runtime/minimax-bot-host/bot-runtime-start.test.mjs
+# runtime-host-probe/prepare.mjs 已校验钉点bundle/资源/依赖/宿主SQLite后：
+python3 dsh-go/tooling/android-node-probe/test-fd-vfs.py --node-probe \
+  --runtime-bundle /path/to/prepared/host-bundle
+```
+
+后条会编译宿主addon，先跑原SQLite回归，再检查真实runtime无metadata/无snapshot的明确拒绝，成功不等于完整runtime启动。必须先准备Node headers及SQLite wrapper，不能拿宿主库放进Android。环境重启后重新探测工具，旧 `/tmp/mbot-*` 路径不保证存在。
+
 当前运行时工作在 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)、[T-AndroidNode](handoff/T-AndroidNode.md)、[T-SQLite](handoff/T-SQLite.md)、[T-Persistence](handoff/T-Persistence.md)。仍是组件/模拟器，不是完整产品APK；默认入口仍DSH。
 
 ```bash

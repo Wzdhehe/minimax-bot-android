@@ -1,6 +1,20 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-RuntimeFS：完整文件适配前的契约与原子发布组件（2026-11-04）
 
+## 当前：SQLite 固定文件元数据接线（2026-11-06）
+
+`02fb530` 增加 addon `fdVfsMetadata(slot)`：0..3 仅主库/WAL/SHM/journal，4仅VFS虚拟目录；返回存在、mode、size，不返回目录FD、路径、任意文件内容或inode。主库与侧文件用**已持有FD的fstat**，不另开/关闭别名，避免意外释放本进程POSIX锁；侧文件零长度按原VFS视图为不存在。目录mode0700描述虚拟命名空间，不是实查物理目录的证明，Main原有目录/文件授予检查仍必须执行。原生注册与查询在同一mutex内。
+
+`runtime-sqlite-fs.mjs` 仅替换钉住的旧 `persistence/db.ts` 与 v2 `infra/db/client.ts` 的 `node:fs` 导入。主库逻辑目录和四文件映射到slot；recursive mkdir只验证已授予的私有虚拟目录，chmod只验证原mode等于0700/0600，**不调用fchmod也不把数据权限放宽**。元数据缺失/异常、mode不私有、已关闭均失败；不得退回宿主同名路径。其他路径的原宿主行为保留，这不是通用FS实现或安全沙箱；系统隔离仍由UID及native能力负责。
+
+metadata 属于可信 `nativeSqlite` 装配参数，不进 descriptor、HTTP或设置；FS view 退役后同一Node进程不能将该逻辑根绑定到新代次。正常复启必须创建新的执行单元，不能用旧FS引用借用新授权。
+
+本轮 Linux/Node24 实跑：SQLite binding/FS/starter **29/29**，钉点完整图 **4/4**，真实默认 factory/Bot 冷启动重开和 native SQLite/backup/integrity/metadata 入口 **2/2**。后者metadata/backup仍是宿主能力，底层SQLite与factory是真实的。原C++ WAL/多连接/跨进程锁/崩溃/同步故障回归及新metadata C ABI/V8用例均通过。
+
+更强的FD探针：`python3 dsh-go/tooling/android-node-probe/test-fd-vfs.py --node-probe --runtime-bundle <已prepare的bundle>`，两个独立进程使用真实addon/四FD。无metadata时打开DB前拒绝；有实际FD metadata时通过旧版权限和表初始化，**在 v2 必需的在线备份前明确拒绝**（`LOCAL_RUNTIME_V2_DATABASE_BACKUP_FAILED` / `runtime_sqlite_backup_unavailable`），检查未应用v2 migration、句柄关闭、同代重开拒绝和无路径数据库回退。这个拒绝是验收目标，绝不是full runtime已启动。
+
+**未验证**：新增metadata/shim的Android编译及设备执行、完整同步/异步FS、native snapshot/备份完整性与清理端口、canonical资源/外部模块Android装配、正式launcher、真实provider/模型turn、产品APK。下一主线是native迁移备份及剩余FS，不得删掉上游backup/integrity/preflight或把虚拟目录当物理授权证明。Windows准备脚本由本机另卡负责，Codex不修改其并行写入范围。
+
 ## 官方Bot Store受控持久化候选（Android验收接线，设备未验证）
 
 `startBotService`可显式使用`fileMode: 'unavailable'`，不创建工作区并要求Store/Memory能力；直接文件相关路由与附件/自定义头像操作在访问filesystem前拒绝。真实Bot和FD socket通过宿主fake文件broker验证，另实测打包为data URL后启动；这为隔离启动准备接缝，不代表Android上已启动真实服务或附件已完成，见[NEXT-AGENT](NEXT-AGENT.md)。

@@ -9,6 +9,10 @@
 
 用户已恢复本机协作。**只在 `feat/t-plugins`，阶段性推送；不动 main/dev/integration，不 force、不 PR、不发布 APK。** 本机执行 [T-Flash-SqliteWindows](T-Flash-SqliteWindows.md)：仅改 Windows SQLite 准备脚本及其宿主测试，随后尝试已授权 full-ICU + SQLite 的 API35 验收；Codex 不并行修改这几个脚本。本机报告/APK不入库，共享文档由 Codex 汇总。其他旧 Flash 卡均不得自行重开。
 
+日间新进展：`02fb530` 的真实 addon 固定 slot metadata 已随 `d2d6c16` 合并推送；`runtime-sqlite-fs.mjs` 又把两处真实 DB 导入的 mkdir/chmod/exists 接到这份元数据，详见 [T-RuntimeFS 最新节](T-RuntimeFS.md)。私有模式只验证、不修改权限；不发目录FD/路径、不跳过迁移备份。同一个 FS root 退役后本进程不可重绑。最终代码本地 **29/29、打包图4/4、真实 host2/2**，真实四FD+metadata 已走过旧版权限/表初始化，随后明确因没有 snapshot 能力而拒绝 v2 迁移；没有metadata则在打开 SQLite 前拒绝。仍非完整FS/Android启动成功，新增部分 **Android编译/设备未验证**。
+
+本机 A 提交 `d68e48f` 已合并用于复核。Linux复跑15项中14过、1 error：新增 Windows argv 测试没有固定模拟宿主，见原卡 R1（`456956d`）；只允许本机 agent 修自己的测试，不放宽生产检查。B阶段设备结果尚未收到，不能据脚本提交推断已完成。
+
 昨晚已推送的核心代码与实际证据：
 
 | 提交 | 实现和验证 | 尚不能据此声称 |

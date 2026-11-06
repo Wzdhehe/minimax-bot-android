@@ -21,8 +21,12 @@ export function runtimeBuildWiring(source) {
     specifier: 'node:module',
     adapter: 'runtime-sqlite-module.mjs',
   });
+  const sqliteFsAdaptations = ['packages/local-runtime/src/persistence/db.ts',
+    'packages/local-runtime-v2/src/infra/db/client.ts'].map((importer) => Object.freeze({
+    importer, specifier: 'node:fs', adapter: 'runtime-sqlite-fs.mjs',
+  }));
   return {
-    adaptations: [adaptation, sqliteAdaptation, legacySqliteAdaptation],
+    adaptations: [adaptation, sqliteAdaptation, legacySqliteAdaptation, ...sqliteFsAdaptations],
     alias: {
       '@mcode-runtime/assembly': join(source, 'packages/webui/src/runtime/assembly.ts'),
       '@mcode-runtime/agent-gateway': join(source, 'packages/local-runtime-v2/src/service/miniapp/agent/gateway.ts'),
@@ -38,6 +42,10 @@ export function runtimeBuildWiring(source) {
         build.onResolve({ filter: /^node:module$/ }, (input) => {
           if (![sqliteAdaptation, legacySqliteAdaptation].some((entry) => input.importer === join(source, entry.importer))) return undefined;
           return { path: join(here, sqliteAdaptation.adapter) };
+        });
+        build.onResolve({ filter: /^node:fs$/ }, (input) => {
+          if (!sqliteFsAdaptations.some((entry) => input.importer === join(source, entry.importer))) return undefined;
+          return { path: join(here, 'runtime-sqlite-fs.mjs') };
         });
       },
     },

@@ -7,7 +7,8 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const [library, wrapperPath, bundle, dataDir] = process.argv.slice(2);
+const [library, wrapperPath, bundle, dataDir, pass] = process.argv.slice(2);
+const withMetadata = pass === '1';
 const require = createRequire(import.meta.url);
 const wrapper = { exports: {} }, addon = { exports: {} };
 new Function('require', 'module', 'exports', readFileSync(wrapperPath, 'utf8'))(require, wrapper, wrapper.exports);
@@ -25,15 +26,17 @@ const nativeSqlite = { open(options) {
   opened.push(db);
   return db;
 } };
+if (withMetadata) nativeSqlite.metadata = (slot) => addon.exports.fdVfsMetadata(slot);
 const { createBuiltinBotRuntime } = await import(pathToFileURL(join(bundle, 'runtime-host.partial.mjs')).href);
-// The legacy DB setup performs chmod on the logical database pathname after
-// opening SQLite. Four FD VFS is not a node:fs metadata adapter: without that
-// capability the real factory must stop, not create a path-based DB fallback.
+// No metadata: refuse before opening SQLite. With real FD metadata: pass the
+// original private-mode checks and reach the mandatory migration backup. No
+// snapshot family is granted, so that stage MUST still refuse initialization.
 await assert.rejects(createBuiltinBotRuntime({ dataDir, appVersion: 'host-real-runtime-fd-sqlite', nativeSqlite }),
-  // The pinned migration preflight wraps the host errno in its own Error.
-  // This is trusted fixture diagnosis, never parsing a provider response.
-  (error) => error.message.startsWith('current_local_runtime_v2_migration_failed:sqlite:runtime-state:open:ENOENT:'));
-assert.ok(opened.length > 0, 'the real factory must have opened the FD-backed database');
+  (error) => withMetadata
+    ? error.code === 'LOCAL_RUNTIME_V2_DATABASE_BACKUP_FAILED' && error.cause?.code === 'runtime_sqlite_backup_unavailable'
+    // Trusted preflight diagnosis, not parsing an untrusted provider response.
+    : error.message.startsWith('current_local_runtime_v2_migration_failed:sqlite:runtime-state:open:runtime_sqlite_metadata_unavailable'));
+assert.equal(opened.length > 0, withMetadata);
 assert.ok(opened.every((db) => !db.open), 'failed factory startup must close adopted handles');
 assert.equal(existsSync(join(dataDir, 'v2/sqlite/runtime-state.sqlite')), false);
 await assert.rejects(createBuiltinBotRuntime({ dataDir, appVersion: 'host-real-runtime-fd-sqlite', nativeSqlite }),
@@ -42,5 +45,8 @@ const verification = new Database('state.db', { nativeBinding: addon.exports, re
 try {
   assert.equal(verification.pragma('integrity_check', { simple: true }), 'ok');
   assert.equal(verification.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'local_runtime_v2_schema_migrations'").get(), undefined);
+  assert.equal(Boolean(verification.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'local_runtime_sessions'").get()), withMetadata);
 } finally { verification.close(); }
-console.log('PASS: real runtime four-FD startup refuses missing FS metadata, closes handles and blocks reuse; no migrations applied, host only');
+console.log(withMetadata
+  ? 'PASS: real runtime with actual FD metadata passes private-mode checks and refuses missing migration backup; no v2 migration applied, host only'
+  : 'PASS: real runtime four-FD startup refuses missing FS metadata before opening SQLite; host only');
