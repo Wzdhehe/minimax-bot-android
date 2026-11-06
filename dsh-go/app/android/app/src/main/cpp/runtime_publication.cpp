@@ -9,6 +9,7 @@
 #include <string>
 #include "runtime_directory_lease.h"
 #include "runtime_stage_cleanup.h"
+#include "runtime_snapshot_stage.h"
 
 namespace {
 std::string basename(JNIEnv* env, jstring input) {
@@ -110,6 +111,31 @@ jint RemoveRegular(JNIEnv* env, jobject, jint directory, jstring name) {
   if (!S_ISREG(info.st_mode) || info.st_uid != getuid() || info.st_nlink != 1 || (info.st_mode & 077) != 0) return EACCES;
   return unlinkat(directory, file.c_str(), 0) == 0 ? 0 : errno;
 }
+jint CreateSnapshotStage(JNIEnv* env, jobject, jint directory, jstring token, jint slot) {
+  const auto value = basename(env, token);
+  if (env->ExceptionCheck()) return -EINVAL;
+  return mbot_snapshot_stage::open(directory, value, slot, true);
+}
+jint OpenSnapshotStageRead(JNIEnv* env, jobject, jint directory, jstring token, jint slot) {
+  const auto value = basename(env, token);
+  if (env->ExceptionCheck()) return -EINVAL;
+  return mbot_snapshot_stage::open(directory, value, slot, false);
+}
+jint RemoveSnapshotStage(JNIEnv* env, jobject, jint directory, jstring token, jint slot, jint held) {
+  const auto value = basename(env, token);
+  if (env->ExceptionCheck()) return EINVAL;
+  return mbot_snapshot_stage::remove(directory, value, slot, held);
+}
+jint PublishSnapshot(JNIEnv* env, jobject, jint directory, jstring token, jstring target, jint held, jlong bytes) {
+  const auto value = basename(env, token), destination = basename(env, target);
+  if (env->ExceptionCheck()) return mbot_snapshot_stage::REFUSED;
+  return mbot_snapshot_stage::publish(directory, value, destination, held, bytes);
+}
+jint RemovePublishedSnapshot(JNIEnv* env, jobject, jint directory, jstring target, jint held) {
+  const auto destination = basename(env, target);
+  if (env->ExceptionCheck()) return EINVAL;
+  return mbot_snapshot_stage::remove_published(directory, destination, held);
+}
 }
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
@@ -127,6 +153,11 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     {const_cast<char*>("openStage"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(OpenStage)},
     {const_cast<char*>("removeStage"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(RemoveStage)},
     {const_cast<char*>("remove"), const_cast<char*>("(ILjava/lang/String;)I"), reinterpret_cast<void*>(RemoveRegular)},
+    {const_cast<char*>("createSnapshotStage"), const_cast<char*>("(ILjava/lang/String;I)I"), reinterpret_cast<void*>(CreateSnapshotStage)},
+    {const_cast<char*>("openSnapshotStageRead"), const_cast<char*>("(ILjava/lang/String;I)I"), reinterpret_cast<void*>(OpenSnapshotStageRead)},
+    {const_cast<char*>("removeSnapshotStage"), const_cast<char*>("(ILjava/lang/String;II)I"), reinterpret_cast<void*>(RemoveSnapshotStage)},
+    {const_cast<char*>("publishSnapshot"), const_cast<char*>("(ILjava/lang/String;Ljava/lang/String;IJ)I"), reinterpret_cast<void*>(PublishSnapshot)},
+    {const_cast<char*>("removePublishedSnapshot"), const_cast<char*>("(ILjava/lang/String;I)I"), reinterpret_cast<void*>(RemovePublishedSnapshot)},
   };
   if (env->RegisterNatives(type, methods, static_cast<jint>(sizeof(methods) / sizeof(methods[0]))) != JNI_OK) return JNI_ERR;
   return JNI_VERSION_1_6;

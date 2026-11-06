@@ -42,6 +42,7 @@ internal class SqliteBackupClient private constructor(
     private var binding = false
     private var registered = false
     private var connected = false
+    private var started = false
     private var cleaned = false
     private var peer: IBinder? = null
     private var deathLinked = false
@@ -95,8 +96,15 @@ internal class SqliteBackupClient private constructor(
         override fun onNullBinding(name: ComponentName) = disconnected()
     }
 
-    private fun bind() {
-        synchronized(lock) { binding = true }
+    /** Explicit activation AFTER caller has retained this resource owner. A
+     * prepare failure can never have transferred data FDs in the background. */
+    fun start() {
+        RuntimePrivateDirectory.requireOwnerWorker(app)
+        synchronized(lock) {
+            if (started || cleaned) throw RuntimeDataFailure(RuntimeDataCode.CLOSED)
+            started = true
+            binding = true
+        }
         try {
             // Do not publish a partly constructed client to the timer thread.
             expiry = timer.schedule({ expire() }, timeoutMs.toLong() + 10_000, TimeUnit.MILLISECONDS)
@@ -219,7 +227,7 @@ internal class SqliteBackupClient private constructor(
             ArrayBlockingQueue<Runnable>(queue), { task -> Thread(task, name).apply { isDaemon = true } })
             .apply { allowCoreThreadTimeOut(true) }
 
-        fun launch(context: Context, directory: RuntimePrivateDirectory, descriptors: List<ParcelFileDescriptor>,
+        fun prepare(context: Context, directory: RuntimePrivateDirectory, descriptors: List<ParcelFileDescriptor>,
                    maxBytes: Long, timeoutMs: Int): SqliteBackupClient {
             RuntimePrivateDirectory.requireOwnerWorker(context)
             directory.requireWorker()
@@ -241,7 +249,6 @@ internal class SqliteBackupClient private constructor(
                 descriptors.forEach { copies.add(it.dup()) }
                 val client = SqliteBackupClient(context.applicationContext, guard, copies.toList(), maxBytes, timeoutMs)
                 transferred = true
-                client.bind()
                 return client
             } catch (error: RuntimeDataFailure) { throw error }
             catch (_: Exception) { throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }

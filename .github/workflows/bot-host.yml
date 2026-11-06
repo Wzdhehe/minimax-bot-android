@@ -8,6 +8,10 @@ on:
       - 'dsh-go/runtime/native-sqlite/**'
       - 'dsh-go/tooling/android-node-probe/test-sqlite-backup*'
       - 'dsh-go/tooling/android-node-probe/NativeSqliteBackupBindings.java'
+      - 'dsh-go/tooling/android-node-probe/test-snapshot-stages*'
+      - 'dsh-go/tooling/android-node-probe/NativeRuntimePublication.java'
+      - 'dsh-go/app/android/app/src/main/cpp/runtime_snapshot_stage.h'
+      - 'dsh-go/app/android/app/src/main/cpp/runtime_publication.cpp'
       - 'dsh-go/tooling/android-node-probe/src/main/cpp/fd_vfs.cpp'
       - 'dsh-go/tooling/android-node-probe/prepare-sqlite.py'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
@@ -22,6 +26,10 @@ on:
       - 'dsh-go/runtime/native-sqlite/**'
       - 'dsh-go/tooling/android-node-probe/test-sqlite-backup*'
       - 'dsh-go/tooling/android-node-probe/NativeSqliteBackupBindings.java'
+      - 'dsh-go/tooling/android-node-probe/test-snapshot-stages*'
+      - 'dsh-go/tooling/android-node-probe/NativeRuntimePublication.java'
+      - 'dsh-go/app/android/app/src/main/cpp/runtime_snapshot_stage.h'
+      - 'dsh-go/app/android/app/src/main/cpp/runtime_publication.cpp'
       - 'dsh-go/tooling/android-node-probe/src/main/cpp/fd_vfs.cpp'
       - 'dsh-go/tooling/android-node-probe/prepare-sqlite.py'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
@@ -57,6 +65,8 @@ jobs:
         run: node --test dsh-go/runtime/minimax-bot-host/runtime-sqlite-binding.test.mjs dsh-go/runtime/minimax-bot-host/runtime-sqlite-fs.test.mjs
       - name: Test the native SQLite backup kernel with pinned source and real FDs
         run: python3 dsh-go/tooling/android-node-probe/test-sqlite-backup.py
+      - name: Test private snapshot stage and production JNI primitives on Linux
+        run: python3 dsh-go/tooling/android-node-probe/test-snapshot-stages.py
       - name: Test upstream Bot storage, usage and memory regressions
         working-directory: dsh-go
         run: node --test runtime/vendor/minimax-bot/tests/storage-reliability.test.mjs runtime/vendor/minimax-bot/tests/usage-honest.test.mjs runtime/vendor/minimax-bot/tests/memory-integration.test.mjs runtime/vendor/minimax-bot/tests/memory-http.test.mjs runtime/vendor/minimax-bot/tests/memory-storage-context.test.mjs runtime/vendor/minimax-bot/tests/avatar-scope.test.mjs runtime/vendor/minimax-bot/tests/http-reliability.test.mjs
