@@ -54,3 +54,11 @@ gradle --no-daemon --max-workers=2 -p dsh-go/tooling/android-node-probe assemble
 回报同步基线、最终 SHA、精确改动文件、实际测试/准备/构建/设备命令及原始汇总；APK 只报本地路径、大小和 SHA256，不提交或发布。失败说明卡在哪一步；没有执行的一律「未验证」，不自动扩展任务。
 
 即使全部通过，也仅是 API35/x86_64 独立验证包：**不是完整 mcode runtime、真实 provider/model turn、ARM64/物理真机或可用产品 APK**。不需要任何真实用户 Key。报告留本机，共享开发进度由 Codex 收到结果后更新。
+
+## 审查 R1（2026-11-06，d68e48f 后）
+
+Codex 已将你的 A 阶段提交与原生 FD metadata 提交正常合并（`d2d6c16`，无 force），未改你负责的三个路径。Linux 实跑 `python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_sqlite*.py' -v`：15 项中14过、1 error。
+
+失败是 `test_the_compiler_runs_with_a_fixed_target_and_no_shell`：`fixture()` 只创建 Windows clang.exe，但该测试调用 `prepare()` 时没有 mock `platform.system()`，在 Linux 实际选择 Linux 编译器，报 `Missing pinned NDK compiler or Android x86_64 runtime`。Windows 本机通过不能证明此测试跨平台。
+
+请只在 `test_sqlite_hosts.py` 修复：这个用例明确验证 Windows argv 时，将宿主检测固定为 Windows；若另加 Linux 完整调用用例，应提供对应 fixture 和 Linux 参数断言。不要 skip Linux，不要放宽生产编译器检查或删原输入安全断言。单独提交修复，B 阶段可以继续，回报实际输出。Codex 之后再在 Linux 复跑。此项是测试可移植性问题，尚未发现 production 脚本需要为此改动。
