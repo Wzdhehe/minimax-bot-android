@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Native SQLite backup kernel
 
-`backup.cpp` is a trusted native copy/validation component. A JNI candidate now exists, but it is **not yet wired into an Android worker/Binder, the runtime backup port, publication or a product APK**. It accepts dedicated SQLite connections, never paths, SQL strings, descriptors from an Agent, provider metadata or credentials. Do not expose it as an Agent tool.
+`backup.cpp` is a trusted native copy/validation component. JNI and private Android worker/Binder candidates now exist, but they are **not yet packaged/connected to a product launcher, the runtime backup port, publication or a usable product APK**. It accepts dedicated SQLite connections, never paths, SQL strings, descriptors from an Agent, provider metadata or credentials. Do not expose it as an Agent tool.
 
 The source connection must be read-only and both connections must be outside any caller transaction. The destination must be a fresh private empty database that an Agent has **never held a writable descriptor to**. The kernel pins a read transaction before checking the source page budget, then uses the real `sqlite3_backup` API. A concurrent WAL writer may commit/grow the source while the chosen snapshot stays consistent.
 
