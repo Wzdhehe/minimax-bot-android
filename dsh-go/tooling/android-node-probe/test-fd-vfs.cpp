@@ -17,6 +17,7 @@
 #error Assertions must stay enabled in this test
 #endif
 extern "C" int mbot_register_precreated_fd_vfs(const char* const*, const int*, int);
+extern "C" int mbot_fd_vfs_metadata(int, struct stat*, int*);
 // GNU ld wraps only this host executable, never the Android/Node addon.
 int sync_error = 0, sync_calls = 0;
 extern "C" int __real_fsync(int);
@@ -70,6 +71,8 @@ int main(int argc, char** argv) {
   char name[] = "/tmp/mbot-vfs-XXXXXX";
   const char* physical = mkdtemp(name); assert(physical);
   const int directory = open(physical, O_RDONLY|O_DIRECTORY|O_CLOEXEC); assert(directory >= 0);
+  struct stat metadata{}; int present = 0;
+  assert(mbot_fd_vfs_metadata(0, &metadata, &present) == SQLITE_MISUSE);
   const char* names[] = {"state.db", "state.db-wal", "state.db-shm", "state.db-journal"};
   std::vector<int> fds;
   for (const auto* filename : names) { const int fd = openat(directory, filename, O_CREAT|O_RDWR, 0600); assert(fd >= 0); fds.push_back(fd); }
@@ -82,11 +85,22 @@ int main(int argc, char** argv) {
   for (int fd : fds) assert(fsync(fd) == 0);
   assert(fsync(directory) == 0); // owner persists entries; no directory grant.
   assert(mbot_register_precreated_fd_vfs(names, fds.data(), 4) == SQLITE_OK);
+  assert(mbot_fd_vfs_metadata(-1, &metadata, &present) == SQLITE_MISUSE);
+  assert(mbot_fd_vfs_metadata(5, &metadata, &present) == SQLITE_MISUSE);
+  assert(mbot_fd_vfs_metadata(0, nullptr, &present) == SQLITE_MISUSE);
+  assert(mbot_fd_vfs_metadata(0, &metadata, nullptr) == SQLITE_MISUSE);
+  assert(mbot_fd_vfs_metadata(4, &metadata, &present) == SQLITE_OK && present && S_ISDIR(metadata.st_mode));
+  assert((metadata.st_mode & 0777) == 0700);
+  assert(mbot_fd_vfs_metadata(0, &metadata, &present) == SQLITE_OK && present && S_ISREG(metadata.st_mode));
+  assert((metadata.st_mode & 0777) == 0600 && metadata.st_size == 0);
+  assert(mbot_fd_vfs_metadata(3, &metadata, &present) == SQLITE_OK && !present);
   auto* vfs = sqlite3_vfs_find("mbot-fd-prototype"); assert(vfs);
   assert(write(fds[3], "journal", 7) == 7);
+  assert(mbot_fd_vfs_metadata(3, &metadata, &present) == SQLITE_OK && present && metadata.st_size == 7);
   sync_error = EIO;
   assert(vfs->xDelete(vfs, "/mbot-data/state.db-journal", 1) == SQLITE_IOERR_DELETE);
   struct stat after_delete{}; assert(fstat(fds[3], &after_delete) == 0 && after_delete.st_size == 0);
+  assert(mbot_fd_vfs_metadata(3, &metadata, &present) == SQLITE_OK && !present && metadata.st_size == 0);
   sync_error = EINTR; const int before_retry = sync_calls;
   assert(vfs->xDelete(vfs, "/mbot-data/state.db-journal", 1) == SQLITE_OK);
   assert(sync_calls == before_retry + 2); // interrupted sync must retry, not succeed silently.
@@ -98,6 +112,7 @@ int main(int argc, char** argv) {
   sql(first, "BEGIN IMMEDIATE; INSERT INTO notes(text) VALUES('rollback'); ROLLBACK");
   assert(rows(second) == 1);
   sql(first, "BEGIN IMMEDIATE; INSERT INTO notes(text) VALUES('held')");
+  for (int slot = 0; slot < 5; ++slot) assert(mbot_fd_vfs_metadata(slot, &metadata, &present) == SQLITE_OK);
   sqlite3_close(second);
   auto child = [&](const char* mode) {
     const pid_t pid = fork(); assert(pid >= 0);

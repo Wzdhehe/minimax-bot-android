@@ -7,7 +7,34 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const [library, wrapper, mode] = process.argv.slice(2);
 
-if (mode === 'child') {
+if (mode === 'metadata') {
+  const wrapperModule = { exports: {} }, addon = { exports: {} };
+  new Function('require', 'module', 'exports', fs.readFileSync(wrapper, 'utf8'))(require, wrapperModule, wrapperModule.exports);
+  process.dlopen(addon, library);
+  const metadata = addon.exports.fdVfsMetadata;
+  assert.throws(() => metadata(0), { code: 'fd_vfs_metadata_unavailable' });
+  addon.exports.setFdVfs(3, 4, 5, 6);
+  for (const fd of [3, 4, 5, 6]) fs.closeSync(fd);
+  for (const args of [[], [-1], [5], ['state.db'], [0.5], [0, 1]]) {
+    assert.throws(() => metadata(...args), { code: 'fd_vfs_metadata_unavailable' });
+  }
+  assert.deepEqual(metadata(4), { present: true, mode: 0o40700, size: 0 });
+  assert.equal(metadata(0).present, true);
+  assert.equal(metadata(0).mode & 0o7777, 0o600);
+  const Database = wrapperModule.exports;
+  const db = new Database('state.db', { nativeBinding: addon.exports });
+  try {
+    db.pragma('journal_mode=WAL');
+    db.exec('CREATE TABLE metadata_probe(text TEXT)');
+    db.prepare('INSERT INTO metadata_probe VALUES (?)').run('fd metadata');
+    assert.equal(metadata(1).present, true);
+    assert.ok(metadata(1).size > 0);
+    assert.equal(metadata(1).mode & 0o7777, 0o600);
+    assert.equal(db.pragma('integrity_check', { simple: true }), 'ok');
+  } finally { db.close(); }
+  assert.equal(metadata(1).present, false);
+  console.log('PASS: real addon fixed-slot FD metadata, live WAL size, private mode and invalid-input refusal; host only');
+} else if (mode === 'child') {
   const source = fs.readFileSync(path.join(__dirname, 'src/main/js/node-fd-probe.cjs'), 'utf8');
   const start = source.indexOf('  let sqlite = null;');
   const end = source.indexOf("  probePhase = 'model_streams';");
@@ -23,7 +50,7 @@ if (mode === 'child') {
   const files = ['state.db', 'state.db-wal', 'state.db-shm', 'state.db-journal'].map((name) => path.join(directory, name));
   const fds = [];
   try {
-    files.forEach((file) => fds.push(fs.openSync(file, 'w+')));
+    files.forEach((file) => fds.push(fs.openSync(file, 'w+', 0o600)));
     fds.forEach((fd) => fs.fsyncSync(fd));
     const directoryFd = fs.openSync(directory, 'r');
     try { fs.fsyncSync(directoryFd); } finally { fs.closeSync(directoryFd); }
@@ -42,6 +69,9 @@ if (mode === 'child') {
       assert.deepEqual(report.sqlite.rows, ['你好', 'second']);
     }
     assert.ok(fs.statSync(files[0]).size > 0);
+    execFileSync(process.execPath, [__filename, library, wrapper, 'metadata'], {
+      stdio: ['ignore', 'inherit', 'inherit', ...fds], env: {}, timeout: 15_000,
+    });
     console.log('PASS: exact APK SQLite block, addon and FD VFS preserve data across independent host Node processes; not Android evidence');
   } finally {
     fds.forEach((fd) => fs.closeSync(fd));

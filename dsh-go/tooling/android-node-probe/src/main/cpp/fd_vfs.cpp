@@ -115,12 +115,35 @@ int delete_precreated(sqlite3_vfs*, const char* path, int) {
 }
 }  // namespace
 
+// Inspect held files without opening/closing aliases: closing an alias could
+// release this process's POSIX SQLite locks. Slot 4 is the virtual namespace,
+// never a physical directory FD or a caller-selected path.
+extern "C" int mbot_fd_vfs_metadata(int slot, struct stat* info, int* present) {
+  if (!info || !present || slot < 0 || slot > 4) return SQLITE_MISUSE;
+  std::lock_guard<std::mutex> lock(gate);
+  if (!registered) return SQLITE_MISUSE;
+  if (slot == 4) {
+    std::memset(info, 0, sizeof(*info));
+    info->st_mode = S_IFDIR | 0700;
+    info->st_nlink = 1;
+    *present = 1;
+    return SQLITE_OK;
+  }
+  const char* names[] = {"state.db", "state.db-wal", "state.db-shm", "state.db-journal"};
+  const auto found = files.find(names[slot]);
+  if (found == files.end()) return SQLITE_NOTFOUND;
+  if (fstat(found->second.fd, info) != 0 || !S_ISREG(info->st_mode) || info->st_size < 0) return SQLITE_IOERR_FSTAT;
+  *present = !found->second.sidecar || info->st_size > 0;
+  return SQLITE_OK;
+}
+
 // One immutable registry per process. Takes duplicates, never caller ownership.
 // The trusted owner must grant only data files and terminate the isolated
 // process on lease revocation: closing an owner copy cannot revoke a dup FD.
 // Precondition: trusted owner has fsynced each precreated file and its containing
 // directory; it must not rename/unlink/replace these inodes while leased.
 extern "C" int mbot_register_precreated_fd_vfs(const char* const* names, const int* descriptors, int count) {
+  std::lock_guard<std::mutex> lock(gate);
   if (registered || count < 4 || count > 16 || !names || !descriptors) return SQLITE_MISUSE;
   struct stat info{};
   std::map<std::string, Entry> staged;
