@@ -7,6 +7,7 @@ on:
       - 'dsh-go/runtime/minimax-bot-host/**'
       - 'dsh-go/runtime/native-sqlite/**'
       - 'dsh-go/tooling/android-node-probe/test-sqlite-backup*'
+      - 'dsh-go/tooling/android-node-probe/NativeSqliteBackupBindings.java'
       - 'dsh-go/tooling/android-node-probe/src/main/cpp/fd_vfs.cpp'
       - 'dsh-go/tooling/android-node-probe/prepare-sqlite.py'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
@@ -20,6 +21,7 @@ on:
       - 'dsh-go/runtime/minimax-bot-host/**'
       - 'dsh-go/runtime/native-sqlite/**'
       - 'dsh-go/tooling/android-node-probe/test-sqlite-backup*'
+      - 'dsh-go/tooling/android-node-probe/NativeSqliteBackupBindings.java'
       - 'dsh-go/tooling/android-node-probe/src/main/cpp/fd_vfs.cpp'
       - 'dsh-go/tooling/android-node-probe/prepare-sqlite.py'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
@@ -41,6 +43,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable

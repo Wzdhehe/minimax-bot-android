@@ -2,6 +2,7 @@
 
 # JNI_OnLoad resolves this private kernel by its fixed class and method names.
 -keep class io.github.ccch1mneyyy.dsh_app.isolation.NativeRuntimePublication { *; }
+-keep class io.github.ccch1mneyyy.dsh_app.isolation.NativeSqliteBackupBindings { *; }
 
 # Conscrypt's pre-Lollipop socket adapters reference platform classes that
 # don't exist on minSdk 26; those paths are never reached.

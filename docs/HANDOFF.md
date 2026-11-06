@@ -2,6 +2,8 @@
 
 **2026-11-06 当前入口**：昨晚 `698201a` → `2ce7b2d` → `8d9d6d9` → `f5fd12e` 已推送，工作树干净；详见 [NEXT-AGENT 当前日间主线](handoff/NEXT-AGENT.md)。已有 Main 运行代次管理、descriptor FD 的可信 guest 启动器，以及真实 runtime 两个 SQLite loader 的受控入口；仍缺 Android 完整文件系统、迁移备份能力与产品装配，**没有可聊天产品 APK**。宿主通过不能代替设备验证。
 
+日间最新：8FD native备份组合层已增加单次调用/永久取消的JNI候选，真实JVM加载并复制/独立重开通过；native边界回归 **JUnit81/81、Node56/56**，文档链接 **51份0问题**。它尚无Android可信worker/Binder/产品打包/owner发布或guest snapshot FS，不能宣称完整runtime启动。细节和本机API35 metadata的真实构建版本见上述NEXT-AGENT；本机当前新卡为[备份核心双ABI只读编译](handoff/T-Flash-BackupCrossCompile.md)，原Windows SQLite/API35卡已结项。
+
 用户已于白天重新授权本机 agent 帮忙，昨晚「断电不再派活」不再是当前安排。本机只做 [Windows SQLite 准备与 API35 组合验收](handoff/T-Flash-SqliteWindows.md)，Codex 继续 runtime 核心并负责共享文档。下面旧分工/待办保留为历史，冲突时以当前入口为准。
 
 **先读[当前接手合同与完整快照](handoff/NEXT-AGENT.md)**。该文已重写为单一当前版本，列明提交/CI、唯一下一项、允许修改面、验收及禁止推断；旧交接保留在Git历史。下面大表和专题内的逐轮记录只作证据背景，不能当当前TODO。

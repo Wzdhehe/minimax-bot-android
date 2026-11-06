@@ -22,6 +22,8 @@ done
   "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/isolation/WorkspaceBroker.kt" \
   "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/isolation/IsolationSessionGate.kt" \
   "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/isolation/GrantedConnectionQueue.kt" \
+  "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/isolation/SqliteBackupReply.kt" \
+  "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/isolation/NativeSqliteBackupBindings.kt" \
   "$root_dir/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/isolation" \
   "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/bot/GuestProviderCatalog.kt" \
   "$root_dir/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/bot/GuestProviderCatalogTest.kt" \
@@ -44,6 +46,7 @@ classpath="$test_dir/tests.jar:$classpath"
   io.github.ccch1mneyyy.dsh_app.isolation.WorkspaceBrokerTest \
   io.github.ccch1mneyyy.dsh_app.isolation.IsolationSessionGateTest \
   io.github.ccch1mneyyy.dsh_app.isolation.GrantedConnectionQueueTest \
+  io.github.ccch1mneyyy.dsh_app.isolation.SqliteBackupReplyTest \
   io.github.ccch1mneyyy.dsh_app.bot.GuestProviderCatalogTest \
   io.github.ccch1mneyyy.dsh_app.runtime.RuntimeDescriptorPayloadTest \
   io.github.ccch1mneyyy.dsh_app.bot.BotRuntimeEndpointTest \

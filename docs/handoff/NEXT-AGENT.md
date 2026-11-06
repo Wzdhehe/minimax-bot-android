@@ -7,6 +7,10 @@
 
 ## 当前日间主线（2026-11-06，覆盖下文历史安排）
 
+最新续写：native备份已有 `jni_backup.cpp`/Kotlin固定声明和严格三long结果解码；一次进程只准调用一次，取消永久生效，无路径/SQL/Key入口。真实Linux JVM加载同名ABI夹具，实际8FD复制并退役后由独立进程只读重开，以及空/错参数、owner自身PID、取消与重复调用，均通过；详见 [native README](../../dsh-go/runtime/native-sqlite/README.md)。这只是JNI候选，**尚无可信Android worker/Binder/生产打包/owner发布/guest snapshot端口，也没有完整runtime启动**。本机双ABI卡按原快照执行，不包含新增JNI，不得把它的链接结果算作JNI已在Android验证。下一步接可信一次性worker和Main的授予/退役/发布生命周期，不能直接把JNI对象交给Agent。
+
+本阶段实跑：`python3 dsh-go/tooling/android-node-probe/test-sqlite-backup.py --java-home /tmp/mbot-jdk-dev/extracted/jdk-21.0.13+9` 的三组真实C++/FD-worker/JVM-JNI验收全部PASS；`KOTLINC=/workspace/toolchains/kotlinc/bin/kotlinc MBOT_NATIVE_DEPS=/tmp/mbot-backup-jni-deps bash dsh-go/tooling/test-native-model-broker.sh` **JUnit81/81、Node56/56**；文档链接51份0问题。JDK为本轮临时恢复、按发布SHA256校验的Temurin21.0.13+9（旧/tmp SDK/NDK仍未恢复）。`javap`已核对精确Kotlin `run`签名为`([IIIJI)[J`、`cancel`为`()V`；不是Android编译/设备测试。CI工作流补JDK/Java夹具触发路径，但没有把本地结果冒充新CI成功。
+
 用户已恢复本机协作。**只在 `feat/t-plugins`，阶段性推送；不动 main/dev/integration，不 force、不 PR、不发布 APK。** 本机执行 [T-Flash-SqliteWindows](T-Flash-SqliteWindows.md)：仅改 Windows SQLite 准备脚本及其宿主测试，随后尝试已授权 full-ICU + SQLite 的 API35 验收；Codex 不并行修改这几个脚本。本机报告/APK不入库，共享文档由 Codex 汇总。其他旧 Flash 卡均不得自行重开。
 
 日间新进展：`02fb530` 的真实 addon 固定 slot metadata 已随 `d2d6c16` 合并推送；`runtime-sqlite-fs.mjs` 又把两处真实 DB 导入的 mkdir/chmod/exists 接到这份元数据，详见 [T-RuntimeFS 最新节](T-RuntimeFS.md)。私有模式只验证、不修改权限；不发目录FD/路径、不跳过迁移备份。同一个 FS root 退役后本进程不可重绑。本地 **29/29、打包图4/4、真实 host2/2**，真实四FD+metadata 已走过旧版权限/表初始化，随后因没有snapshot能力而拒绝v2迁移；没有metadata则在打开SQLite前拒绝。**FD metadata API 后续已由本机db7ee66的API35验收补齐，完整FS shim/factory仍未在Android启动。**
