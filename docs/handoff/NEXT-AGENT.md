@@ -9,13 +9,15 @@
 
 用户已恢复本机协作。**只在 `feat/t-plugins`，阶段性推送；不动 main/dev/integration，不 force、不 PR、不发布 APK。** 本机执行 [T-Flash-SqliteWindows](T-Flash-SqliteWindows.md)：仅改 Windows SQLite 准备脚本及其宿主测试，随后尝试已授权 full-ICU + SQLite 的 API35 验收；Codex 不并行修改这几个脚本。本机报告/APK不入库，共享文档由 Codex 汇总。其他旧 Flash 卡均不得自行重开。
 
-日间新进展：`02fb530` 的真实 addon 固定 slot metadata 已随 `d2d6c16` 合并推送；`runtime-sqlite-fs.mjs` 又把两处真实 DB 导入的 mkdir/chmod/exists 接到这份元数据，详见 [T-RuntimeFS 最新节](T-RuntimeFS.md)。私有模式只验证、不修改权限；不发目录FD/路径、不跳过迁移备份。同一个 FS root 退役后本进程不可重绑。最终代码本地 **29/29、打包图4/4、真实 host2/2**，真实四FD+metadata 已走过旧版权限/表初始化，随后明确因没有 snapshot 能力而拒绝 v2 迁移；没有metadata则在打开 SQLite 前拒绝。仍非完整FS/Android启动成功，新增部分 **Android编译/设备未验证**。
+日间新进展：`02fb530` 的真实 addon 固定 slot metadata 已随 `d2d6c16` 合并推送；`runtime-sqlite-fs.mjs` 又把两处真实 DB 导入的 mkdir/chmod/exists 接到这份元数据，详见 [T-RuntimeFS 最新节](T-RuntimeFS.md)。私有模式只验证、不修改权限；不发目录FD/路径、不跳过迁移备份。同一个 FS root 退役后本进程不可重绑。本地 **29/29、打包图4/4、真实 host2/2**，真实四FD+metadata 已走过旧版权限/表初始化，随后因没有snapshot能力而拒绝v2迁移；没有metadata则在打开SQLite前拒绝。**FD metadata API 后续已由本机db7ee66的API35验收补齐，完整FS shim/factory仍未在Android启动。**
 
 本机 A/R1 已交付：`d68e48f` 生产准备脚本源码复核，`8cdc523` 修复测试的Linux可移植性；Codex已在真实Linux宿主复跑 **16/16通过**，R1接受。用户转述本机B在 **`d68e48f0f491914cb77835ffa1585e14dbc19292`、已跟踪源码干净** 时构建，并在API35/x86_64执行 full-ICU+SQLite+四FD组合：定向 **OK (8 tests)**、全套 **OK (58 tests)**，均0失败/错误/跳过；含真实官方Bot分支与coordinator的合成ready组件用例。产物内adapter摘要亦与该旧版匹配，**不含02fb530及1d2f0af**，不能套用到新增FD metadata/shim或backup kernel；正式包/完整mcode/真实provider仍没有。详见 [本机卡的结果补记](T-Flash-SqliteWindows.md)。
 
 native备份复制内核已在真实SQLite/FD宿主回归通过，见 [README](../../dsh-go/runtime/native-sqlite/README.md) 的严格调用前提和尚未接线项；它不等于Android备份完成，不取消当前真实factory探针的missing-snapshot拒绝。下一步是可信native owner/IPC/只读snapshot授予与上游FS，不得将备份可写FD给Agent后声称能撤销。
 
-本机新卡为 [FD metadata直接设备验收](T-Flash-FDMetadataProbe.md)，替代上一卡已完成的A/B/R1。Codex已在固定Node脚本和IsolatedNodeModelTest中新增真实metadata调用/断言（私有mode、6次非法输入、运行中WAL大小、关闭后WAL状态），并有旧API缺失的宿主拒绝负例。需要本机从最新HEAD重新准备full-ICU和SQLite、构建并执行；**当前设备未验证**。Codex同时推进备份native owner/IPC，不改本机并行任务。
+后续 `fd_backup.cpp` 已组合8个数据FD的私有/owner/links/flags/空目标检查、复制、连接关闭、文件fsync与独立只读integrity；宿主新增独立worker进程及EIO/EINTR/复验失败注入通过。严格要求**新的单次可信进程**，禁止在活Agent/Main SQLite进程内调用；VFS仍持有dup，Main必须确认整个worker退役才能发布/授予只读能力。它没有Android service/JNI/Binder、Main真实目录/nonce/generation策略或上游snapshot FS接线，不能跳过这些步骤把状态改成已启动。最新边界以README为准。
+
+本机 [FD metadata直接设备验收](T-Flash-FDMetadataProbe.md) 已完成（用户转述）：db7ee66、已跟踪源码干净，重新准备full-ICU/SQLite/FD三flag全true，在API35/x86_64定向 **8/8**、全套 **58/58**；4个metadata布尔值和6次非法输入的新断言实际进入并通过，adapter字节/库符号/新APK摘要已记录原卡。云端未直接读D盘日志。这只覆盖API及既有组件回归，不覆盖FS shim/factory或native备份。旧卡结项，下一卡另派；Codex继续备份worker/owner/IPC。
 
 昨晚已推送的核心代码与实际证据：
 

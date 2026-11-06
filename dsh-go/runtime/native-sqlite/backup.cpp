@@ -147,4 +147,18 @@ BackupResult copySqliteBackup(sqlite3* source, sqlite3* destination, std::int64_
   try { return copy(source, destination, maxBytes, timeoutMs, cancelled); }
   catch (...) { return BackupResult::copy_failed; }
 }
+
+BackupResult verifySqliteBackup(sqlite3* snapshot, int timeoutMs, const std::atomic_bool* cancelled) {
+  if (!snapshot || timeoutMs < 1 || timeoutMs > 30000 || !sqlite3_get_autocommit(snapshot)) return BackupResult::invalid;
+  if (sqlite3_db_readonly(snapshot, "main") != 1) return BackupResult::source_not_readonly;
+  try {
+    Budget budget{Clock::now() + std::chrono::milliseconds(timeoutMs), cancelled};
+    if (budget.stopped()) return budget.stopResult();
+    Scope cleanup{snapshot, snapshot};
+    Interrupt interrupt(snapshot, snapshot, budget);
+    sqlite3_busy_timeout(snapshot, std::min(timeoutMs, 25));
+    if (!integrity(snapshot)) return budget.stopped() ? budget.stopResult() : BackupResult::integrity_failed;
+    return budget.stopped() ? budget.stopResult() : BackupResult::ok;
+  } catch (...) { return BackupResult::copy_failed; }
+}
 }

@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # T-Flash-FDMetadataProbe：新 metadata API 的 API35 直接验收
 
+**已交付（用户转述）**：构建HEAD为db7ee66、已跟踪源码干净，API35/x86_64新断言实际执行，定向8项与全套58项全过，详见文末。不要继续按本卡重复构建，下一卡另派。
+
 2026-11-06，Codex 给用户本机 agent 的后续设备卡。先读根及dsh-go的AGENTS、[上一卡](T-Flash-SqliteWindows.md)和本卡。只在 `feat/t-plugins`；本卡**不改任何源码，不提交报告或APK**，仅准备/构建/设备验证。Codex继续native备份owner/IPC，双方不等待旧DSH rootfs。
 
 ## 为什么重跑
@@ -42,3 +44,31 @@ Node脚本会对旧addon（没有该API）直接失败，不允许skip/fallback�
 报告留本机 `docs/research/flash-fd-metadata-probe.md`，不提交。回报构建HEAD、源码是否干净、Node/SQLite metadata三个flag、实际工具版本、编译命令和原始终态、实际runner/设备、定向/全套统计、APK本地路径/大小/SHA256、此次adapter摘要和未验证项。必须明确 `persistent.metadata` 新断言在requiresFdVfs=true分支执行；无需也不得上传完整JSON、env或任何Key。
 
 这是API35/x86_64独立验证包。它只验证FD metadata API及旧组件回归，**不证明1d2f0af的整个mcode FS shim/factory在Android启动，也不证明native备份kernel/owner/IPC/发布、完整runtime、真实provider、ARM64/真机或产品APK**。本卡没有任何需要真实用户Key的步骤。源码若需修复由Codex处理，验收完等待新卡。
+
+## 实际结果（2026-11-06，用户转述本机回报）
+
+本机fetch/快进到 **db7ee66e4fe9b8b10fccfb79f53ed29e1ceda970** 后准备/构建。已跟踪源码无未提交改动，只有4个不参与构建的本地报告；本卡零源码改动、零提交。云端没有直接读取D盘日志，以下为用户转述的实际结果。
+
+full-ICU授权使用原字节导出树及未改动verify-source-run.py复核通过，缓存内层zip摘要仍为cd8823cf…9747；五个producer权威输入未变。新prepare-probe 25.1s、prepare-sqlite 29.8s，requiresIntl/requiresSqlite/requiresFdVfs全true。工具为Node24.14.0/Python3.13.5/JDK17.0.10/Gradle9.3.1/NDK27d/CMake3.22.1/esbuild0.28.2，未改编译配置/依赖/校验器。
+
+新adapter记录与db7ee66的本机CRLF工作树字节匹配：
+
+```text
+fd_vfs.cpp      b0b071c0fd996b4febadd6dca63ccf3e8bf3650ff5afaae9208da70347bbc134
+fd_vfs_node.cpp 3789b12c951643e626f5bd013edc2daca2de3a7f022cdc52f2717ded4c0af7a5
+libmbot_sqlite_probe.so：2,161,336字节，Android26/x86_64 ELF，含mbot_fd_vfs_metadata
+```
+
+构建 `BUILD SUCCESSFUL in 32s`，71 tasks（13 executed/58 up-to-date）。只对emulator-5554/API35/x86_64/boot完成的设备安装，两个APK均Success；未清数据/wipe/卸载其他App/修AVD。
+
+```text
+三类定向：Time: 14.809 / OK (8 tests) / INSTRUMENTATION_CODE: -1
+全套：Time: 20.721 / OK (58 tests) / INSTRUMENTATION_CODE: -1
+逐项code 0；0失败、0错误、0跳过
+```
+
+requiresFdVfs=true，新增 `persistent.metadata` 四布尔值及invalidRefused=6确实进入断言并通过；包内JS存在直接调用、库内有新native符号，没有旧API fallback。原Bot/记忆/SQLite/Key/UID/桥/coordinator断言保留并通过。**数字仍8/58只是用例数量未变，覆盖增量来自这些新断言和新产物来源**。
+
+主APK76,378,488字节，SHA256 `ed1130615064f936270d78e8e8df375a20ef0b826e6d01361d95ba8a9df5b12a`；仪器APK1,110,819字节，SHA256 `67cff9eee7a56ada272384c11a6ded46ec07d0d390afbb6d2c30c3aca66e6a70`。二进制和报告仅在本机，不入库、不发布。
+
+本次补齐的是FD metadata API的API35设备证据。**完整FS shim/factory、备份kernel/worker/owner/IPC/发布、完整mcode、真实模型、产品APK、API26/ARM64/物理真机未验证**，不能从APK包含106860a提交标题推断备份内核已编入或运行。

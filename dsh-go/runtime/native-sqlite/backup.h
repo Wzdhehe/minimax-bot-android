@@ -22,4 +22,8 @@ enum class BackupResult {
 BackupResult copySqliteBackup(sqlite3* source, sqlite3* destination,
                               std::int64_t maxBytes, int timeoutMs,
                               const std::atomic_bool* cancelled = nullptr);
+// Independent check on a newly reopened read-only snapshot connection. Same
+// exclusive ownership, lifetime, budget and no-publication rules as above.
+BackupResult verifySqliteBackup(sqlite3* snapshot, int timeoutMs,
+                                const std::atomic_bool* cancelled = nullptr);
 }

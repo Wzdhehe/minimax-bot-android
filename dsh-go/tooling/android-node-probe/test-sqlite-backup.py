@@ -38,6 +38,13 @@ def run(archive=None):
                         str(ROOT / 'test-sqlite-backup.cpp'), str(obj), '-ldl', '-lpthread', '-lm',
                         '-o', str(executable)], check=True)
         subprocess.run([str(executable)], check=True, timeout=30)
+        grants = stage / 'backup-grants'
+        subprocess.run(['g++', '-std=c++20', '-O0', '-Wall', '-Wextra', '-I', str(sqlite), '-I', str(CORE),
+                        str(CORE / 'backup.cpp'), str(CORE / 'fd_backup.cpp'), str(ROOT / 'src/main/cpp/fd_vfs.cpp'),
+                        str(ROOT / 'test-sqlite-backup-fds.cpp'), str(obj), '-ldl', '-lpthread', '-lm',
+                        '-Wl,--wrap=fsync,--wrap=fstat,--wrap=sqlite3_close,--wrap=sqlite3_prepare_v2',
+                        '-o', str(grants)], check=True)
+        subprocess.run([str(grants)], check=True, timeout=30)
 
 
 if __name__ == '__main__':
