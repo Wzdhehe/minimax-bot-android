@@ -23,7 +23,7 @@ native备份复制内核已在真实SQLite/FD宿主回归通过，见 [README](.
 
 本机 [FD metadata直接设备验收](T-Flash-FDMetadataProbe.md) 已完成（用户转述）：db7ee66、已跟踪源码干净，重新准备full-ICU/SQLite/FD三flag全true，在API35/x86_64定向 **8/8**、全套 **58/58**；4个metadata布尔值和6次非法输入的新断言实际进入并通过，adapter字节/库符号/新APK摘要已记录原卡。云端未直接读D盘日志。这只覆盖API及既有组件回归，不覆盖FS shim/factory或native备份。旧卡结项，下一卡另派；Codex继续备份worker/owner/IPC。
 
-本机下一张为 [备份核心Android双ABI交叉编译](T-Flash-BackupCrossCompile.md)：只读同一源码快照，用已有NDK27d编译/链接x86_64及arm64候选库，禁止改Core、造JNI入口、换编译定义或安装APK。尚未回报结果；Codex继续JNI/可信worker/owner并负责产品装配。不要以编译候选库替代设备执行或从libnode预编译件推断ARM64支持。
+本机 [备份核心Android双ABI交叉编译](T-Flash-BackupCrossCompile.md) 已结项（用户转述）：df0eeac、已跟踪源码干净，NDK27d固定Android26的x86_64及arm64-v8a均重编/完整链接通过，36原SQLite定义未动；ELF/依赖/三核心符号/16KiB LOAD均核验，摘要详见原卡。零源码修改/提交/APK操作；云端未直接读D盘日志。**此快照不含7479c62的JNI**，不得算JNI/worker/Android执行或ARM64运行通过。Codex继续可信worker/owner并负责生产打包；不要重派已结项旧卡。
 
 昨晚已推送的核心代码与实际证据：
 
