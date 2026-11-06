@@ -6,6 +6,7 @@ import ast
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import platform
 import re
 import shutil
 import subprocess
@@ -13,12 +14,56 @@ import tarfile
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent
-PIN = json.loads((ROOT / 'sqlite-runtime-pin.json').read_text())
+PIN = json.loads((ROOT / 'sqlite-runtime-pin.json').read_text(encoding='utf-8'))
 
 
 def digest(path):
     with path.open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def ndk_host_tools(ndk, system=None):
+    """Select the pinned NDK's host compilers, always targeting Android x64.
+
+    Use the Windows executables directly: .cmd wrappers require shell handling
+    and cannot safely be treated as an executable with arbitrary path quoting.
+    No shell is involved, and no caller-selected Android target is accepted.
+    """
+    system = platform.system() if system is None else system
+    if system == 'Linux':
+        toolchain = ndk / 'toolchains/llvm/prebuilt/linux-x86_64'
+        compiler = [str(toolchain / 'bin/x86_64-linux-android26-clang')]
+        cxx = [str(toolchain / 'bin/x86_64-linux-android26-clang++')]
+    elif system == 'Windows':
+        toolchain = ndk / 'toolchains/llvm/prebuilt/windows-x86_64'
+        compiler = [str(toolchain / 'bin/clang.exe'), '--target=x86_64-linux-android26']
+        cxx = [str(toolchain / 'bin/clang++.exe'), '--target=x86_64-linux-android26']
+    else:
+        raise RuntimeError('Verification preparation supports Linux or Windows hosts only')
+    runtime = toolchain / 'sysroot/usr/lib/x86_64-linux-android/libc++_shared.so'
+    if not Path(compiler[0]).is_file() or not Path(cxx[0]).is_file() or not runtime.is_file():
+        raise RuntimeError('Missing pinned NDK compiler or Android x86_64 runtime')
+    return toolchain, compiler, cxx
+
+
+def esbuild_executable(esbuild):
+    """The real esbuild program, never a command wrapper.
+
+    npm installs esbuild as a .cmd wrapper on Windows; running one needs a
+    shell, so the wrapper is refused instead of being worked around.
+    """
+    if esbuild.suffix.lower() in {'.cmd', '.bat'}:
+        raise RuntimeError('Expected the real esbuild executable, not a command wrapper')
+    return esbuild
+
+
+def header_inventory(headers):
+    """The prepared Node headers as forward-slash relative paths.
+
+    The paths are compared with the manifest, which names them with forward
+    slashes on every host.
+    """
+    return {path.relative_to(headers).as_posix() for path in headers.rglob('*') if path.is_file()}
 
 
 def extract(archive, output):
@@ -46,20 +91,21 @@ def extract(archive, output):
 
 def instrument_addon(source):
     addon_source = source / 'src/better_sqlite3.cpp'
-    contents = addon_source.read_text()
+    contents = addon_source.read_text(encoding='utf-8')
     entry = 'NODE_MODULE_INIT(/* exports, context */) {'
     if contents.count(entry) != 1:
         raise RuntimeError('Unexpected addon initialization entry')
     addon_source.write_text(contents.replace(entry,
         'extern void MbotInstallFdVfsBinding(v8::Local<v8::Object>, v8::Local<v8::Context>);\n' +
-        entry + '\nMbotInstallFdVfsBinding(exports, context);', 1))
+        entry + '\nMbotInstallFdVfsBinding(exports, context);', 1), encoding='utf-8')
     return addon_source
 
 
 def prepare(ndk, archive, esbuild):
-    if PIN['ndkVersion'] not in (ndk / 'source.properties').read_text():
+    if PIN['ndkVersion'] not in (ndk / 'source.properties').read_text(encoding='utf-8'):
         raise RuntimeError('Expected pinned NDK27d')
-    if subprocess.check_output([str(esbuild), '--version'], text=True).strip() != PIN['esbuildVersion']:
+    esbuild = esbuild_executable(esbuild)
+    if subprocess.check_output([str(esbuild), '--version'], text=True, encoding='utf-8').strip() != PIN['esbuildVersion']:
         raise RuntimeError('Expected pinned esbuild')
     if not archive.is_file():
         archive.parent.mkdir(parents=True, exist_ok=True)
@@ -71,49 +117,50 @@ def prepare(ndk, archive, esbuild):
         shutil.rmtree(build)
     source = build / 'source'
     extract(archive, source)
-    package = json.loads((source / 'package.json').read_text())
+    package = json.loads((source / 'package.json').read_text(encoding='utf-8'))
     if package['name'] != PIN['package'] or package['version'] != PIN['version']:
         raise RuntimeError('SQLite package identity mismatch')
     headers = ROOT / 'build/node-headers'
-    header_manifest = json.loads((ROOT / 'build/node-headers.json').read_text())
-    inventory = {str(path.relative_to(headers)) for path in headers.rglob('*') if path.is_file()}
+    header_manifest = json.loads((ROOT / 'build/node-headers.json').read_text(encoding='utf-8'))
+    # The inventory is compared by forward-slash relative paths on every host.
+    inventory = header_inventory(headers)
     if inventory != set(header_manifest['files']) or not {'node.h', 'node_version.h', 'config.gypi'} <= inventory:
         raise RuntimeError('Prepared Node header inventory changed')
     for name, expected in header_manifest['files'].items():
         path = PurePosixPath(name)
         if path.is_absolute() or '..' in path.parts or digest(headers.joinpath(*path.parts)) != expected:
             raise RuntimeError('Prepared Node headers changed')
-    version = (headers / 'node_version.h').read_text()
+    version = (headers / 'node_version.h').read_text(encoding='utf-8')
     actual = '.'.join(re.search(r'#define NODE_' + part + r'_VERSION\s+(\d+)', version)[1] for part in ['MAJOR', 'MINOR', 'PATCH'])
     if actual != PIN['nodeVersion']:
         raise RuntimeError('Node headers version mismatch')
-    variables = ast.literal_eval((headers / 'config.gypi').read_text())['variables']
+    variables = ast.literal_eval((headers / 'config.gypi').read_text(encoding='utf-8'))['variables']
     if any(variables.get(key) != 0 for key in ['v8_enable_pointer_compression', 'v8_enable_sandbox', 'v8_enable_31bit_smis_on_64bit_arch']):
         raise RuntimeError('Unsupported V8 ABI configuration')
-    definitions = ast.literal_eval((source / 'deps/defines.gypi').read_text())['defines']
+    definitions = ast.literal_eval((source / 'deps/defines.gypi').read_text(encoding='utf-8'))['defines']
     if not all(isinstance(value, str) and re.fullmatch('[A-Za-z0-9_=-]+', value) for value in definitions):
         raise RuntimeError('Unexpected SQLite compile definitions')
-    toolchain = ndk / 'toolchains/llvm/prebuilt/linux-x86_64'
-    compiler = toolchain / 'bin/x86_64-linux-android26-clang'
-    cxx = toolchain / 'bin/x86_64-linux-android26-clang++'
+    # The host compilers are picked after every input was verified, so a
+    # changed input is still rejected before anything is compiled.
+    toolchain, compiler, cxx = ndk_host_tools(ndk)
     flags = ['-O3', '-fPIC', '-fvisibility=hidden', '-DNDEBUG']
     sqlite = source / 'deps/sqlite3'
-    engine_version = re.search(r'#define SQLITE_VERSION\s+"([^"]+)"', (sqlite / 'sqlite3.h').read_text())[1]
-    subprocess.run([str(compiler), '-std=c99', *flags, *['-D' + value for value in definitions],
+    engine_version = re.search(r'#define SQLITE_VERSION\s+"([^"]+)"', (sqlite / 'sqlite3.h').read_text(encoding='utf-8'))[1]
+    subprocess.run([*compiler, '-std=c99', *flags, *['-D' + value for value in definitions],
                     '-c', str(sqlite / 'sqlite3.c'), '-o', str(build / 'sqlite3.o')], check=True)
     addon_source = instrument_addon(source)
     adapter_objects = []
     for name in ('fd_vfs.cpp', 'fd_vfs_node.cpp'):
         obj = build / (name + '.o')
-        subprocess.run([str(cxx), '-std=c++20', *flags, '-I', str(headers), '-I', str(sqlite),
+        subprocess.run([*cxx, '-std=c++20', *flags, '-I', str(headers), '-I', str(sqlite),
                         '-c', str(ROOT / 'src/main/cpp' / name), '-o', str(obj)], check=True)
         adapter_objects.append(str(obj))
-    subprocess.run([str(cxx), '-std=c++20', *flags, '-DBUILDING_NODE_EXTENSION', '-DNODE_GYP_MODULE_NAME=better_sqlite3',
+    subprocess.run([*cxx, '-std=c++20', *flags, '-DBUILDING_NODE_EXTENSION', '-DNODE_GYP_MODULE_NAME=better_sqlite3',
                     '-I', str(headers), '-I', str(sqlite), '-c', str(source / 'src/better_sqlite3.cpp'),
                     '-o', str(build / 'addon.o')], check=True)
     jni = ROOT / 'build/verified-jni/x86_64'
     library = jni / 'libmbot_sqlite_probe.so'
-    subprocess.run([str(cxx), '-shared', '-Wl,-z,max-page-size=16384', '-Wl,-z,common-page-size=16384',
+    subprocess.run([*cxx, '-shared', '-Wl,-z,max-page-size=16384', '-Wl,-z,common-page-size=16384',
                     '-Wl,-soname,libmbot_sqlite_probe.so', str(build / 'addon.o'), str(build / 'sqlite3.o'), *adapter_objects,
                     '-L', str(jni), '-lnode', '-lm', '-ldl', '-o', str(library)], check=True)
     wrapper = build / 'wrapper.cjs'
@@ -122,24 +169,25 @@ def prepare(ndk, archive, esbuild):
     assets = ROOT / 'build/verified-assets'
     script = assets / 'node-fd-probe.cjs'
     placeholder = '"__MBOT_SQLITE_WRAPPER__"'
-    contents = script.read_text()
+    contents = script.read_text(encoding='utf-8')
     if contents.count(placeholder) != 1:
         raise RuntimeError('Prepare the base Node probe before SQLite')
-    script.write_text(contents.replace(placeholder, json.dumps(wrapper.read_text())))
+    script.write_text(contents.replace(placeholder, json.dumps(wrapper.read_text(encoding='utf-8'))), encoding='utf-8')
     notices = assets / 'third_party/better-sqlite3'
     notices.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source / 'LICENSE', notices / 'LICENSE')
     shutil.copyfile(ROOT.parents[1] / 'LICENSE', notices / 'FD-VFS-AGPL-LICENSE')
-    (notices / 'SQLITE-PUBLIC-DOMAIN.txt').write_text('\n'.join((sqlite / 'sqlite3.c').read_text().splitlines()[:22]) + '\n')
-    metadata = json.loads((assets / 'node-validation.json').read_text())
+    (notices / 'SQLITE-PUBLIC-DOMAIN.txt').write_text(
+        '\n'.join((sqlite / 'sqlite3.c').read_text(encoding='utf-8').splitlines()[:22]) + '\n', encoding='utf-8')
+    metadata = json.loads((assets / 'node-validation.json').read_text(encoding='utf-8'))
     metadata.update(requiresSqlite=True, requiresFdVfs=True, betterSqlite3Version=PIN['version'], sqliteEngineVersion=engine_version)
-    (assets / 'node-validation.json').write_text(json.dumps(metadata) + '\n')
+    (assets / 'node-validation.json').write_text(json.dumps(metadata) + '\n', encoding='utf-8')
     (notices / 'build-inputs.json').write_text(json.dumps({
         'pin': PIN, 'librarySha256': digest(library), 'nodeHeaders': header_manifest,
         'defines': definitions, 'modifiedAddonSha256': digest(addon_source),
         'adapters': {name: digest(ROOT / 'src/main/cpp' / name) for name in ('fd_vfs.cpp', 'fd_vfs_node.cpp')},
         'scope': 'verification only; explicit non-sensitive owner-granted data FDs',
-    }, indent=2) + '\n')
+    }, indent=2) + '\n', encoding='utf-8')
     print('Prepared pinned better-sqlite3', PIN['version'], 'Android x86_64 verification addon')
 
 
