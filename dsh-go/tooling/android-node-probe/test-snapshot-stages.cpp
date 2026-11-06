@@ -34,7 +34,14 @@ int main() {
   assert(s::open(directory, token, -1, true) == -EINVAL && s::open(directory, token, 4, true) == -EINVAL);
   assert(fchmod(directory, 0755) == 0);
   assert(s::open(directory, token, 0, true) == -EACCES);
-  assert(fchmod(directory, 0700) == 0);
+  assert(fchmod(directory, 01700) == 0 && s::open(directory, token, 0, true) == -EACCES);
+  assert(fchmod(directory, 04700) == 0 && s::open(directory, token, 0, true) == -EACCES);
+  assert(fchmod(directory, 02750) == 0 && s::open(directory, token, 0, true) == -EACCES);
+  // Match Android's inherited private directory mode. All positive create,
+  // publish and removal checks below must work without clearing setgid.
+  assert(fchmod(directory, 02700) == 0);
+  struct stat privateDirectory{};
+  assert(fstat(directory, &privateDirectory) == 0 && (privateDirectory.st_mode & 07777) == 02700);
   std::array<int, 4> writable;
   for (int i = 0; i < 4; ++i) { writable[i] = s::open(directory, token, i, true); assert(writable[i] >= 3); }
   assert(s::open(directory, token, 0, true) == -EEXIST);
@@ -47,6 +54,9 @@ int main() {
   assert(s::publish(directory, token, "../bad", readonly, sizeof(payload)) == s::REFUSED);
   assert(s::publish(directory, token, target, readonly, sizeof(payload) + 1) == s::REFUSED);
   assert(fchmod(writable[0], 0644) == 0);
+  assert(s::publish(directory, token, target, readonly, sizeof(payload)) == s::REFUSED);
+  assert(fchmod(writable[0], 0600) == 0);
+  assert(fchmod(writable[0], 02600) == 0);
   assert(s::publish(directory, token, target, readonly, sizeof(payload)) == s::REFUSED);
   assert(fchmod(writable[0], 0600) == 0);
   assert(write(writable[1], "x", 1) == 1);

@@ -53,7 +53,13 @@ inline int directory_error(int directory) {
   if (directory < 3) return EINVAL;
   struct stat info{};
   if (fstat(directory, &info) != 0) return errno;
-  return S_ISDIR(info.st_mode) && info.st_uid == getuid() && (info.st_mode & 07777) == 0700 ? 0 : EACCES;
+  // Android app data/cache directories propagate setgid to private children.
+  // It selects inherited group ownership, not group access. Permit only that
+  // extra directory bit; owner rwx remains required, group/other rwx, sticky
+  // and setuid remain forbidden. Regular files still require exactly 0600.
+  const auto permissions = info.st_mode & 07777;
+  return S_ISDIR(info.st_mode) && info.st_uid == getuid() &&
+    (permissions == 0700 || permissions == (0700 | S_ISGID)) ? 0 : EACCES;
 }
 inline bool private_file(const struct stat& info) {
   return S_ISREG(info.st_mode) && info.st_uid == getuid() && info.st_nlink == 1 &&

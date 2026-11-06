@@ -38,6 +38,7 @@ def run(java_home=None):
         classes = stage / 'classes'; classes.mkdir()
         subprocess.run([str(java_home / 'bin/javac'), '-d', str(classes), str(ROOT / 'NativeRuntimePublication.java')], check=True)
         directory = stage / 'private'; directory.mkdir(mode=0o700)
+        directory.chmod(0o2700)  # Android-style inherited setgid, still private.
         fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         try:
             subprocess.run([str(java_home / 'bin/java'), '--add-opens=java.base/java.io=ALL-UNNAMED',
