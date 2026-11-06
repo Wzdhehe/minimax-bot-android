@@ -100,12 +100,14 @@ internal class BotRuntimeExecution(private val context: Context, private val cha
             try {
                 if (closing.get()) return@execute
                 BotCodeAssets(context) // Fail before binding if the product is not packaged.
+                android.util.Log.i("MiniMaxBotRuntime", "bot_assets_manifest_verified")
                 bound = context.bindService(Intent(context, IsolatedBotService::class.java), connection, Context.BIND_AUTO_CREATE)
                 if (!bound) throw IOException()
                 val target = connected.get(10, TimeUnit.SECONDS)
                 send(target, BotNodeWire.HELLO)
                 uid = identity.get(10, TimeUnit.SECONDS)
                 if (closing.get()) return@execute
+                android.util.Log.i("MiniMaxBotRuntime", "bot_isolated_peer_verified")
                 run.attachBinder(context, target, uid) { gate -> BotSocketConnection.open(context) { fd -> gate.awaitAccepted { offer(fd) } } }
                 val store = BotProviderStore(context)
                 val catalog = store.guestCatalogJson()
@@ -140,6 +142,7 @@ internal class BotRuntimeExecution(private val context: Context, private val cha
                             putParcelable("descriptor", descriptorFile)
                             listOf("db", "wal", "shm", "journal").forEachIndexed { index, key -> putParcelable(key, data[index]) }
                         })
+                        android.util.Log.i("MiniMaxBotRuntime", "bot_grants_sent")
                     } finally { data.forEach { it.close() } }
                 }
             } catch (_: Exception) { if (!closing.get()) fail("bot_runtime_start_failed") }
@@ -188,11 +191,19 @@ internal class BotRuntimeExecution(private val context: Context, private val cha
                     if (!text.endsWith("\r\n\r\n") || !text.startsWith(if (authorized) "HTTP/1.1 200 " else "HTTP/1.1 403 ")) throw IOException()
                 } finally { pair.forEach { try { Os.shutdown(it.fileDescriptor, OsConstants.SHUT_RDWR) } catch (_: Exception) { }; try { it.close() } catch (_: Exception) { } } }
             }
-            if (!closing.get() && run.ready()) changed() else throw IOException()
+            if (!closing.get() && run.ready()) {
+                android.util.Log.i("MiniMaxBotRuntime", "bot_ready")
+                changed()
+            } else throw IOException()
         } catch (_: Exception) { fail("bot_runtime_health_failed") }
         finally { gate.close(); healthGate = null }
     }
-    fun fail(code: String) { if (!closing.get()) failure = code; if (::run.isInitialized) run.close(); changed() }
+    fun fail(code: String) {
+        val safe = code.takeIf { it in failureCodes } ?: "bot_runtime_start_failed"
+        if (!closing.get()) { failure = safe; android.util.Log.w("MiniMaxBotRuntime", safe) }
+        if (::run.isInitialized) run.close()
+        changed()
+    }
     fun closeAsync(): CompletableFuture<Unit> {
         closing.set(true)
         healthGate?.close()
@@ -227,6 +238,7 @@ internal class BotRuntimeExecution(private val context: Context, private val cha
         private val cleaners = Executors.newSingleThreadExecutor()
         private val deadlines = Executors.newSingleThreadScheduledExecutor()
         private val failureCodes = setOf("bot_bootstrap_failed", "bot_assets_failed", "bot_filesystem_failed", "bot_runtime_import_failed",
-            "bot_runtime_start_failed", "bot_runtime_loop_failed", "bot_runtime_exited")
+            "bot_runtime_start_failed", "bot_runtime_loop_failed", "bot_runtime_exited", "bot_runtime_disconnected",
+            "bot_runtime_assets_unavailable", "bot_runtime_start_timeout", "bot_runtime_health_failed")
     }
 }
