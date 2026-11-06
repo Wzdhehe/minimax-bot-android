@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 package io.github.ccch1mneyyy.dsh_app.isolation
 
-/** JNI ABI only, not an IPC endpoint. A future trusted one-shot worker must
+/** JNI ABI only, not an IPC endpoint. The private one-shot worker must
  * authenticate Main and check its isolated UID BEFORE loading this object.
  * This library is not packaged or called by the product yet. Never load it
  * in Main or a live Agent. Its FD registry survives until process retirement.

@@ -3,7 +3,7 @@
 
 ## 当前：SQLite 固定文件元数据接线（2026-11-06）
 
-后续已增加host验过的JNI候选：固定8FD及可信owner参数，显式有限数字结果、一次进程单次调用、永久取消；Kotlin解码不把复制候选称为发布成功。真实JVM加载原生库并完成复制/独立进程只读复验及拒绝路径通过。**Android worker/调用者认证/独立UID检查/打包/退役确认/发布/snapshot FS仍未接**，不能据此解除本卡missing-snapshot拒绝；边界和复跑见 [native README](../../dsh-go/runtime/native-sqlite/README.md)。本机现行双ABI只读卡不含新JNI源文件。
+后续已增加host验过的JNI候选：固定8FD及可信owner参数，显式有限数字结果、一次进程单次调用、永久取消；Kotlin解码不把复制候选称为发布成功。真实JVM加载原生库并完成复制/独立进程只读复验及拒绝路径通过。再后续私有 `SqliteBackupService`/Binder候选已写并以Android36 API精确编译，源代码检查实际Binder身份和独立UID、保留预取消、Main死亡及完成时自退役；session纯JVM7项加入后native回归88/88、Node56/56。**Service未在设备运行，Main客户端/实际授予与退役确认/原生库打包/发布/snapshot FS仍未接**，不能据此解除本卡missing-snapshot拒绝；边界和复跑见 [native README](../../dsh-go/runtime/native-sqlite/README.md)。本机原双ABI只读卡已结项，df0eeac不含新JNI源文件。
 
 日间后续已新增 [native SQLite backup kernel](../../dsh-go/runtime/native-sqlite/README.md)：独立只读 source、固定read snapshot后的页数预算、真实sqlite3_backup与完整性检查、取消/超时和无原文错误结果。真实8FD宿主用例验证另一进程在选定快照后提交并长大，备份仍为原版本；负例验证只读准入/非空目标拒绝、超限、busy、取消、校验失败及事务回收。保持原SQLite编译定义（omit progress callback），通过joined watchdog调用sqlite3_interrupt。它**尚未接Android/JNI/Binder/备份端口或持久发布**，不是下述missing-snapshot拒绝已解除；native owner、source/destination授予、关闭/fsync/发布/只读回授和upstream snapshot FS仍待实现，详情以新README为准。
 

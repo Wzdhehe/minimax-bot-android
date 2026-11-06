@@ -7,7 +7,11 @@
 
 ## 当前日间主线（2026-11-06，覆盖下文历史安排）
 
-最新续写：native备份已有 `jni_backup.cpp`/Kotlin固定声明和严格三long结果解码；一次进程只准调用一次，取消永久生效，无路径/SQL/Key入口。真实Linux JVM加载同名ABI夹具，实际8FD复制并退役后由独立进程只读重开，以及空/错参数、owner自身PID、取消与重复调用，均通过；详见 [native README](../../dsh-go/runtime/native-sqlite/README.md)。这只是JNI候选，**尚无可信Android worker/Binder/生产打包/owner发布/guest snapshot端口，也没有完整runtime启动**。本机双ABI卡按原快照执行，不包含新增JNI，不得把它的链接结果算作JNI已在Android验证。下一步接可信一次性worker和Main的授予/退役/发布生命周期，不能直接把JNI对象交给Agent。
+最新续写：native备份已有 `jni_backup.cpp`/Kotlin固定声明和严格三long结果解码；一次进程只准调用一次，取消永久生效，无路径/SQL/Key入口。真实Linux JVM加载同名ABI夹具，实际8FD复制并退役后由独立进程只读重开，以及空/错参数、owner自身PID、取消与重复调用，均通过；详见 [native README](../../dsh-go/runtime/native-sqlite/README.md)。后续私有Android worker/Binder候选已写（下段），但**尚无设备运行/生产Main客户端/原生库打包/owner发布/guest snapshot端口，也没有完整runtime启动**。本机原双ABI卡不含JNI，不能算JNI已在Android验证。下一步是Main授予/退役/发布生命周期和库打包，不能直接把JNI对象或worker控制Binder交给Agent。
+
+`SqliteBackupService`非exported、isolatedProcess、单独:sqlite_backup进程，只执行固定native备份；启动前取真实Binder UID/PID、核对Main/独立UID/nonce/预算/固定8 typed PFD，并由Main确认实际peer身份。PEER只是身份准入，**不是JNI或runtime ready**；回调/结果/死亡可早于START应答。首次授权START即消耗worker；取消永久生效，Main回调Binder死亡/限时/完成/显式退役均杀自身，manifest误配Main不加载库且不杀Main。控制Binder有进程静态锚点，不主动丢弃来伪造退出；Main仍须等它死亡并复查active generation/cancel，才能考虑发布。控制Binder及任何额外数据FD不得交给Agent；Main不得向已启动worker重发FD（即使拒绝事务，关闭内核安装的别名也可能释放SQLite锁）。结果不是发布成功，未知结果不自动重试。Main客户端及其上述策略仍待写。
+
+worker阶段实跑：精确4个Kotlin源码用`kotlinc -jvm-target 17 -Werror -classpath /tmp/mbot-android36.jar ... -d /tmp/mbot-backup-worker-android-compile.jar`编译成功，无warning；jar从Google平台36r02归档校验大小65878410及官方SHA1 2c1a80dd4d9f7d0e6dd336ec603d9b5c55a6f576后提取。只验证API/编译，不是Gradle APK或设备执行。原native边界脚本全跑 **JUnit88/88、Node56/56**（新7项session用例：身份/同PID拒绝、控制会话、预取消、晚到成功、退役拒绝、单次完成、未执行不能给candidate），日志/tmp/mbot-backup-worker-boundary-final.log；Android编译日志/tmp/mbot-backup-worker-android-compile.log为空且退出0。没有把这些host策略测试叫真实Binder/UID/kill/死亡设备验收。
 
 本阶段实跑：`python3 dsh-go/tooling/android-node-probe/test-sqlite-backup.py --java-home /tmp/mbot-jdk-dev/extracted/jdk-21.0.13+9` 的三组真实C++/FD-worker/JVM-JNI验收全部PASS；`KOTLINC=/workspace/toolchains/kotlinc/bin/kotlinc MBOT_NATIVE_DEPS=/tmp/mbot-backup-jni-deps bash dsh-go/tooling/test-native-model-broker.sh` **JUnit81/81、Node56/56**；文档链接51份0问题。JDK为本轮临时恢复、按发布SHA256校验的Temurin21.0.13+9（旧/tmp SDK/NDK仍未恢复）。`javap`已核对精确Kotlin `run`签名为`([IIIJI)[J`、`cancel`为`()V`；不是Android编译/设备测试。CI工作流补JDK/Java夹具触发路径，但没有把本地结果冒充新CI成功。
 

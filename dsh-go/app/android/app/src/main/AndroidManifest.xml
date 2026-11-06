@@ -230,6 +230,14 @@
             android:exported="false"
             android:isolatedProcess="true" />
 
+        <!-- Trusted native backup worker candidate; never shares the Agent
+             process or receives shell/code/Key. Product client/library pending. -->
+        <service
+            android:name=".isolation.SqliteBackupService"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":sqlite_backup" />
+
         <!-- Main-process broker: the only path from the isolated UID to filesDir/workspace.
              Path-guarded; no shell, no credential operation. -->
         <service
