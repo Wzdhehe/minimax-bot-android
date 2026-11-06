@@ -21,6 +21,7 @@ import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDeletionResult
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimePublicationResult
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataCode
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeSnapshotClient
 import io.github.ccch1mneyyy.dsh_app.runtime.BotSocketConnection
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -28,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal object NodeProbeRuntime {
     @Volatile private var modelClient: ModelRequestClient? = null
     @Volatile private var fileClient: RuntimeFileCommitClient? = null
+    @Volatile private var snapshotClient: RuntimeSnapshotClient? = null
     private val botConnections = GrantedConnectionQueue<ParcelFileDescriptor>()
     fun offerBotConnection(fd: ParcelFileDescriptor) = botConnections.offer(fd)
     fun takeBotConnection(): Int {
@@ -37,6 +39,21 @@ internal object NodeProbeRuntime {
     fun closeBotConnections() = botConnections.close()
     fun configureModelBroker(host: IBinder, session: String) { modelClient = ModelRequestClient(host, session) }
     fun configureFileBroker(host: IBinder, session: String) { fileClient = RuntimeFileCommitClient(host, session) }
+    fun configureSnapshotBroker(host: IBinder, session: String) { snapshotClient = RuntimeSnapshotClient(host, session) }
+    fun closeSnapshotBroker() { snapshotClient = null }
+    fun copyRuntimeSnapshot(name: String): Int = try {
+        when (snapshotClient?.copy(name)) {
+            "published" -> 0; "already_exists" -> 1; "not_published" -> 2; else -> 3
+        }
+    } catch (_: Exception) { 3 }
+    fun catalogRuntimeSnapshots(): String? = try { snapshotClient?.catalogJson() } catch (_: Exception) { null }
+    fun openRuntimeSnapshot(name: String, identity: String): Int {
+        val client = snapshotClient ?: return -1
+        return try { client.openReadOnly(name, identity).use { it.detachFd() } } catch (_: Exception) { -1 }
+    }
+    fun removeRuntimeSnapshot(name: String, identity: String): Int = try {
+        if (snapshotClient?.remove(name, identity) == "removed") 0 else 1
+    } catch (_: Exception) { 1 }
     private fun fileError(code: RuntimeDataCode): Int = when (code) {
         RuntimeDataCode.INVALID -> 3; RuntimeDataCode.DENIED -> 4; RuntimeDataCode.CLOSED -> 5
         RuntimeDataCode.NOT_FOUND -> 7; RuntimeDataCode.TOO_LARGE -> 8; else -> 6
@@ -161,6 +178,7 @@ class NodeIsolationProbeService : Service() {
     override fun onDestroy() {
         acceptingBotConnections.set(false)
         NodeProbeRuntime.closeBotConnections()
+        NodeProbeRuntime.closeSnapshotBroker()
         UnconsumedSnapshotProbe.close()
         worker.shutdownNow()
         super.onDestroy()
@@ -207,10 +225,13 @@ class NodeIsolationProbeService : Service() {
         val session = data.getString("model_session")
         val fileHost = data.getBinder("file_host")
         val fileSession = data.getString("file_session")
+        val snapshotHost = data.getBinder("snapshot_host")
+        val snapshotSession = data.getString("snapshot_session")
         val providerId = data.getString("providerId")
         if (!id.matches(Regex("[a-zA-Z0-9_-]{1,128}")) || fds.any { it == null } ||
             privatePath == null || privatePath.length > 4096 || host == null || session == null ||
             !session.matches(Regex("[0-9a-f]{64}")) || fileHost == null || fileSession == null || !fileSession.matches(Regex("[0-9a-f]{64}")) ||
+            snapshotHost == null || snapshotSession == null || !snapshotSession.matches(Regex("[0-9a-f]{64}")) ||
             providerId == null || providerId.length !in 1..200 || !started.compareAndSet(false, true)) {
             fds.forEach { try { it?.close() } catch (_: Exception) { } }
             return
@@ -222,11 +243,16 @@ class NodeIsolationProbeService : Service() {
                 val script = assets.open("node-fd-probe.cjs").bufferedReader(Charsets.UTF_8).use { it.readText() }
                 NodeProbeRuntime.configureModelBroker(host, session)
                 NodeProbeRuntime.configureFileBroker(fileHost, fileSession)
+                NodeProbeRuntime.configureSnapshotBroker(snapshotHost, snapshotSession)
                 NodeProbeRuntime.load()
                 // Ownership goes to the fixed Node script. It closes model
                 // FDs on every stream path and the result FD after writing.
                 val raw = fds.map { it!!.detachFd() }
-                val exit = NodeProbeRuntime.start(script, raw[0], raw[1], raw[2], raw[3], privatePath, applicationInfo.nativeLibraryDir, providerId,
+                // Uncompressed native entries can be mapped directly from the
+                // globally readable APK by this independent UID. No path is
+                // accepted from a caller for addon loading.
+                val libraries = applicationInfo.sourceDir + "!/lib/x86_64"
+                val exit = NodeProbeRuntime.start(script, raw[0], raw[1], raw[2], raw[3], privatePath, libraries, providerId,
                     raw[8], applicationInfo.uid, raw.subList(4, 8).toIntArray())
                 code = if (exit == 0) "ok" else "node_nonzero_exit"
             } catch (_: UnsatisfiedLinkError) { code = "node_library_unavailable" }
@@ -234,6 +260,7 @@ class NodeIsolationProbeService : Service() {
             finally {
                 acceptingBotConnections.set(false)
                 NodeProbeRuntime.closeBotConnections()
+                NodeProbeRuntime.closeSnapshotBroker()
                 fds.forEach { try { it?.close() } catch (_: Exception) { } }
             }
             val response = Message.obtain(null, 2)

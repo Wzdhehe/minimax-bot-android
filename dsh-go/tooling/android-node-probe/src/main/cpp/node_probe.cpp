@@ -373,6 +373,8 @@ namespace file_module_registration {
 NODE_MODULE_LINKED(mbot_files_bridge, InitializeFiles)
 }
 
+#include "node_snapshot_bridge.inc"
+
 std::string ReadString(JNIEnv* env, jstring value) {
   const char* text = env->GetStringUTFChars(value, nullptr);
   if (!text) return {};
@@ -430,7 +432,12 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   file_move_method = env->GetMethodID(type, "moveRuntimeFile", "(Ljava/lang/String;Ljava/lang/String;Z)I");
   file_remove_method = env->GetMethodID(type, "removeRuntimeFile", "(Ljava/lang/String;)I");
   file_append_method = env->GetMethodID(type, "appendRuntimeFile", "(Ljava/lang/String;[B)I");
+  snapshot_copy_method = env->GetMethodID(type, "copyRuntimeSnapshot", "(Ljava/lang/String;)I");
+  snapshot_catalog_method = env->GetMethodID(type, "catalogRuntimeSnapshots", "()Ljava/lang/String;");
+  snapshot_open_method = env->GetMethodID(type, "openRuntimeSnapshot", "(Ljava/lang/String;Ljava/lang/String;)I");
+  snapshot_remove_method = env->GetMethodID(type, "removeRuntimeSnapshot", "(Ljava/lang/String;Ljava/lang/String;)I");
   if (!open_method || !cancel_method || !bot_connection_method || !bot_connection_close_method || !file_method || !file_read_method || !file_size_method || !file_move_method || !file_remove_method || !file_append_method) return JNI_ERR;
+  if (!snapshot_copy_method || !snapshot_catalog_method || !snapshot_open_method || !snapshot_remove_method) return JNI_ERR;
   JNINativeMethod method{const_cast<char*>("start"),
       const_cast<char*>("(Ljava/lang/String;IIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;II[I)I"), reinterpret_cast<void*>(Start)};
   if (env->RegisterNatives(type, &method, 1) != JNI_OK) return JNI_ERR;

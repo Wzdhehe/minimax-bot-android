@@ -64,6 +64,8 @@ def bundle(output_dir=None):
         'bot-store-persistence.mjs': ['bot-file-lease.mjs'],
         'bot-memory-filesystem.mjs': [],
         'bot-persistence.mjs': ['bot-file-lease.mjs', 'bot-memory-filesystem.mjs', 'bot-store-persistence.mjs'],
+        'runtime-snapshot-port.mjs': [],
+        'runtime-snapshot-database.mjs': [],
     }
     def module_url(name):
         if name not in urls:
@@ -132,6 +134,11 @@ def bundle(output_dir=None):
     if not bot_service.startswith('data:text/javascript;base64,') or len(bot_service) > 3 * 1024 * 1024:
         raise RuntimeError('Unexpected verification Bot service bundle')
     template = template.replace(bot_service_placeholder, json.dumps(bot_service))
+    for name, token in [('runtime-snapshot-port.mjs', '__MBOT_SNAPSHOT_PORT_MODULE_URL__'),
+                        ('runtime-snapshot-database.mjs', '__MBOT_SNAPSHOT_DATABASE_MODULE_URL__')]:
+        placeholder = json.dumps(token)
+        assert template.count(placeholder) == 1
+        template = template.replace(placeholder, json.dumps(module_url(name)))
     (assets / 'node-fd-probe.cjs').write_text(template, encoding='utf-8')
     bot_notice = assets / 'third_party/minimax-bot'
     bot_notice.mkdir(parents=True, exist_ok=True)
@@ -214,11 +221,24 @@ def prepare(ndk, archive, source_sha=None):
     shutil.copyfile(toolchain / 'sysroot/usr/lib/x86_64-linux-android/libc++_shared.so', jni / 'libc++_shared.so')
     (notices / 'ndk').mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ndk / 'NOTICE', notices / 'ndk/NOTICE')
+    native_sources = ROOT / 'build/probe-native-source'
+    native_sources.mkdir(parents=True, exist_ok=True)
+    bridge_inputs = {}
+    for name in ('node_probe.cpp', 'node_snapshot_bridge.inc'):
+        origin = ROOT / 'src/main/cpp' / name
+        target = native_sources / name
+        shutil.copyfile(origin, target)
+        bridge_inputs[name] = digest(target)
     command = compiler + ['-std=c++20', '-fPIC', '-shared',
                '-fvisibility=hidden', '-O2', '-Wl,-z,max-page-size=16384', '-Wl,-z,common-page-size=16384',
-               '-I', str(source_dir), str(ROOT / 'src/main/cpp/node_probe.cpp'),
+               '-I', str(source_dir), str(native_sources / 'node_probe.cpp'),
                '-L', str(jni), '-lnode', '-o', str(jni / 'libmbot_node_probe.so')]
     subprocess.run(command, check=True)
+    if any(digest(ROOT / 'src/main/cpp' / name) != sha for name, sha in bridge_inputs.items()):
+        raise RuntimeError('Node JNI inputs changed during preparation')
+    (ROOT / 'build/node-bridge-inputs.json').write_text(json.dumps({
+        'inputs': bridge_inputs, 'librarySha256': digest(jni / 'libmbot_node_probe.so'),
+    }) + '\n', encoding='utf-8')
     # File publication is now built by AGP from the production CMake target.
     # Drop the obsolete generated probe library on incremental preparation.
     (jni / 'libmbot_file_publication_probe.so').unlink(missing_ok=True)

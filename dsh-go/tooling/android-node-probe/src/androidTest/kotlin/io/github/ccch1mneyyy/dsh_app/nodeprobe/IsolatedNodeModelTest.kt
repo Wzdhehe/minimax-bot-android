@@ -24,6 +24,9 @@ import io.github.ccch1mneyyy.dsh_app.bot.NativeModelRequestHost
 import io.github.ccch1mneyyy.dsh_app.bot.NativeModelChannels
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDatabaseFiles
 import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeFileCommitHost
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeSnapshotHost
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeSnapshotClient
+import io.github.ccch1mneyyy.dsh_app.isolation.RuntimeDataFailure
 import io.github.ccch1mneyyy.dsh_app.model.NativeModelBroker
 import io.github.ccch1mneyyy.dsh_app.model.ProviderCall
 import io.github.ccch1mneyyy.dsh_app.model.ProviderResponse
@@ -110,10 +113,11 @@ class IsolatedNodeModelTest {
         // Failure messages include only finite allowlisted codes, never a raw
         // report, provider response, path, session token or generated Key.
         val phases = setOf("bootstrap", "sqlite_load", "sqlite_memory", "vfs_register", "vfs_metadata", "vfs_open", "vfs_wal",
-            "vfs_verify", "vfs_write", "vfs_reopen", "model_streams", "descriptor_transfer", "bot_http_fd", "model_dynamic", "sdk_route", "scoped_model_route", "file_commit", "file_read", "file_mutation", "file_append", "bot_store")
+            "vfs_verify", "vfs_write", "vfs_reopen", "sqlite_snapshot", "model_streams", "descriptor_transfer", "bot_http_fd", "model_dynamic", "sdk_route", "scoped_model_route", "file_commit", "file_read", "file_mutation", "file_append", "bot_store")
         val codes = setOf("SQLITE_CANTOPEN", "SQLITE_IOERR", "SQLITE_IOERR_SHMOPEN", "SQLITE_BUSY", "SQLITE_READONLY",
             "SQLITE_ERROR", "SQLITE_PERM", "SQLITE_MISUSE", "SQLITE_NOTFOUND", "fd_vfs_unavailable", "fd_vfs_input_invalid", "fd_vfs_metadata_unavailable", "sqlite_parent_missing",
             "runtime_data_invalid", "runtime_data_denied", "runtime_data_closed", "runtime_data_unavailable", "runtime_data_not_found", "runtime_data_too_large", "runtime_data_outcome_unknown", "runtime_data_reload_required",
+            "runtime_snapshot_unavailable", "runtime_snapshot_database_unavailable", "runtime_snapshot_outcome_unknown", "runtime_snapshot_refused", "runtime_snapshot_catalog_invalid", "fd_vfs_snapshot_unavailable",
             "descriptor_invalid", "descriptor_permissions", "descriptor_not_a_regular_file", "bot_transport_timeout", "bot_transport_invalid", "bot_transport_unavailable", "memory_pending", "memory_backup_failed")
         val phase = report.optString("failedPhase").takeIf { it in phases } ?: "unknown"
         val code = report.optString("failureCode").takeIf { it in codes } ?: "unknown"
@@ -205,11 +209,14 @@ class IsolatedNodeModelTest {
                             BotSocketConnection.open(base) { fd -> checkNotNull(grant.get())(fd) }
                         }
                         val admission = java.util.concurrent.atomic.AtomicReference<BotConnectionGrants?>()
+                        val snapshots = java.util.concurrent.atomic.AtomicReference<RuntimeSnapshotHost?>()
+                        val snapshotSession = RuntimeDescriptorSession.randomToken()
                         var watchedPeer: IBinder? = null
                         val peerDeath = IBinder.DeathRecipient {
                             admission.get()?.close()
                             bridge.close()
                             grant.set(null)
+                            snapshots.getAndSet(null)?.close()
                         }
                         try {
                             val descriptorSession = RuntimeDescriptorSession(
@@ -237,6 +244,10 @@ class IsolatedNodeModelTest {
                                 assertTrue(identity.data.getBoolean("database_owner_denied"))
                                 assertTrue(identity.data.getBoolean("publication_owner_denied"))
                                 assertTrue(identity.data.getBoolean("bot_connection_owner_denied"))
+                                val snapshotHost = RuntimeSnapshotHost.open(context, checkNotNull(databaseOwner), identity.uid, snapshotSession)
+                                snapshots.set(snapshotHost)
+                                // Even the owner UID is not the admitted guest.
+                                assertThrows(RuntimeDataFailure::class.java) { RuntimeSnapshotClient(snapshotHost, snapshotSession).catalogJson() }
                                 val gate = BotConnectionGrants(identity.uid)
                                 admission.set(gate)
                                 grant.set { fd ->
@@ -256,6 +267,7 @@ class IsolatedNodeModelTest {
                                     putString("privatePath", marker.absolutePath)
                                     putBinder("model_host", host); putString("model_session", host.session); putString("providerId", providerId)
                                     putBinder("file_host", fileHost); putString("file_session", fileHost.session)
+                                    putBinder("snapshot_host", snapshotHost); putString("snapshot_session", snapshotSession)
                                     putParcelable("normal", modelFds[0]); putParcelable("stalled", modelFds[1])
                                     putParcelable("echo", modelFds[2]); putParcelable("result", resultPair[1])
                                     putParcelable("runtime_descriptor", descriptorFd)
@@ -325,6 +337,7 @@ class IsolatedNodeModelTest {
                                 assertFalse(text.contains(broker.session.token))
                                 assertFalse(text.contains(host.session))
                                 assertFalse(text.contains(fileHost.session))
+                                assertFalse(text.contains(snapshotSession))
                                 assertFalse(text.contains(descriptorSession.token))
                                 assertFalse(text.contains(newerDescriptor.token))
                                 val report = if (text.isBlank()) JSONObject() else JSONObject(text)
@@ -375,6 +388,12 @@ class IsolatedNodeModelTest {
                                         assertTrue(metadata.getBoolean(name))
                                     }
                                     assertEquals(6, metadata.getInt("invalidRefused"))
+                                    val snapshot = report.getJSONObject("snapshot")
+                                    for (name in listOf("published", "readonly", "frozen", "writeRefused", "wrongIdentity", "removed", "heldAfterRemoval")) {
+                                        assertTrue("snapshot_$name", snapshot.getBoolean(name))
+                                    }
+                                    assertEquals("ok", snapshot.getString("integrity"))
+                                    assertEquals(listOf("你好", "second"), (0 until snapshot.getJSONArray("rows").length()).map { snapshot.getJSONArray("rows").getString(it) })
                                     assertTrue(dataFiles[0].length() > 0)
                                     assertTrue(dataFiles.none { it.readBytes().toString(Charsets.UTF_8).contains(secret) })
                                 }
@@ -475,6 +494,7 @@ class IsolatedNodeModelTest {
                                 }
                             }
                         } finally {
+                            snapshots.getAndSet(null)?.close()
                             admission.getAndSet(null)?.close()
                             bridge.close()
                             grant.set(null)

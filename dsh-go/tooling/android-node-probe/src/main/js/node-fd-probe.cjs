@@ -11,9 +11,47 @@ const botStoreModuleUrl = "__MBOT_BOT_STORE_MODULE_URL__";
 const botMemoryModuleUrl = "__MBOT_BOT_MEMORY_MODULE_URL__";
 const botPersistenceModuleUrl = "__MBOT_BOT_PERSISTENCE_MODULE_URL__";
 const botServiceModuleUrl = "__MBOT_BOT_SERVICE_MODULE_URL__";
+const snapshotPortModuleUrl = "__MBOT_SNAPSHOT_PORT_MODULE_URL__";
+const snapshotDatabaseModuleUrl = "__MBOT_SNAPSHOT_DATABASE_MODULE_URL__";
 const fs = require('node:fs');
 let probePhase = 'bootstrap';
 const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
+
+async function probeSnapshot({ Database, nativeBinding }) {
+  const { createNativeSnapshotSqlitePort } = await import(snapshotPortModuleUrl);
+  const { createSnapshotFdDatabase } = await import(snapshotDatabaseModuleUrl);
+  const bridge = process._linkedBinding('mbot_snapshots_bridge');
+  const port = createNativeSnapshotSqlitePort({ ...bridge,
+    openDatabase: createSnapshotFdDatabase({ Database, nativeBinding, closeDescriptor: fs.closeSync }) });
+  const fileName = `runtime-state-before-v2-migration-${Date.now()}-${require('node:crypto').randomUUID()}.sqlite`;
+  const source = new Database('state.db', { nativeBinding });
+  let snapshot;
+  try {
+    source.exec("CREATE TABLE IF NOT EXISTS snapshot_live_probe(value TEXT); DELETE FROM snapshot_live_probe; INSERT INTO snapshot_live_probe VALUES('before')");
+    const liveWal = nativeBinding.fdVfsMetadata(1);
+    if (!liveWal.present || liveWal.size <= 0) throw Error('snapshot_source_wal_missing');
+    if (await port.backup(source, { fileName }) !== 'published') throw Error('snapshot_not_published');
+    const rows = port.snapshots.catalog();
+    const row = rows.find((item) => item.fileName === fileName);
+    if (!row) throw Error('snapshot_catalog_missing');
+    let wrongIdentity = false;
+    try { bridge.openReadOnly(fileName, row.identity === '0'.repeat(32) ? '1'.repeat(32) : '0'.repeat(32)); }
+    catch (error) { wrongIdentity = error.code === 'runtime_snapshot_unavailable'; }
+    snapshot = port.openBackup({ fileName, options: { readonly: true, fileMustExist: true } });
+    source.exec("INSERT INTO snapshot_live_probe VALUES('after')");
+    const values = snapshot.prepare('SELECT value FROM snapshot_live_probe').all().map((item) => item.value);
+    const durable = snapshot.prepare('SELECT text FROM durable').all().map((item) => item.text);
+    const integrity = snapshot.pragma('integrity_check', { simple: true });
+    let writeRefused = false;
+    try { snapshot.exec("INSERT INTO snapshot_live_probe VALUES('refused')"); }
+    catch (error) { writeRefused = error.code === 'SQLITE_READONLY'; }
+    if (await port.snapshots.remove({ fileName, identity: row.identity }) !== 'removed') throw Error('snapshot_remove_failed');
+    const heldAfterRemoval = snapshot.prepare('SELECT count(*) AS count FROM snapshot_live_probe').get().count === 1;
+    return { published: true, readonly: snapshot.readonly === true, integrity,
+      rows: durable, frozen: values.length === 1 && values[0] === 'before', writeRefused,
+      wrongIdentity, removed: !port.snapshots.catalog().some((item) => item.fileName === fileName), heldAfterRemoval };
+  } finally { try { snapshot?.close(); } finally { try { source.close(); } finally { port.deactivate(); } } }
+}
 
 (async () => {
   const [normal, stalled, echo, result, privatePath, nativeLibraryDir, providerId, descriptorFd, descriptorOwnerUid, ...dataFdArgs] = process.argv.slice(1);
@@ -37,6 +75,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
   try { fs.readFileSync(privatePath); privateDenied = false; } catch {}
   let sqlite = null;
   let persistent = null;
+  let snapshotInputs = null;
   const dataFds = dataFdArgs.map(Number);
   if (nativeLibraryDir && !sqliteWrapper.startsWith('__MBOT_SQLITE_')) {
     const wrapper = { exports: {} };
@@ -66,6 +105,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
     if (dataFds.length === 4) {
       probePhase = 'vfs_register';
       addon.exports.setFdVfs(...dataFds);
+      snapshotInputs = { Database, nativeBinding: addon.exports };
       // Remove input aliases before SQLite creates locks; registry owns dup FDs.
       dataFds.forEach((fd) => fs.closeSync(fd)); dataFds.length = 0;
       probePhase = 'vfs_metadata';
@@ -115,7 +155,10 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
   }
   dataFds.forEach((fd) => fs.closeSync(fd));
   probePhase = 'model_streams';
-  const report = { sqlite, persistent,
+  let snapshot = null;
+  if (snapshotInputs) { probePhase = 'sqlite_snapshot'; snapshot = await probeSnapshot(snapshotInputs); }
+  probePhase = 'model_streams';
+  const report = { sqlite, persistent, snapshot,
     pid: process.pid, version: process.versions.node, modules: process.versions.modules,
     uid: process.getuid(), privateDenied, intlAvailable: typeof Intl !== 'undefined',
     intlSmoke: typeof Intl === 'undefined' ? null : {
@@ -423,6 +466,7 @@ const sqliteWrapper = "__MBOT_SQLITE_WRAPPER__";
 })().catch((error) => {
   const codes = new Set(['SQLITE_CANTOPEN', 'SQLITE_IOERR', 'SQLITE_IOERR_SHMOPEN', 'SQLITE_BUSY', 'SQLITE_READONLY',
     'SQLITE_ERROR', 'SQLITE_PERM', 'SQLITE_MISUSE', 'SQLITE_NOTFOUND', 'fd_vfs_unavailable', 'fd_vfs_input_invalid', 'fd_vfs_metadata_unavailable',
+    'runtime_snapshot_unavailable', 'runtime_snapshot_database_unavailable', 'runtime_snapshot_outcome_unknown', 'runtime_snapshot_refused', 'runtime_snapshot_catalog_invalid', 'fd_vfs_snapshot_unavailable',
     'runtime_data_invalid', 'runtime_data_denied', 'runtime_data_closed', 'runtime_data_unavailable',
     'runtime_data_not_found', 'runtime_data_too_large', 'runtime_data_outcome_unknown', 'runtime_data_reload_required', 'descriptor_invalid', 'descriptor_permissions',
     'descriptor_not_a_regular_file', 'bot_transport_timeout', 'bot_transport_invalid', 'bot_transport_unavailable', 'memory_pending', 'memory_backup_failed']);

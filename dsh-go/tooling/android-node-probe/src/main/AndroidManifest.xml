@@ -8,5 +8,7 @@
             android:exported="false" android:isolatedProcess="true" />
         <service android:name="io.github.ccch1mneyyy.dsh_app.nodeprobe.ForeignOfferProbeService"
             android:exported="false" android:isolatedProcess="true" android:process=":foreign_offer_probe" />
+        <service android:name="io.github.ccch1mneyyy.dsh_app.isolation.SqliteBackupService"
+            android:exported="false" android:isolatedProcess="true" android:process=":sqlite_backup" />
     </application>
 </manifest>

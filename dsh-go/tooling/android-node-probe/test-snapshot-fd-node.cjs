@@ -68,7 +68,54 @@ async function child() {
       assert.throws(() => open(fd, { readonly: true, fileMustExist: true }), { code: 'runtime_snapshot_database_unavailable', message: 'runtime_snapshot_database_unavailable' });
       assert.throws(() => fs.fstatSync(fd), { code: 'EBADF' });
     }
+    // Exercise the EXACT new APK probe function. This host Main stand-in uses
+    // Python's real online backup in a separate process against the physical
+    // source family; it does not stand in for Android Binder/UID/native proof.
+    const sourceRoot = process.argv[5];
+    const primary = new Database('state.db', { nativeBinding });
+    try { primary.exec("PRAGMA journal_mode=WAL; CREATE TABLE durable(text TEXT); INSERT INTO durable VALUES('你好'),('second')"); }
+    finally { primary.close(); }
+    const text = fs.readFileSync(path.join(__dirname, 'build/verified-assets/node-fd-probe.cjs'), 'utf8');
+    const start = text.indexOf('async function probeSnapshot('), end = text.indexOf('\n(async () => {', start);
+    assert.ok(start > 0 && end > start);
+    const snapshotPortModuleUrl = JSON.parse(/^const snapshotPortModuleUrl = (.+);$/m.exec(text)[1]);
+    const snapshotDatabaseModuleUrl = JSON.parse(/^const snapshotDatabaseModuleUrl = (.+);$/m.exec(text)[1]);
+    const probe = new Function('require', 'fs', 'snapshotPortModuleUrl', 'snapshotDatabaseModuleUrl',
+      text.slice(start, end) + '\nreturn probeSnapshot;')(require, fs, snapshotPortModuleUrl, snapshotDatabaseModuleUrl);
+    const catalog = new Map();
+    let copies = 0, removals = 0;
+    const bridge = {
+      copy(name) {
+        assert.equal(catalog.size, 0); copies++;
+        const target = path.join(root, name);
+        execFileSync('python3', ['-c',
+          "import sqlite3,sys; source=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); target=sqlite3.connect(sys.argv[2]); target.execute('PRAGMA journal_mode=DELETE'); source.backup(target); assert target.execute('PRAGMA journal_mode=DELETE').fetchone()==('delete',); target.close(); source.close()",
+          path.join(sourceRoot, 'state.db'), target], { timeout: 10_000 });
+        fs.chmodSync(target, 0o600);
+        catalog.set(name, { fileName: name, bytes: fs.statSync(target).size, createdAtMs: Date.now(), identity: 'b'.repeat(32) });
+        return 'published';
+      },
+      catalog() { return JSON.stringify([...catalog.values()]); },
+      openReadOnly(name, identity) {
+        if (catalog.get(name)?.identity !== identity) throw Object.assign(Error('runtime_snapshot_unavailable'), { code: 'runtime_snapshot_unavailable' });
+        return fs.openSync(path.join(root, name), 'r');
+      },
+      remove(name, identity) {
+        assert.equal(catalog.get(name)?.identity, identity); removals++;
+        fs.unlinkSync(path.join(root, name)); catalog.delete(name); return 'removed';
+      },
+    };
+    const linkedBinding = process._linkedBinding;
+    let report;
+    try {
+      process._linkedBinding = (name) => name === 'mbot_snapshots_bridge' ? bridge : linkedBinding(name);
+      report = await probe({ Database, nativeBinding });
+    } finally { process._linkedBinding = linkedBinding; }
+    assert.equal(copies, 1); assert.equal(removals, 1);
+    assert.equal(report.integrity, 'ok'); assert.deepEqual(report.rows, ['你好', 'second']);
+    for (const name of ['published', 'readonly', 'frozen', 'writeRefused', 'wrongIdentity', 'removed', 'heldAfterRemoval']) assert.equal(report[name], true, name);
     console.log('PASS: actual Node addon opens the Main-fixture read-only snapshot, consumes granted FDs, reads Chinese rows, checks real integrity, refuses writes/corruption/invalid native responses; host only');
+    console.log('PASS: exact APK snapshot function preserves a live-WAL copy after later writes, checks real integrity and owner-mediated removal using a separate-process host backup fixture; not Android evidence');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
 if (mode === 'child') child().catch((error) => { console.error(error); process.exitCode = 1; });
@@ -77,7 +124,7 @@ else {
   const fds = [];
   try {
     for (const name of ['state.db', 'state.db-wal', 'state.db-shm', 'state.db-journal']) fds.push(fs.openSync(path.join(root, name), 'wx+', 0o600));
-    execFileSync(process.execPath, [__filename, library, wrapper, 'child'], {
+    execFileSync(process.execPath, [__filename, library, wrapper, 'child', root], {
       stdio: ['ignore', 'inherit', 'inherit', ...fds], env: {}, timeout: 15_000,
     });
   } finally { for (const fd of fds) fs.closeSync(fd); fs.rmSync(root, { recursive: true, force: true }); }
