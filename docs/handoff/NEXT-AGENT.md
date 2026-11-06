@@ -7,6 +7,12 @@
 
 ## 当前日间主线（2026-11-06，覆盖下文历史安排）
 
+最新继续（用户上课，本机agent当前不可达）：Codex独立推进，不等新本机卡。`SqliteBackupClient`/`SqliteBackupExchange`候选已接Main绑定、nonce与真实Binder peer身份、单次START、独立控制队列、保留FD/目录lease和真正退役等待。副本目录在Main持有，绝不进worker；本进程单attempt gate及目录advisory lease在未知结果时保留。**必须同时有worker锚定Binder死亡与sender结束才可回收可能已发送的FD；不能将onServiceDisconnected、ACK、unbind或超时当死亡。** 正常worker自退役的框架断开不擦掉已收到结果；结果/死亡可先于START回复。取消使旧candidate失效，调用者发布前还要复查当前generation与candidate；UNKNOWN不清私有输出、不自动重发。Main崩溃后的未知私有stage须保留独特名字，不能推断旧worker已退出后乱扫。
+
+本阶段实跑：`test-native-model-broker.sh` **JUnit98/98、Node56/56**，日志/tmp/mbot-backup-client-boundary.log；新增exchange10项覆盖发送/死亡/结果顺序及错误身份/nonce/取消。把副本源码的释放条件分别删掉sender完成和真实死亡，现有测试均能抓住（/tmp/mbot-backup-exchange-mutation/），没有替换仓库源。精确Client/Service及12个依赖Kotlin源码用Android36 API jar、JVM17、`-Werror`编译成功，日志/tmp/mbot-backup-client-android-compile.log为空且退出0。首轮编译发现SDK不暴露EWOULDBLOCK，使用Android/Linux的EAGAIN；补齐真实依赖后重编通过，无测试桩替代。**未做Gradle/设备执行**；快照文件owner/native stage发布/guest FS/库打包/产品启动仍待接。
+
+CI本轮实查：4a3cc4a的host/scope、bfe4a90的native/docs均failure；native check-run127714790221实际annotation是「The job was not started because recent account payments have failed or your spending limit needs to be increased」。因此没有新CI测试执行结果，不得把failure记成代码回归，也不得声称CI通过。继续本地构建/测试，不等用户上课时处理计费。
+
 最新续写：native备份已有 `jni_backup.cpp`/Kotlin固定声明和严格三long结果解码；一次进程只准调用一次，取消永久生效，无路径/SQL/Key入口。真实Linux JVM加载同名ABI夹具，实际8FD复制并退役后由独立进程只读重开，以及空/错参数、owner自身PID、取消与重复调用，均通过；详见 [native README](../../dsh-go/runtime/native-sqlite/README.md)。后续私有Android worker/Binder候选已写（下段），但**尚无设备运行/生产Main客户端/原生库打包/owner发布/guest snapshot端口，也没有完整runtime启动**。本机原双ABI卡不含JNI，不能算JNI已在Android验证。下一步是Main授予/退役/发布生命周期和库打包，不能直接把JNI对象或worker控制Binder交给Agent。
 
 `SqliteBackupService`非exported、isolatedProcess、单独:sqlite_backup进程，只执行固定native备份；启动前取真实Binder UID/PID、核对Main/独立UID/nonce/预算/固定8 typed PFD，并由Main确认实际peer身份。PEER只是身份准入，**不是JNI或runtime ready**；回调/结果/死亡可早于START应答。首次授权START即消耗worker；取消永久生效，Main回调Binder死亡/限时/完成/显式退役均杀自身，manifest误配Main不加载库且不杀Main。控制Binder有进程静态锚点，不主动丢弃来伪造退出；Main仍须等它死亡并复查active generation/cancel，才能考虑发布。控制Binder及任何额外数据FD不得交给Agent；Main不得向已启动worker重发FD（即使拒绝事务，关闭内核安装的别名也可能释放SQLite锁）。结果不是发布成功，未知结果不自动重试。Main客户端及其上述策略仍待写。

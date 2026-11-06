@@ -4,6 +4,8 @@
 
 日间最新：8FD native备份组合层已增加单次调用/永久取消的JNI候选，真实JVM加载并复制/独立重开通过；后续私有独立UID `SqliteBackupService`/Binder候选已写，实际Binder身份在解析请求前读取，Main死亡/限时/完成均走自身退役，PEER只代表身份准入。精确Service源码以Android36 API jar、Kotlin17目标、`-Werror`编译通过；native边界回归 **JUnit88/88、Node56/56**。**Service尚未设备运行，无产品Main客户端/原生库打包/owner发布/guest snapshot FS，不能宣称完整runtime启动。** 细节和实际命令见上述NEXT-AGENT。用户转述的[备份核心双ABI只读编译](handoff/T-Flash-BackupCrossCompile.md)已结项，但df0eeac不含JNI，不能扩成新worker已验证。
 
+后续Main备份客户端候选已写，保留数据FD/目录租约，结果与真正死亡及发送结束三者齐备才回收；普通服务断开不当死亡，取消不能恢复旧candidate。Android36 API精确编译通过，回归 **JUnit98/98、Node56/56**；尚无设备执行/快照owner发布/产品装配。当前用户上课、本机agent不可达，先不等待或依赖本机新卡回报。GitHub Actions实查仍因账户付款/额度而未启动作业（不是源码测试失败），云机继续本地验证；最新命令、边界和下一步仍见NEXT-AGENT。
+
 用户已于白天重新授权本机 agent 帮忙，昨晚「断电不再派活」不再是当前安排。本机只做 [Windows SQLite 准备与 API35 组合验收](handoff/T-Flash-SqliteWindows.md)，Codex 继续 runtime 核心并负责共享文档。下面旧分工/待办保留为历史，冲突时以当前入口为准。
 
 **先读[当前接手合同与完整快照](handoff/NEXT-AGENT.md)**。该文已重写为单一当前版本，列明提交/CI、唯一下一项、允许修改面、验收及禁止推断；旧交接保留在Git历史。下面大表和专题内的逐轮记录只作证据背景，不能当当前TODO。
