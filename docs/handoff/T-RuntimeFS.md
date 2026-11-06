@@ -3,6 +3,8 @@
 
 ## 当前：SQLite 固定文件元数据接线（2026-11-06）
 
+日间后续已新增 [native SQLite backup kernel](../../dsh-go/runtime/native-sqlite/README.md)：独立只读 source、固定read snapshot后的页数预算、真实sqlite3_backup与完整性检查、取消/超时和无原文错误结果。真实8FD宿主用例验证另一进程在选定快照后提交并长大，备份仍为原版本；负例验证只读准入/非空目标拒绝、超限、busy、取消、校验失败及事务回收。保持原SQLite编译定义（omit progress callback），通过joined watchdog调用sqlite3_interrupt。它**尚未接Android/JNI/Binder/备份端口或持久发布**，不是下述missing-snapshot拒绝已解除；native owner、source/destination授予、关闭/fsync/发布/只读回授和upstream snapshot FS仍待实现，详情以新README为准。
+
 `02fb530` 增加 addon `fdVfsMetadata(slot)`：0..3 仅主库/WAL/SHM/journal，4仅VFS虚拟目录；返回存在、mode、size，不返回目录FD、路径、任意文件内容或inode。主库与侧文件用**已持有FD的fstat**，不另开/关闭别名，避免意外释放本进程POSIX锁；侧文件零长度按原VFS视图为不存在。目录mode0700描述虚拟命名空间，不是实查物理目录的证明，Main原有目录/文件授予检查仍必须执行。原生注册与查询在同一mutex内。
 
 `runtime-sqlite-fs.mjs` 仅替换钉住的旧 `persistence/db.ts` 与 v2 `infra/db/client.ts` 的 `node:fs` 导入。主库逻辑目录和四文件映射到slot；recursive mkdir只验证已授予的私有虚拟目录，chmod只验证原mode等于0700/0600，**不调用fchmod也不把数据权限放宽**。元数据缺失/异常、mode不私有、已关闭均失败；不得退回宿主同名路径。其他路径的原宿主行为保留，这不是通用FS实现或安全沙箱；系统隔离仍由UID及native能力负责。

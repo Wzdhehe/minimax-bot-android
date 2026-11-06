@@ -11,7 +11,9 @@
 
 日间新进展：`02fb530` 的真实 addon 固定 slot metadata 已随 `d2d6c16` 合并推送；`runtime-sqlite-fs.mjs` 又把两处真实 DB 导入的 mkdir/chmod/exists 接到这份元数据，详见 [T-RuntimeFS 最新节](T-RuntimeFS.md)。私有模式只验证、不修改权限；不发目录FD/路径、不跳过迁移备份。同一个 FS root 退役后本进程不可重绑。最终代码本地 **29/29、打包图4/4、真实 host2/2**，真实四FD+metadata 已走过旧版权限/表初始化，随后明确因没有 snapshot 能力而拒绝 v2 迁移；没有metadata则在打开 SQLite 前拒绝。仍非完整FS/Android启动成功，新增部分 **Android编译/设备未验证**。
 
-本机 A 提交 `d68e48f` 已合并用于复核。Linux复跑15项中14过、1 error：新增 Windows argv 测试没有固定模拟宿主，见原卡 R1（`456956d`）；只允许本机 agent 修自己的测试，不放宽生产检查。B阶段设备结果尚未收到，不能据脚本提交推断已完成。
+本机 A/R1 已交付：`d68e48f` 生产准备脚本源码复核，`8cdc523` 修复测试的Linux可移植性；Codex已在真实Linux宿主复跑 **16/16通过**，R1接受。用户转述本机B在 **`d68e48f0f491914cb77835ffa1585e14dbc19292`、已跟踪源码干净** 时构建，并在API35/x86_64执行 full-ICU+SQLite+四FD组合：定向 **OK (8 tests)**、全套 **OK (58 tests)**，均0失败/错误/跳过；含真实官方Bot分支与coordinator的合成ready组件用例。产物内adapter摘要亦与该旧版匹配，**不含02fb530及1d2f0af**，不能套用到新增FD metadata/shim或backup kernel；正式包/完整mcode/真实provider仍没有。详见 [本机卡的结果补记](T-Flash-SqliteWindows.md)。
+
+native备份复制内核已在真实SQLite/FD宿主回归通过，见 [README](../../dsh-go/runtime/native-sqlite/README.md) 的严格调用前提和尚未接线项；它不等于Android备份完成，不取消当前真实factory探针的missing-snapshot拒绝。下一步是可信native owner/IPC/只读snapshot授予与上游FS，不得将备份可写FD给Agent后声称能撤销。
 
 昨晚已推送的核心代码与实际证据：
 

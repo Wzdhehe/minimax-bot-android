@@ -62,3 +62,25 @@ Codex 已将你的 A 阶段提交与原生 FD metadata 提交正常合并（`d2d
 失败是 `test_the_compiler_runs_with_a_fixed_target_and_no_shell`：`fixture()` 只创建 Windows clang.exe，但该测试调用 `prepare()` 时没有 mock `platform.system()`，在 Linux 实际选择 Linux 编译器，报 `Missing pinned NDK compiler or Android x86_64 runtime`。Windows 本机通过不能证明此测试跨平台。
 
 请只在 `test_sqlite_hosts.py` 修复：这个用例明确验证 Windows argv 时，将宿主检测固定为 Windows；若另加 Linux 完整调用用例，应提供对应 fixture 和 Linux 参数断言。不要 skip Linux，不要放宽生产编译器检查或删原输入安全断言。单独提交修复，B 阶段可以继续，回报实际输出。Codex 之后再在 Linux 复跑。此项是测试可移植性问题，尚未发现 production 脚本需要为此改动。
+
+## 交付结果补记（用户转述，2026-11-06）
+
+A `d68e48f`、R1 `8cdc523` 已纳入。Codex实查R1仅修测试宿主选择并增加Linux完整argv用例，真实Linux复跑 `test_sqlite*.py` **16项OK**；生产检查未放宽，R1接受。以下B来自用户转述本机agent的实跑报告，云端没有读取D盘原始日志。补报确认：**B构建HEAD为`d68e48f0f491914cb77835ffa1585e14dbc19292`，已跟踪源码无未提交改动**；只有被忽略的构建产物和不参与构建的本地报告。不能用报告最终8cdc523代替B构建版本。
+
+Windows工具为JDK17.0.10、Gradle9.3.1、NDK27d；本机A实际生成Android26/x86_64 ELF共享库（2,159,336字节，SHA256 `f44e9bf3ec9d6f97a4e1b3ad20b98c5e3c3d1bcc3f3ef81a266cdd33af6a13a7`）。不是Windows DLL/宿主Linux件。SQLite源归档经TLS中断后换本地路径下载，摘要仍匹配原pin，未放宽校验。
+
+B授权初次拒绝源于本机autocrlf将权威输入变为CRLF。未改验证器：以`git cat-file blob`导出提交原字节到临时同布局树，再运行原验证器，得到 `Verified same-repository source build, branch, producer and exact build inputs`，退出0。下载producer41826964330后，内层zip45,047,224字节、SHA256 `cd8823cf323e0c7216902a9a2dfb4a50542a99f85ffe21e4a2fa99e3436e9747`；外层artifact45,047,372字节。准备后requiresIntl/requiresSqlite/requiresFdVfs全true，SQLite3.53.2；构建 `BUILD SUCCESSFUL in 2m 7s`（71 tasks，23 executed）。没有改producer权威输入或校验器。
+
+两个APK仅留本机：主包76,378,488字节，SHA256 `8383bb695f81e718244d7f76efbf7ceaf569f94c6f9f9f585a97e21f455d4e51`；仪器包1,110,372字节，SHA256 `637967a69828e00579683040ee1fb326008cf95874847eb220fe5e8a1677eb45`。只安装至emulator-5554/API35/x86_64，未清数据/wipe/卸载其他App/修AVD；未提交发布二进制。
+
+```text
+三类定向：Time: 4.45 / OK (8 tests) / INSTRUMENTATION_CODE: -1
+完整独立验收包：Time: 8.97 / OK (58 tests) / INSTRUMENTATION_CODE: -1
+全部逐项code 0；0失败、0错误、0跳过
+```
+
+回报说明实际Intl/官方Bot服务分支（ready首字节B，匿名403、授权200含bots）、BotStore/Memory/journal/backup/pending恢复，以及实际SQLite加载/数据、四FD WAL/重开/integrity均断言通过。coordinator两项此前只编译，现由本机实际执行；其ready仍是**合成组件事件**，不能证明生产guest就绪/正式launcher。
+
+两个APK写出时间分别为本机10:33:05.415、10:33:22.720（+0800），之后10:37:40才快进到1d2f0af，10:39:27提交R1。产物自带 `third_party/better-sqlite3/build-inputs.json` 的adapter摘要也与d68工作树字节匹配，与后续版本不匹配。因此该包明确**不含02fb530、456956d、1d2f0af**，新增FD metadata接口既未编进此包，也没有由本次设备运行验证。
+
+范围仍仅API35/x86_64独立验收包。API26/ARM64/物理真机、完整mcode runtime、真实provider/model turn、当前新metadata/shim/kernel、产品APK均不能据此写成通过。新metadata设备验收必须重编并增加直接接口断言，不能仅重复旧8/58项就宣称覆盖新能力。
