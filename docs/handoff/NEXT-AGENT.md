@@ -29,6 +29,8 @@ native备份复制内核已在真实SQLite/FD宿主回归通过，见 [README](.
 
 本机 [备份核心Android双ABI交叉编译](T-Flash-BackupCrossCompile.md) 已结项（用户转述）：df0eeac、已跟踪源码干净，NDK27d固定Android26的x86_64及arm64-v8a均重编/完整链接通过，36原SQLite定义未动；ELF/依赖/三核心符号/16KiB LOAD均核验，摘要详见原卡。零源码修改/提交/APK操作；云端未直接读D盘日志。**此快照不含7479c62的JNI**，不得算JNI/worker/Android执行或ARM64运行通过。Codex继续可信worker/owner并负责生产打包；不要重派已结项旧卡。
 
+新只读本机卡已准备：[JNI双ABI与worker组件编译](T-Flash-BackupJNIBuild.md)，至少含bfe4a90；A检查新JNI真实目标导出，B只用现成broker工程做assemble源码/组件编译，不注入A库、不安装/执行设备、不改仓库。尚未回报结果，不能叫已通过。Codex保留Main客户端/owner/退役/发布/产品打包的实现权。
+
 昨晚已推送的核心代码与实际证据：
 
 | 提交 | 实现和验证 | 尚不能据此声称 |
