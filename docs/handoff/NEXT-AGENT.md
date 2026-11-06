@@ -5,6 +5,27 @@
 
 用户最新要求继续开发；本文件文首「当前续写」覆盖旧轮次的暂停指令与TODO。遇到没有实查的接口，先读源码/写清缺口，不得为展示进度虚构协议或开通入口。
 
+## 当前日间主线（2026-11-06，覆盖下文历史安排）
+
+用户已恢复本机协作。**只在 `feat/t-plugins`，阶段性推送；不动 main/dev/integration，不 force、不 PR、不发布 APK。** 本机执行 [T-Flash-SqliteWindows](T-Flash-SqliteWindows.md)：仅改 Windows SQLite 准备脚本及其宿主测试，随后尝试已授权 full-ICU + SQLite 的 API35 验收；Codex 不并行修改这几个脚本。本机报告/APK不入库，共享文档由 Codex 汇总。其他旧 Flash 卡均不得自行重开。
+
+昨晚已推送的核心代码与实际证据：
+
+| 提交 | 实现和验证 | 尚不能据此声称 |
+|---|---|---|
+| `698201a` | `BotRuntimeCoordinator` + Binder 生命周期：代次所有权、延后清理/失败锁住重开、Endpoint 撤回、gate/bridge 关闭。Linux JUnit77/Node56通过，验收 APK/仪器 APK 编译通过 | 新增 coordinator 两项设备用例未执行；`ready()` 仍须可信启动器提供真实就绪证明，Binder 身份不等于服务 ready |
+| `2ce7b2d` | `startBuiltinBotRuntimeFromFd`：消费 descriptor FD，组装真实 factory/Bot/受控文件/FD ingress，私有 ready 回调和共享 close。单组9/9、相关47/47、打包图4/4、真实 host2/2 | 文件/模型/source 能力在宿主探针里是假能力；未跑模型 turn、Android 完整 runtime 或产品 launcher |
+| `8d9d6d9` | 两个真实 SQLite loader（旧 loader + v2 DatabaseClient）精确接缝；主库 opener 不收路径，迁移备份/只读完整性用 basename 端口；关闭/失败撤销与代次拒绝；原数据库、drizzle、迁移不替换。21/21、打包图4/4、真实 host2/2通过 | 宿主使用真实 Linux SQLite 和普通宿主 FS，并非 Android backup/FS 已接通 |
+| `f5fd12e` | `test-fd-vfs.py --node-probe --runtime-bundle <已准备bundle>` 用真实 addon/四FD/两个独立 Node 进程验证拒绝路径；原 WAL/锁/崩溃恢复及精确 APK SQLite 块仍通过 | **这是失败边界验收，不是 full runtime 四FD启动成功**：旧初始化先在逻辑 DB 路径执行 chmod，缺 FS metadata 时必须拒绝；句柄回收、禁止同代重开、无迁移、四文件保持空，均已检查 |
+
+唯一主线是 **Android 完整 runtime 文件系统与迁移备份能力，然后生产启动器/Flutter 装配**。先保留并接通实际行为：旧 loader 需要主库 chmod/exists 等元数据；v2 每次有待执行迁移时（包括首次安装）都会创建在线备份、独立只读 integrity check，再执行迁移，不能删检查或用假成功蒙混。当前四FD仅覆盖主库和三侧文件，既不是通用 node:fs，也没有 snapshot family。既有 Bot flat-file broker 已有 Store/Memory 适配，但不能直接声称适配了 mcode 全部同步/异步 FS。
+
+宿主新打包仍标 `androidReady:false`；Key 始终留 native，descriptor 不新增凭据字段；不转回同 UID PRoot/shell，不修改上游钉点或迁移源码来绕过缺口。正式启动器须消耗真正 guest ready/退出结果，不能把 descriptor 写完/端口可用当完整启动证据。
+
+本机此前真实设备证据仍只是 `47a2efc` 的 API35/x86_64、无 Intl/SQLite 的6项（用户转述）。昨晚 full-ICU producer `41826964330` 的 artifact 元数据可读，但下载在 storage redirect 返回 Forbidden；没有拿它构建，不得写成 build/device failure 或新版已验证。GitHub Actions 计费阻塞没有解除证据。
+
+环境于今早重启：旧 `/tmp/mbot-*` SDK/NDK/JDK/Gradle/host bundle 已实查不存在，后续必须重新探测/准备，不复制旧路径就声称工具可用。昨晚日志不在当前 `/tmp`，上表来源是昨晚实际执行和已推提交记录；本轮新验证另记，不冒充重跑。
+
 ## 当前续写（覆盖下文历史TODO，2026-11-05）
 
 **用户已要求断电，不再给本机Flash派任务。** 本机在47a2efc的设备交付已回报：Windows用JDK17.0.10/Gradle9.3.1/NDK27d编译通过，API35 x86_64的原卡6项OK，含真正Binder死亡撤销的closed断言。来源为用户转述，云端没有直接读取D盘报告；具体用例/终态/APK SHA见[T-Flash-API35Probe结果](T-Flash-API35Probe.md)。默认Node无Intl/SQLite，只证明基础夹具/选中native链，非完整Bot/mcode/真实provider；API26/ARM64/真机未验证。此后新增运行代次管理器/测试不在该筛选，必须单列未验证。下文「本机未运行/下一步执行卡」为旧状态，不能据此继续派活。
