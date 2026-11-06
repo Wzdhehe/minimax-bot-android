@@ -103,6 +103,11 @@ class SqliteHostTest(unittest.TestCase):
         for name in inventory:
             self.assertNotIn('\\', name)
 
+    def compiles(self, runner):
+        """The compiler commands the preparation ran, as argv lists."""
+        calls = [call.args[0] for call in runner.call_args_list]
+        return [command for command in calls if command and 'clang' in str(command[0])]
+
     def fake_run(self, command, *args, **kwargs):
         """Stand in for a real command; the bundler and the linker write files."""
         if command and 'esbuild' in str(command[0]):
@@ -125,47 +130,70 @@ class SqliteHostTest(unittest.TestCase):
             runner.assert_not_called()
 
     def test_the_compiler_runs_with_a_fixed_target_and_no_shell(self):
-        self.fixture()
+        self.fixture('Windows')
         with patch.object(self.module.subprocess, 'check_output', return_value=self.module.PIN['esbuildVersion']), \
-             patch.object(self.module.subprocess, 'run', side_effect=self.fake_run) as runner:
+             patch.object(self.module.subprocess, 'run', side_effect=self.fake_run) as runner, \
+             patch.object(self.module.platform, 'system', return_value='Windows'):
             self.module.prepare(self.ndk, self.archive, Path('/unused/esbuild'))
-        calls = [call.args[0] for call in runner.call_args_list]
-        compiles = [command for command in calls if command and 'clang' in str(command[0])]
+        compiles = self.compiles(runner)
         self.assertTrue(compiles, 'the preparation did not run a compiler')
         for command in compiles:
             self.assertIsInstance(command, list)
             self.assertIn(' ', command[0])
             self.assertNotIn('"', command[0])
             self.assertNotIn('.cmd', str(command[0]))
+            self.assertIn('clang', str(command[0]))
             targets = [part for part in command if part.startswith('--target=')]
             self.assertEqual(['--target=x86_64-linux-android26'], targets)
         for call in runner.call_args_list:
             self.assertNotIn('shell', call.kwargs)
 
+    def test_the_compiler_runs_with_the_linux_android26_wrapper_on_a_linux_host(self):
+        self.fixture('Linux')
+        with patch.object(self.module.subprocess, 'check_output', return_value=self.module.PIN['esbuildVersion']), \
+             patch.object(self.module.subprocess, 'run', side_effect=self.fake_run) as runner, \
+             patch.object(self.module.platform, 'system', return_value='Linux'):
+            self.module.prepare(self.ndk, self.archive, Path('/unused/esbuild'))
+        compiles = self.compiles(runner)
+        self.assertTrue(compiles, 'the preparation did not run a compiler')
+        for command in compiles:
+            self.assertIsInstance(command, list)
+            self.assertIn(' ', command[0])
+            self.assertNotIn('"', command[0])
+            # The Linux wrapper already names the Android target.
+            self.assertRegex(str(command[0]), r'x86_64-linux-android26-clang(\+\+)?$')
+            self.assertEqual([], [part for part in command if part.startswith('--target=')])
+        for call in runner.call_args_list:
+            self.assertNotIn('shell', call.kwargs)
+
     # ── the fixture ──────────────────────────────────────────────────────────
 
-    def fixture(self):
+    def fixture(self, host='Windows'):
         """A prepared host: pinned NDK, pinned headers, pinned archive."""
         module = self.module
         self.root = Path(self.temporary.name) / 'root'
         module.ROOT = self.root / 'app'
         (module.ROOT / 'src/main/cpp').mkdir(parents=True)
-        (module.ROOT / 'src/main/cpp/fd_vfs.cpp').write_text('// adapter')
-        (module.ROOT / 'src/main/cpp/fd_vfs_node.cpp').write_text('// adapter')
-        (Path(self.temporary.name) / 'LICENSE').write_text('AGPL fixture')
+        (module.ROOT / 'src/main/cpp/fd_vfs.cpp').write_text('// adapter', encoding='utf-8')
+        (module.ROOT / 'src/main/cpp/fd_vfs_node.cpp').write_text('// adapter', encoding='utf-8')
+        (Path(self.temporary.name) / 'LICENSE').write_text('AGPL fixture', encoding='utf-8')
         self.ndk.mkdir(parents=True, exist_ok=True)
-        (self.ndk / 'source.properties').write_text('Pkg.Revision = ' + module.PIN['ndkVersion'])
-        self.host('windows-x86_64', 'clang.exe', 'clang++.exe')
+        (self.ndk / 'source.properties').write_text('Pkg.Revision = ' + module.PIN['ndkVersion'], encoding='utf-8')
+        if host == 'Windows':
+            self.host('windows-x86_64', 'clang.exe', 'clang++.exe')
+        else:
+            self.host('linux-x86_64', 'x86_64-linux-android26-clang', 'x86_64-linux-android26-clang++')
 
         headers = module.ROOT / 'build/node-headers'
         (headers / 'include/node').mkdir(parents=True)
-        (headers / 'node.h').write_text('header fixture')
-        (headers / 'include/node/node.h').write_text('header fixture')
+        (headers / 'node.h').write_text('header fixture', encoding='utf-8')
+        (headers / 'include/node/node.h').write_text('header fixture', encoding='utf-8')
         (headers / 'node_version.h').write_text(
-            '#define NODE_MAJOR_VERSION 24\n#define NODE_MINOR_VERSION 22\n#define NODE_PATCH_VERSION 2\n')
+            '#define NODE_MAJOR_VERSION 24\n#define NODE_MINOR_VERSION 22\n#define NODE_PATCH_VERSION 2\n',
+            encoding='utf-8')
         (headers / 'config.gypi').write_text(repr({'variables': {
             'v8_enable_pointer_compression': 0, 'v8_enable_sandbox': 0,
-            'v8_enable_31bit_smis_on_64bit_arch': 0}}))
+            'v8_enable_31bit_smis_on_64bit_arch': 0}}), encoding='utf-8')
         files = {path.relative_to(headers).as_posix(): module.digest(path)
                  for path in headers.rglob('*') if path.is_file()}
         (module.ROOT / 'build/node-headers.json').write_text(json.dumps({'files': files}), encoding='utf-8')
