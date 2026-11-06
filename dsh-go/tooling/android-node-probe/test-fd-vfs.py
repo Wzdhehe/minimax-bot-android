@@ -37,6 +37,11 @@ def run(archive=None, ndk=None, node_probe=False, runtime_bundle=None):
         subprocess.run(['g++', '-std=c++20', '-O0', '-I', str(sqlite), str(adapter), str(ROOT / 'test-fd-vfs.cpp'),
                         str(obj), '-Wl,--wrap=fsync', '-ldl', '-lpthread', '-lm', '-o', str(executable)], check=True)
         subprocess.run([str(executable)], check=True)
+        snapshot_probe = stage / 'snapshot-probe'
+        subprocess.run(['g++', '-std=c++20', '-O0', '-Wall', '-Wextra', '-Werror', '-I', str(sqlite),
+                        str(adapter), str(ROOT / 'test-snapshot-fd-vfs.cpp'), str(obj),
+                        '-Wl,--wrap=fstat', '-ldl', '-lpthread', '-lm', '-o', str(snapshot_probe)], check=True)
+        subprocess.run([str(snapshot_probe)], check=True, timeout=15)
         if node_probe:
             # Same verified addon instrumentation, wrapper and Android-prepared
             # headers. Desktop ABI/execution evidence only, never isolation.
@@ -52,6 +57,8 @@ def run(archive=None, ndk=None, node_probe=False, runtime_bundle=None):
             library = stage / 'libmbot_sqlite_probe.so'
             subprocess.run(['g++', '-shared', *map(str, objects), '-ldl', '-lpthread', '-lm', '-o', str(library)], check=True)
             subprocess.run(['node', str(ROOT / 'test-fd-vfs-node.cjs'), str(library),
+                            str(ROOT / 'build/sqlite-probe/wrapper.cjs')], check=True)
+            subprocess.run(['node', str(ROOT / 'test-snapshot-fd-node.cjs'), str(library),
                             str(ROOT / 'build/sqlite-probe/wrapper.cjs')], check=True)
             if runtime_bundle is not None:
                 # Dedicated host-only backing files. Parent never loads SQLite:

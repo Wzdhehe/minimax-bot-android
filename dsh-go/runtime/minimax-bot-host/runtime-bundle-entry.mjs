@@ -7,6 +7,7 @@ import { catalogFromDescriptor, readRuntimeDescriptor, readRuntimeDescriptorFd }
 import { startBotRuntimeFromFd } from './bot-runtime-start.mjs';
 import { bindRuntimeSqlite } from './runtime-sqlite-binding.mjs';
 export { createNativeSnapshotSqlitePort } from './runtime-snapshot-port.mjs';
+export { createSnapshotFdDatabase } from './runtime-snapshot-database.mjs';
 export { createWebuiRuntimeHost };
 
 // The guest reads the descriptor the Android host wrote into its own private

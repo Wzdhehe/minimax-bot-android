@@ -5,7 +5,22 @@
 #include <sys/stat.h>
 extern "C" int mbot_register_precreated_fd_vfs(const char* const*, const int*, int);
 extern "C" int mbot_fd_vfs_metadata(int, struct stat*, int*);
+extern "C" int mbot_register_readonly_snapshot_fd(int, char*, int);
 namespace {
+void ReadOnlySnapshot(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  auto* isolate = args.GetIsolate();
+  auto context = isolate->GetCurrentContext();
+  char name[64]{};
+  if (args.Length() != 1 || !args[0]->IsInt32() ||
+      mbot_register_readonly_snapshot_fd(args[0].As<v8::Int32>()->Value(), name, sizeof(name)) != SQLITE_OK) {
+    auto error = v8::Exception::Error(v8::String::NewFromUtf8Literal(isolate, "fd_vfs_snapshot_unavailable")).As<v8::Object>();
+    error->Set(context, v8::String::NewFromUtf8Literal(isolate, "code"),
+      v8::String::NewFromUtf8Literal(isolate, "fd_vfs_snapshot_unavailable")).Check();
+    isolate->ThrowException(error); return;
+  }
+  args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, name).ToLocalChecked());
+}
+
 void Metadata(const v8::FunctionCallbackInfo<v8::Value>& args) {
   auto* isolate = args.GetIsolate();
   auto context = isolate->GetCurrentContext();
@@ -52,4 +67,5 @@ void MbotInstallFdVfsBinding(v8::Local<v8::Object> exports, v8::Local<v8::Contex
   auto* isolate = context->GetIsolate();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "setFdVfs"), v8::Function::New(context, Configure).ToLocalChecked()).Check();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "fdVfsMetadata"), v8::Function::New(context, Metadata).ToLocalChecked()).Check();
+  exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "fdVfsReadOnlySnapshot"), v8::Function::New(context, ReadOnlySnapshot).ToLocalChecked()).Check();
 }

@@ -11,14 +11,17 @@
 #include <map>
 #include <set>
 #include <mutex>
+#include <vector>
 
 namespace {
 constexpr const char* root = "/mbot-data";
-struct Entry { int fd; bool sidecar; };
+struct Entry { int fd; bool sidecar; bool snapshot = false; };
 std::map<std::string, Entry> files;
 std::mutex gate;
 sqlite3_vfs adapter{};
 bool registered = false;
+int snapshotAttempts = 0;
+std::vector<int> refusedSnapshotAliases;
 using OpenFunction = int(*)(const char*, int, int);
 OpenFunction original_open = nullptr;
 
@@ -49,6 +52,7 @@ int open_file(const char* path, int flags, int) {
   const auto found = files.find(key(path));
   if (found == files.end()) return denied();
   auto& entry = found->second;
+  if (entry.snapshot && ((flags & O_ACCMODE) != O_RDONLY || (flags & (O_CREAT | O_EXCL | O_TRUNC)))) return denied();
   if (!exists(entry) && !(flags & O_CREAT)) return denied(ENOENT);
   if (exists(entry) && (flags & O_EXCL) && (flags & O_CREAT)) return denied(EEXIST);
   const int mode = fcntl(entry.fd, F_GETFL) & O_ACCMODE;
@@ -114,6 +118,60 @@ int delete_precreated(sqlite3_vfs*, const char* path, int) {
   return errno == ENOENT ? SQLITE_IOERR_DELETE_NOENT : SQLITE_IOERR_DELETE;
 }
 }  // namespace
+
+// Admit an already-granted immutable snapshot, never a caller-selected path.
+// Main owns publication/immutability. This API verifies a private read-only
+// regular inode owned by the same Main UID as state.db, distinct from every
+// mutable family member. Registry duplicates live until process retirement.
+// NEVER consume/close the input, even on refusal: an arbitrary alias could be
+// a live primary SQLite file, and closing it would drop process POSIX locks.
+extern "C" int mbot_register_readonly_snapshot_fd(int descriptor, char* output, int capacity) {
+  if (descriptor < 3 || !output || capacity < 64) return SQLITE_MISUSE;
+  std::lock_guard<std::mutex> lock(gate);
+  const auto primary = files.find("state.db");
+  struct stat info{}, source{};
+  const int flags = fcntl(descriptor, F_GETFL);
+#ifdef O_PATH
+  if (flags >= 0 && (flags & O_PATH)) return SQLITE_MISUSE;
+#endif
+  if (!registered || primary == files.end() || flags < 0 || (flags & O_ACCMODE) != O_RDONLY ||
+      fstat(primary->second.fd, &source) != 0 || fstat(descriptor, &info) != 0 ||
+      !S_ISREG(info.st_mode) || (info.st_mode & 07777) != 0600 || info.st_nlink != 1 ||
+      info.st_uid != source.st_uid || info.st_size <= 0 || info.st_size > 512LL * 1024 * 1024) return SQLITE_MISUSE;
+  int snapshots = 0;
+  for (const auto& [name, entry] : files) {
+    struct stat held{};
+    if (fstat(entry.fd, &held) != 0) return SQLITE_IOERR_FSTAT;
+    if (held.st_dev == info.st_dev && held.st_ino == info.st_ino) {
+      if (!entry.snapshot) return SQLITE_MISUSE;
+      // The same confirmed immutable inode may be verified more than once.
+      std::memcpy(output, name.c_str(), name.size() + 1);
+      return SQLITE_OK;
+    }
+    if (entry.snapshot) ++snapshots;
+  }
+  if (snapshots >= 8 || snapshotAttempts >= 8) return SQLITE_FULL;
+  const auto name = "snapshot-" + std::to_string(snapshots + 1) + ".db";
+  if (files.count(name)) return SQLITE_MISUSE;
+  ++snapshotAttempts;
+  const int owned = fcntl(descriptor, F_DUPFD_CLOEXEC, 3);
+  if (owned < 0) return SQLITE_CANTOPEN;
+  // The supplied number may have been concurrently closed/reused. Validate
+  // our own stable duplicate again. On mismatch retain it (bounded attempts)
+  // until exit: closing an unexpected primary alias could release its locks.
+  struct stat actual{};
+  const int actualFlags = fcntl(owned, F_GETFL);
+  if (fstat(owned, &actual) != 0 || actualFlags < 0 || actualFlags != flags ||
+      actual.st_dev != info.st_dev || actual.st_ino != info.st_ino ||
+      actual.st_mode != info.st_mode || actual.st_uid != info.st_uid ||
+      actual.st_nlink != info.st_nlink || actual.st_size != info.st_size) {
+    refusedSnapshotAliases.push_back(owned);
+    return SQLITE_MISUSE;
+  }
+  files.emplace(name, Entry{owned, false, true});
+  std::memcpy(output, name.c_str(), name.size() + 1);
+  return SQLITE_OK;
+}
 
 // Inspect held files without opening/closing aliases: closing an alias could
 // release this process's POSIX SQLite locks. Slot 4 is the virtual namespace,
