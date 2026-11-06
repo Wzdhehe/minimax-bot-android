@@ -64,7 +64,7 @@ internal class SqliteBackupClient private constructor(
             val uid = getCallingUid()
             val pid = getCallingPid()
             var accepted = false
-            if (flags == 0 && reply != null) try {
+            if (SqliteBackupWire.synchronous(flags, reply != null)) try {
                 data.enforceInterface(SqliteBackupWire.CALLBACK)
                 val session = data.readString() ?: ""
                 val result = if (code == SqliteBackupWire.RESULT) {

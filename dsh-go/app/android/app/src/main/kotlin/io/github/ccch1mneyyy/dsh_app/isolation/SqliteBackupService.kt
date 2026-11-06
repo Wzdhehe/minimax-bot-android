@@ -37,7 +37,7 @@ class SqliteBackupService : Service() {
             val uid = getCallingUid()
             val pid = getCallingPid()
             var accepted = false
-            if (isolated() && uid == applicationInfo.uid && flags == 0 && reply != null) {
+            if (isolated() && uid == applicationInfo.uid && SqliteBackupWire.synchronous(flags, reply != null)) {
                 try {
                     data.enforceInterface(SqliteBackupWire.DESCRIPTOR)
                     when (code) {

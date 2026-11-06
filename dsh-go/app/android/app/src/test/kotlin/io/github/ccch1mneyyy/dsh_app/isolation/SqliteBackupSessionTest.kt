@@ -5,6 +5,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SqliteBackupSessionTest {
+    @Test fun binderTransportFlagsDoNotTurnSynchronousCallsIntoRefusals() {
+        for (flags in listOf(0, 0x10, 0x12, 0x20, 0x30)) assertTrue(SqliteBackupWire.synchronous(flags, true))
+        for (flags in listOf(1, 0x11, 0x13, 0x21, 0x31)) assertFalse(SqliteBackupWire.synchronous(flags, true))
+        for (flags in listOf(0, 1, 0x10, 0x12, 0x30)) assertFalse(SqliteBackupWire.synchronous(flags, false))
+    }
     private val nonce = "a".repeat(64)
     private fun worker() = SqliteBackupSession(10001, 99001, 42)
     private fun candidate() = SqliteBackupReply.decode(longArrayOf(0, 0, 4096))

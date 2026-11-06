@@ -45,7 +45,8 @@ class RuntimeSnapshotOwnerTest {
             RuntimeDatabaseFiles.open(context).use { source ->
                 RuntimeSnapshotOwner.open(context, source) { true }.use { owner ->
                     val name = "runtime-state-before-v2-migration-${System.currentTimeMillis()}-${UUID.randomUUID()}.sqlite"
-                    assertEquals(RuntimeSnapshotOwner.Status.PUBLISHED, owner.create(name))
+                    val outcome = owner.create(name)
+                    assertEquals(owner.diagnosticCode(), RuntimeSnapshotOwner.Status.PUBLISHED, outcome)
                     val info = owner.catalog().single()
                     assertEquals(name, info.fileName)
                     assertTrue(info.bytes > 0)

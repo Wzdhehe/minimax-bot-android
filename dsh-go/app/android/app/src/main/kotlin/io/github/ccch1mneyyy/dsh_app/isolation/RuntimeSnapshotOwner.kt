@@ -29,6 +29,9 @@ internal class RuntimeSnapshotOwner private constructor(
     private val busy = AtomicBoolean(false)
     private val uncertain = AtomicBoolean(false)
     @Volatile private var pending: SqliteBackupClient? = null
+    @Volatile private var diagnostic = "idle"
+    /** Finite phases/codes only; no names, paths, identities, payload or Key. */
+    fun diagnosticCode(): String = diagnostic
     private fun live(): Boolean = !closed.get() && !uncertain.get() && try { active() } catch (_: Exception) { false }
 
     /** Off Main. Copy result/ACK is never publication permission. This function
@@ -50,6 +53,7 @@ internal class RuntimeSnapshotOwner private constructor(
         var preserve = false
         var publicationStarted = false
         if (!busy.compareAndSet(false, true)) throw RuntimeDataFailure(RuntimeDataCode.BUSY)
+        diagnostic = "admission"
         try {
             synchronized(records) {
                 if (records.containsKey(fileName)) return Status.ALREADY_EXISTS
@@ -57,14 +61,17 @@ internal class RuntimeSnapshotOwner private constructor(
             }
             if (!live()) return Status.NOT_PUBLISHED
             for (slot in 0..3) {
+                diagnostic = "stage_create_$slot"
                 val fd = directory.withDescriptor { NativeRuntimePublication.createSnapshotStage(it, token, slot) }
-                if (fd < 0) throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
+                if (fd < 0) { diagnostic = "stage_errno_${-fd}"; throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE) }
                 writable.add(ParcelFileDescriptor.adoptFd(fd))
             }
+            diagnostic = "source_grant"
             sourceCopies = source.duplicateForTransfer()
             if (!live()) return Status.NOT_PUBLISHED
             val client = SqliteBackupClient.prepare(context, directory, sourceCopies + writable, maxBytes, timeoutMs)
             attempt = client; pending = client
+            diagnostic = "worker_start"
             client.start()
             val deadline = System.nanoTime() + 60_000_000_000L
             var receipt: SqliteBackupExchange.Outcome
@@ -73,8 +80,10 @@ internal class RuntimeSnapshotOwner private constructor(
                 receipt = client.awaitSettled(250)
             } while (!receipt.safeToRelease && System.nanoTime() < deadline && !Thread.currentThread().isInterrupted)
             safeToRelease = receipt.safeToRelease
-            if (!safeToRelease) { preserve = true; uncertain.set(true); return Status.OUTCOME_UNKNOWN }
+            if (!safeToRelease) { diagnostic = "worker_not_retired"; preserve = true; uncertain.set(true); return Status.OUTCOME_UNKNOWN }
+            diagnostic = "worker_${receipt.reply.stage.name}_${receipt.reply.result.name}"
             if (!receipt.candidateReady || !live()) return Status.NOT_PUBLISHED
+            diagnostic = "readonly_reopen"
             val identities = writable.map { Os.fstat(it.fileDescriptor) }
             if (identities[0].st_size != receipt.reply.bytes || identities.drop(1).any { it.st_size != 0L }) {
                 throw RuntimeDataFailure(RuntimeDataCode.UNAVAILABLE)
@@ -97,6 +106,7 @@ internal class RuntimeSnapshotOwner private constructor(
             }
             if (!live() || !client.candidateStillValid(receipt.reply)) return Status.NOT_PUBLISHED
             publicationStarted = true
+            diagnostic = "publication"
             val result = directory.withDescriptor {
                 NativeRuntimePublication.publishSnapshot(it, token, fileName, readonly[0]!!.fd, receipt.reply.bytes)
             }
@@ -106,6 +116,7 @@ internal class RuntimeSnapshotOwner private constructor(
                     val info = Info(fileName, receipt.reply.bytes, System.currentTimeMillis(), randomToken())
                     synchronized(records) { records[fileName] = Record(info, readonly[0]!!, identities[0].st_dev, identities[0].st_ino) }
                     readonly[0] = null // Ownership moved to this owner's immutable record.
+                    diagnostic = "published"
                     return Status.PUBLISHED
                 }
                 1 -> return Status.ALREADY_EXISTS

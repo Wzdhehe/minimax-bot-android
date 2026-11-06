@@ -55,6 +55,10 @@ internal class SqliteBackupSession(private val ownerUid: Int, private val worker
  * Callback reply: writeNoException + ACK. Every admitted worker self-retires.
  */
 internal object SqliteBackupWire {
+    /** Binder adds transport flags (notably TF_ACCEPT_FDS=0x10) even when a
+     * caller passes 0. Only FLAG_ONEWAY=1 changes this protocol's reply model.
+     * Identity/nonce/payload checks remain mandatory and separate. */
+    fun synchronous(flags: Int, hasReply: Boolean): Boolean = hasReply && (flags and 1) == 0
     const val DESCRIPTOR = "io.github.ccch1mneyyy.dsh_app.sqlite_backup.v1"
     const val CALLBACK = "io.github.ccch1mneyyy.dsh_app.sqlite_backup_callback.v1"
     const val START = 1
