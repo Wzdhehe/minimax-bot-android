@@ -85,6 +85,23 @@ bool integrity(sqlite3* db) {
   if (sqlite3_finalize(statement) != SQLITE_OK) ok = false;
   return ok;
 }
+
+bool singleFileJournal(sqlite3* db) {
+  sqlite3_stmt* statement = nullptr;
+  if (sqlite3_prepare_v2(db, "PRAGMA journal_mode=DELETE", -1, &statement, nullptr) != SQLITE_OK) return false;
+  bool ok = sqlite3_step(statement) == SQLITE_ROW && sqlite3_column_type(statement, 0) == SQLITE_TEXT;
+  if (ok) {
+    const auto* mode = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+    const char* file = sqlite3_db_filename(db, "main");
+    // Disposable in-memory destinations are used by kernel fault tests. The
+    // granted-file worker always has a nonempty, fixed snapshot filename.
+    ok = mode && (!std::strcmp(mode, "delete") ||
+      ((!file || !*file) && !std::strcmp(mode, "memory")));
+  }
+  if (ok) ok = sqlite3_step(statement) == SQLITE_DONE;
+  if (sqlite3_finalize(statement) != SQLITE_OK) ok = false;
+  return ok;
+}
 }
 
 static BackupResult copy(sqlite3* source, sqlite3* destination, std::int64_t maxBytes, int timeoutMs,
@@ -136,6 +153,11 @@ static BackupResult copy(sqlite3* source, sqlite3* destination, std::int64_t max
   const int finished = sqlite3_backup_finish(backup);
   if (budget.stopped()) return budget.stopResult();
   if (step != SQLITE_DONE || finished != SQLITE_OK) return failed(destination, budget);
+  // backup copies page 1's WAL format bits too. Setting DELETE only before
+  // copying is insufficient: restore rollback mode through SQLite AFTER the
+  // copy, so a fresh reader needs just the published read-only database FD.
+  if (!singleFileJournal(destination)) return failed(destination, budget);
+  if (budget.stopped()) return budget.stopResult();
   if (!integrity(destination)) return budget.stopped() ? budget.stopResult() : BackupResult::integrity_failed;
   return budget.stopped() ? budget.stopResult() : BackupResult::ok;
 }

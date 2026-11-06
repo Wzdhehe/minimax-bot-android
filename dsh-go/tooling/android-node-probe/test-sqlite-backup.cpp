@@ -62,6 +62,12 @@ int integrityControl(void* state, int action, const char* name, const char*, con
   if (state) { static_cast<std::atomic_bool*>(state)->store(true); return SQLITE_OK; }
   return SQLITE_DENY;
 }
+int refuseFinalJournalMode(void* state, int action, const char* name, const char*, const char*, const char*) {
+  if (action == SQLITE_PRAGMA && name && !std::strcmp(name, "journal_mode")) {
+    if (++*static_cast<int*>(state) == 2) return SQLITE_DENY;
+  }
+  return SQLITE_OK;
+}
 
 int main(int argc, char** argv) {
   if (argc == 8 && std::strcmp(argv[1], "writer") == 0) {
@@ -120,6 +126,12 @@ int main(int argc, char** argv) {
   // positive copy below still uses real granted snapshot FDs across processes.
   sqlite3* rejected = nullptr;
   assert(sqlite3_open(":memory:", &rejected) == SQLITE_OK);
+  int journalChanges = 0;
+  sqlite3_set_authorizer(rejected, refuseFinalJournalMode, &journalChanges);
+  assert(mbot::copySqliteBackup(source, rejected, 65536, 1000) == BackupResult::copy_failed);
+  assert(journalChanges == 2 && sqlite3_get_autocommit(source));
+  assert(sqlite3_close(rejected) == SQLITE_OK);
+  assert(sqlite3_open(":memory:", &rejected) == SQLITE_OK);
   sqlite3_set_authorizer(rejected, integrityControl, nullptr);
   assert(mbot::copySqliteBackup(source, rejected, 65536, 1000) == BackupResult::integrity_failed);
   assert(sqlite3_get_autocommit(source));
@@ -174,6 +186,11 @@ int main(int argc, char** argv) {
   assert(mbot::copySqliteBackup(source, destination, 65536, 1000) == BackupResult::destination_not_empty);
   assert(scalar(destination, "SELECT min(generation) FROM notes") == 1);
   assert(sqlite3_close(source) == SQLITE_OK && sqlite3_close(destination) == SQLITE_OK);
+  unsigned char format[2]{};
+  assert(pread(fds[4], format, sizeof(format), 18) == 2);
+  assert(format[0] == 1 && format[1] == 1); // A single immutable rollback-mode DB.
+  assert(pread(fds[0], format, sizeof(format), 18) == 2);
+  assert(format[0] == 2 && format[1] == 2); // The live source stays in WAL mode.
   for (int i = 4; i < 8; ++i) assert(fsync(fds[i]) == 0);
   sqlite3* checked = nullptr;
   assert(sqlite3_open_v2("snapshot.db", &checked, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK);

@@ -22,6 +22,7 @@
 #error Assertions must stay enabled in this test
 #endif
 extern "C" int mbot_register_precreated_fd_vfs(const char* const*, const int*, int);
+extern "C" int mbot_register_readonly_snapshot_fd(int, char*, int);
 const char* names[] = {"state.db", "state.db-wal", "state.db-shm", "state.db-journal",
                        "snapshot.db", "snapshot.db-wal", "snapshot.db-shm", "snapshot.db-journal"};
 using mbot::BackupResult;
@@ -82,9 +83,18 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 8; ++i) fds[i] = std::atoi(argv[i+2]);
     const std::string mode(argv[1]);
     if (mode == "seed" || mode == "verify") {
-      assert(mbot_register_precreated_fd_vfs(names, fds.data(), 8) == SQLITE_OK);
+      assert(mbot_register_precreated_fd_vfs(names, fds.data(), mode == "seed" ? 8 : 4) == SQLITE_OK);
+      char readonlyName[64]{};
+      if (mode == "verify") {
+        // Linux host grant stand-in only. The actual guest receives a fresh RO
+        // FD from Main; no physical path or proc-fd reopening crosses its API.
+        const auto reference = "/proc/self/fd/" + std::to_string(fds[4]);
+        const int readonly = open(reference.c_str(), O_RDONLY | O_CLOEXEC); assert(readonly >= 3);
+        assert(mbot_register_readonly_snapshot_fd(readonly, readonlyName, sizeof(readonlyName)) == SQLITE_OK);
+        close(readonly); // Before SQLite locks; registry owns its stable RO copy.
+      }
       sqlite3* db = nullptr;
-      assert(sqlite3_open_v2(mode == "seed" ? "state.db" : "snapshot.db", &db,
+      assert(sqlite3_open_v2(mode == "seed" ? "state.db" : readonlyName, &db,
         mode == "seed" ? SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE : SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK);
       if (mode == "seed") sql(db, "PRAGMA journal_mode=WAL; CREATE TABLE notes(text TEXT, data BLOB); INSERT INTO notes VALUES('before',zeroblob(8192)),('before',zeroblob(8192))");
       else {
