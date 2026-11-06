@@ -11,5 +11,13 @@
             android:exported="false" />
         <service android:name="io.github.ccch1mneyyy.dsh_app.isolation.AgentIsolationService"
             android:exported="false" android:isolatedProcess="true" />
+        <!-- The production declaration of the private backup worker, unchanged:
+             its own isolated UID, its own process, not exported. It never
+             shares the Agent process and receives no shell, code or Key. -->
+        <service
+            android:name="io.github.ccch1mneyyy.dsh_app.isolation.SqliteBackupService"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":sqlite_backup" />
     </application>
 </manifest>
