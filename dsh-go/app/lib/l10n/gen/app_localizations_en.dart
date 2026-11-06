@@ -8826,6 +8826,20 @@ class L10nEn extends L10n {
   String get mobileBotLoadFailed => 'Cannot load the Bot service. Check the local runtime and retry.';
 
   @override
+  String get mobileBotEntryStoppedTitle => 'No Bot service is running on this phone';
+
+  @override
+  String get mobileBotEntryStoppedHint =>
+      'Fill in the key, base URL and model in settings first, then come back and reconnect.';
+
+  @override
+  String get mobileBotEntryFailedTitle => 'Could not reach the Bot service on this phone';
+
+  @override
+  String get mobileBotEntryFailedHint =>
+      'The service address the phone gave is not usable, or the service did not answer. Reconnect once, or check the key, base URL and model in settings.';
+
+  @override
   String get mobileBotSendFailed => 'Delivery is unconfirmed. Check the conversation before sending again.';
 
   @override

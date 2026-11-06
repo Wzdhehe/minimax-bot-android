@@ -8372,6 +8372,18 @@ class L10nZh extends L10n {
   String get mobileBotLoadFailed => '无法加载 Bot 服务，请检查本机运行状态后重试。';
 
   @override
+  String get mobileBotEntryStoppedTitle => '本机没有运行中的 Bot 服务';
+
+  @override
+  String get mobileBotEntryStoppedHint => '可以先到设置里填写 Key、Base URL 和模型，再回到这里重新连接。';
+
+  @override
+  String get mobileBotEntryFailedTitle => '无法连接本机 Bot 服务';
+
+  @override
+  String get mobileBotEntryFailedHint => '本机给出的服务地址不可用，或服务没有响应。重新连接一次，或到设置里检查 Key、Base URL 和模型。';
+
+  @override
   String get mobileBotSendFailed => '发送未确认，请先检查会话记录再决定是否重发。';
 
   @override

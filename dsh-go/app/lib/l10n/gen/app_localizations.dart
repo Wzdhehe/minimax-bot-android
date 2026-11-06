@@ -15374,6 +15374,30 @@ abstract class L10n {
   /// **'无法加载 Bot 服务，请检查本机运行状态后重试。'**
   String get mobileBotLoadFailed;
 
+  /// No description provided for @mobileBotEntryStoppedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机没有运行中的 Bot 服务'**
+  String get mobileBotEntryStoppedTitle;
+
+  /// No description provided for @mobileBotEntryStoppedHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'可以先到设置里填写 Key、Base URL 和模型，再回到这里重新连接。'**
+  String get mobileBotEntryStoppedHint;
+
+  /// No description provided for @mobileBotEntryFailedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法连接本机 Bot 服务'**
+  String get mobileBotEntryFailedTitle;
+
+  /// No description provided for @mobileBotEntryFailedHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机给出的服务地址不可用，或服务没有响应。重新连接一次，或到设置里检查 Key、Base URL 和模型。'**
+  String get mobileBotEntryFailedHint;
+
   /// No description provided for @mobileBotSendFailed.
   ///
   /// In zh, this message translates to:

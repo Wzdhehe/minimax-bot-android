@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'bot/bot_app.dart';
 import 'dev/frame_probe.dart';
 import 'diagnostics/app_error_log.dart';
 import 'launch/launch_state.dart';
@@ -28,5 +29,8 @@ Future<void> _startApp() async {
   // through AnnotatedRegion(dshSystemOverlay(...)).
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(dshSystemOverlay(PlatformDispatcher.instance.platformBrightness));
-  runApp(const ProviderScope(child: DshApp()));
+  // The App opens on the official Bot interface. The old install guide and the
+  // old workbench are not on the way in any more; the shell around it (the
+  // language, the theme, the launch window) stays.
+  runApp(const ProviderScope(child: DshApp(home: BotEntry())));
 }
