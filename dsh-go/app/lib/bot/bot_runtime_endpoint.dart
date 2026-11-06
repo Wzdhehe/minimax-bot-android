@@ -11,10 +11,13 @@ import 'package:flutter/services.dart';
 /// UI; it is never handed to the Agent or written into a file the guest can
 /// read.
 class BotRuntimeEndpoint {
-  const BotRuntimeEndpoint({MethodChannel? channel})
-      : _channel = channel ?? const MethodChannel('minimax/bot-runtime');
+  const BotRuntimeEndpoint({MethodChannel? channel}) : _channel = channel ?? const MethodChannel('minimax/bot-runtime');
 
   final MethodChannel _channel;
+
+  /// Opening/reconnecting the product asks native to start its own service.
+  /// Native keeps this idempotent; it never replaces a live or retiring run.
+  Future<void> ensureRunning() => _channel.invokeMethod<void>('start');
 
   /// The live service, or null when the runtime is not running.
   Future<MiniMaxBotApi?> liveService() async {

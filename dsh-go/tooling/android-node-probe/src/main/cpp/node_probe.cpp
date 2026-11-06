@@ -372,6 +372,7 @@ void InitializeFiles(v8::Local<v8::Object> exports, v8::Local<v8::Value>, v8::Lo
 #ifdef MBOT_PRODUCT_NODE
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "readSync"), v8::Function::New(context, ReadFileSync).ToLocalChecked()).Check();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "replaceSync"), v8::Function::New(context, ReplaceFileSync).ToLocalChecked()).Check();
+  exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "removeSync"), v8::Function::New(context, RemoveFileSync).ToLocalChecked()).Check();
 #endif
 }
 // Node's macro emits a TU-local `_module` regardless of the public module name.

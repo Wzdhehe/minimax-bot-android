@@ -42,7 +42,11 @@ let phase = 'bootstrap';
   phase = 'runtime_loop';
   try { await Promise.race([stopped, handle.done]); }
   finally { await handle.close(); }
-})().catch(() => {
+})().then(() => {
+  // This UID owns exactly one VM. SDK background timers must not retain a
+  // retired execution after the real runtime's close promise has completed.
+  process.exit(0);
+}).catch(() => {
   // Do not log the raw error/stack: provider responses and user content may
   // appear in arbitrary dependency errors. Main gets only a finite phase.
   try { product.failed(phase); } catch {}

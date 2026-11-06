@@ -18,24 +18,31 @@ internal object BotRuntimeManager {
     private var current: BotRuntimeExecution? = null
     private var lastCode: String? = null
     private var restart = false
+    private var launchRequested = false
     private val main = Handler(Looper.getMainLooper())
     private val listeners = CopyOnWriteArraySet<() -> Unit>()
     private val readers = Executors.newFixedThreadPool(2)
     fun status(): Map<String, String> = synchronized(lock) {
-        mapOf("phase" to (current?.run?.phase?.name?.lowercase() ?: if (restart) "starting" else if (lastCode == null) "stopped" else "failed"),
+        mapOf("phase" to (current?.run?.phase?.name?.lowercase() ?: if (restart || launchRequested) "starting" else if (lastCode == null) "stopped" else "failed"),
             "code" to (current?.failure ?: lastCode ?: "ok"))
     }
     fun observe(listener: () -> Unit) { listeners.add(listener) }
     fun removeObserver(listener: () -> Unit) { listeners.remove(listener) }
     private fun changed() { main.post { listeners.forEach { it() } } }
     fun requestStart(context: Context) {
+        synchronized(lock) {
+            if (current != null || launchRequested) return
+            launchRequested = true
+        }
+        changed()
         val intent = Intent(context, BotRuntimeService::class.java).setAction(BotRuntimeService.START)
         try {
             if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent) else context.startService(intent)
-        } catch (_: Exception) { synchronized(lock) { if (current == null) lastCode = "bot_start_unavailable" }; changed() }
+        } catch (_: Exception) { synchronized(lock) { launchRequested = false; if (current == null) lastCode = "bot_start_unavailable" }; changed() }
     }
     fun start(context: Context) {
         val execution = synchronized(lock) {
+            launchRequested = false
             if (current != null) return
             lastCode = null
             restart = false
@@ -71,7 +78,7 @@ internal object BotRuntimeManager {
     @Volatile private var activeContext: Context? = null
     fun attach(context: Context) { activeContext = context.applicationContext }
     fun stop() {
-        val execution = synchronized(lock) { restart = false; current }
+        val execution = synchronized(lock) { restart = false; launchRequested = false; current }
         execution?.run?.close()
         if (execution != null) onExecutionChanged(execution) else changed()
     }
@@ -79,9 +86,10 @@ internal object BotRuntimeManager {
         // Key replacement alone does not require a guest restart: Main resolves
         // it afresh for each model call. Only the non-secret catalog is compared.
         val next = try { BotProviderStore(context).guestCatalogJson() } catch (_: Exception) { return }
+        if (synchronized(lock) { current == null }) { requestStart(context); return }
         val execution = synchronized(lock) {
             val value = current ?: return
-            if (value.catalogJson == null || value.catalogJson == next) return
+            if (value.catalogJson == next) return
             restart = true
             value
         }

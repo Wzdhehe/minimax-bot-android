@@ -12,8 +12,10 @@ val keyProps = Properties().apply {
     rootProject.file("key.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
 
-// Per-ABI runtime bundles produced by runtime/build-runtime.sh.
-val runtimeOut = rootProject.file("../../runtime/out")
+// The Bot product never launches the same-UID DSH/PRoot runtime. Its Node VM
+// and code assets are assembled explicitly for the selected Android ABI.
+val mobileTooling = rootProject.file("../../tooling/mobile-runtime-bundle")
+val mobileProducts = File(mobileTooling, "build/product")
 
 // versionCode is the build minute, same encoding as tooling/build_number.py:
 // (year - 2026) * 10^8 + MMDDhhmm at UTC+8. tooling/build-apk.sh passes it as
@@ -36,7 +38,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.github.ccch1mneyyy.dsh_app"
+        // Install the Bot product alongside upstream DSH without overwriting
+        // its app data. The namespace stays stable for existing JNI bindings.
+        applicationId = "io.github.ccch1mneyyy.dsh_app.mbot"
         // java.nio.file (symlinks while unpacking the rootfs) needs API 26.
         minSdk = 26
         // Bot-only fork: comply with the current Play target API requirement.
@@ -69,22 +73,21 @@ android {
 
     sourceSets {
         getByName("arm64") {
-            assets.srcDir(File(runtimeOut, "arm64-v8a/assets"))
-            jniLibs.srcDir(File(runtimeOut, "arm64-v8a/jniLibs"))
+            assets.srcDir(File(mobileProducts, "arm64-v8a/assets"))
+            jniLibs.srcDir(File(mobileProducts, "arm64-v8a/jniLibs"))
         }
         getByName("x64") {
-            assets.srcDir(File(runtimeOut, "x86_64/assets"))
-            jniLibs.srcDir(File(runtimeOut, "x86_64/jniLibs"))
+            assets.srcDir(File(mobileProducts, "x86_64/assets"))
+            jniLibs.srcDir(File(mobileProducts, "x86_64/jniLibs"))
         }
     }
 
     packaging {
-        // proot and friends ship as lib*.so; they must be extracted to
-        // nativeLibraryDir so they can be executed.
+        // Independent Android UIDs cannot read Main's extracted native
+        // directory. Map uncompressed libraries directly from the signed APK.
         jniLibs {
-            useLegacyPackaging = true
-            // Keep the Termux binaries byte-identical to runtime/out (their hashes are in the manifest).
-            keepDebugSymbols += listOf("**/libproot.so", "**/libproot-loader.so", "**/libtalloc.so", "**/libandroid-shmem.so")
+            useLegacyPackaging = false
+            keepDebugSymbols += listOf("**/libnode.so", "**/libmbot_node_runtime.so", "**/libmbot_sqlite_probe.so", "**/libmbot_sqlite_backup.so", "**/libc++_shared.so")
         }
     }
 
@@ -116,6 +119,21 @@ android {
             // its TLS libraries are reached by class name (see the file).
             proguardFiles("proguard-rules.pro")
         }
+    }
+}
+
+// A missing or stale product assembly is a build failure, not an apparently
+// successful APK which can only display an unavailable-engine screen.
+for ((flavor, abi) in listOf("X64" to "x86_64", "Arm64" to "arm64-v8a")) {
+    val verifier = tasks.register<Exec>("verify${flavor}BotProduct") {
+        workingDir(mobileTooling)
+        val python = providers.gradleProperty("mbotPython").orElse(
+            if (System.getProperty("os.name").startsWith("Windows")) "python" else "python3")
+        commandLine(python.get(), File(mobileTooling, "prepare-product.py").absolutePath,
+            "--verify-only", "--abi", abi)
+    }
+    tasks.configureEach {
+        if (name.startsWith("pre${flavor}") && name.endsWith("Build")) dependsOn(verifier)
     }
 }
 

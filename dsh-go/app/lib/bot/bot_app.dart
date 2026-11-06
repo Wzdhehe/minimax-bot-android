@@ -118,6 +118,8 @@ class _BotEntryState extends State<BotEntry> {
     MiniMaxBotApi? api;
     Object? failure;
     try {
+      await widget.endpoint.ensureRunning();
+      if (!mounted || read != _read) return;
       api = await widget.endpoint.liveService();
     } catch (error) {
       failure = error;
@@ -169,9 +171,7 @@ class _BotEntryState extends State<BotEntry> {
   Future<void> _settings() async {
     final api = _api;
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => widget.settingsPage?.call(context) ?? BotSettingsHub(botApi: api),
-      ),
+      MaterialPageRoute<void>(builder: (context) => widget.settingsPage?.call(context) ?? BotSettingsHub(botApi: api)),
     );
     if (!mounted) return;
     // The phone may have started a service while the settings were open.

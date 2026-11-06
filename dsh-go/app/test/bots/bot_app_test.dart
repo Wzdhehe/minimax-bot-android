@@ -35,13 +35,22 @@ class _Api extends MiniMaxBotApi {
 class _Endpoint extends BotRuntimeEndpoint {
   _Endpoint({this.service});
   MiniMaxBotApi? service;
+
   /// When set, the phone fails to answer.
   Object? failure;
+
   /// How often the phone was asked.
   int reads = 0;
+  int starts = 0;
+  @override
+  Future<void> ensureRunning() async {
+    starts++;
+  }
+
   /// How many answers were in flight at the same time.
   int running = 0;
   int peak = 0;
+
   /// Reads that wait for the test to let them answer.
   final gates = <Completer<MiniMaxBotApi?>>[];
 
@@ -71,10 +80,7 @@ class _Settings extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('设置')),
     body: Center(
-      child: TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('返回'),
-      ),
+      child: TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('返回')),
     ),
   );
 }
@@ -205,16 +211,13 @@ void main() {
     expect(api.closes, 1);
   });
 
-  testWidgets('the entry only asks the phone for the service', (tester) async {
+  testWidgets('the entry requests native start and its descriptor without stopping the service', (tester) async {
     const channel = MethodChannel('minimax/bot-runtime');
     final calls = <String>[];
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-      channel,
-      (call) async {
-        calls.add(call.method);
-        return null;
-      },
-    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      return null;
+    });
     addTearDown(
       () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null),
     );
@@ -222,7 +225,8 @@ void main() {
     await tester.pumpWidget(app(const BotRuntimeEndpoint()));
     await pumpUntil(tester, () => find.text('本机没有运行中的 Bot 服务').evaluate().isNotEmpty);
 
-    // Nothing was asked of the phone but the service itself.
-    expect(calls, ['descriptor']);
+    expect(calls, ['start', 'descriptor']);
+    await tester.pumpWidget(const SizedBox());
+    expect(calls, ['start', 'descriptor']);
   });
 }

@@ -52,3 +52,16 @@ void ReplaceFileSync(const v8::FunctionCallbackInfo<v8::Value>& args) {
   args.GetReturnValue().Set(v8::String::NewFromUtf8Literal(isolate, "outcome_unknown"));
   if (result == 0) args.GetReturnValue().Set(v8::String::NewFromUtf8Literal(isolate, "published"));
 }
+
+void RemoveFileSync(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  auto* isolate = args.GetIsolate(); JNIEnv* env = nullptr;
+  if (args.Length() != 1 || !args[0]->IsString() || args[0].As<v8::String>()->Length() > 128 ||
+      java_vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) { SyncFileError(isolate, 6); return; }
+  v8::String::Value value(isolate, args[0]);
+  auto name = env->NewString(reinterpret_cast<const jchar*>(*value), value.length());
+  int result = 2;
+  if (name && !env->ExceptionCheck()) result = env->CallIntMethod(dispatcher, file_remove_method, name);
+  if (env->ExceptionCheck()) { env->ExceptionClear(); result = 2; }
+  if (name) env->DeleteLocalRef(name);
+  args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, result == 0 ? "removed" : result == 7 ? "not_found" : "outcome_unknown").ToLocalChecked());
+}
