@@ -26,7 +26,6 @@ jobs:
       CCACHE_BASEDIR: ${{ github.workspace }}/upstream-node-mobile
       CCACHE_COMPILERCHECK: content
       CCACHE_MAXSIZE: 3G
-      CCACHE_DIR: ${{ runner.temp }}/mbot-node-arm64-ccache
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,6 +79,8 @@ jobs:
       - name: Compile the ARM64 candidate, leaving budget for cache preservation
         id: build
         timeout-minutes: 330
+        env:
+          CCACHE_DIR: ${{ runner.temp }}/mbot-node-arm64-ccache
         run: |
           ccache --zero-stats
           source_status=0

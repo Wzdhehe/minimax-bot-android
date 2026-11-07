@@ -12,6 +12,8 @@
 - 当前云机没有可用NDK/clang/ninja/ccache，根盘剩余不足0.2GiB，/tmp剩余约3.6GiB；不应在这里硬塞完整Node源编译。2026-11-07实查9a7cffe最新CI作业annotation仍是计费/支出限制导致未启动，不是源码编译失败。环境会变，以新实查为准。
 - prepare-product.py的ARM64拒绝仍在。不能把“新编译作业已写”说成“手机包完成”。
 
+CI配置复核：初版07c5a34的run42379715185为failure且无build job；actionlint 1.7.7实际指出job级env不能引用runner.temp。已将CCACHE_DIR移入编译step的env，同一actionlint检查退出0，ARM64源码/来源20项通过。**这个初版失败不能归因于计费或Node编译**；修正版是否能分配runner，须另查新run的job/annotation。前述9a7cffe的计费阻塞是另一条已实查记录。
+
 ## 给Ubuntu agent的可转发任务
 
 下面这段可以原样转发；它只负责长编译，不设计ABI消费代码。
