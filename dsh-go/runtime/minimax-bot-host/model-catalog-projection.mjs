@@ -171,7 +171,12 @@ async function resolveForkProviderId(providers, view, match, displayName) {
  */
 export async function applyNativeCatalog({ application, catalog, probe = null }) {
   const projection = projectNativeCatalog(catalog);
-  if (!projection.upserts.length) {
+  const active = new Set(projection.upserts.map((row) => row.providerId));
+  const disabledNames = new Set((Array.isArray(catalog?.providers) ? catalog.providers : [])
+    .filter((row) => typeof row?.providerId === 'string' && PROVIDER_ID.test(row.providerId) &&
+      !active.has(row.providerId) && !projection.rejected.some((entry) => entry.providerId === row.providerId))
+    .map((row) => displayNameFor(row.providerId)));
+  if (!projection.upserts.length && !disabledNames.size) {
     return { providerBinding: [], defaultSelection: null, rejected: projection.rejected };
   }
   const providers = application?.modelProviders;
@@ -184,6 +189,14 @@ export async function applyNativeCatalog({ application, catalog, probe = null })
     throw new TypeError('The upstream model application is required');
   }
   const listed = await providers.listUser();
+  // A boot with all models switched off must retire the previous provider's
+  // visible catalog too, rather than just dropping its native route.
+  for (const row of Array.isArray(listed) ? listed : []) {
+    if (disabledNames.has(row?.name) && typeof row?.providerId === 'string') {
+      try { await providers.update({ providerId: row.providerId, enabled: false }); }
+      catch (error) { throw projectionFailure('runtime_provider_projection_failed', error?.code); }
+    }
+  }
   const providerBinding = [];
   for (const upsert of projection.upserts) {
     const request = {
@@ -208,7 +221,7 @@ export async function applyNativeCatalog({ application, catalog, probe = null })
       }
       // The upstream api key is tri-state: omitting it keeps the stored one.
       view = match?.providerId && !replace
-        ? await providers.update({ providerId: match.providerId, ...request })
+        ? await providers.update({ providerId: match.providerId, ...request, enabled: true })
         : await providers.create({ ...request, apiKey: PLACEHOLDER_API_KEY });
       if (replace && view?.providerId !== match.providerId) throw projectionFailure('runtime_provider_projection_failed');
     } catch (error) {

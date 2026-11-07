@@ -22,7 +22,7 @@
   "mobileBotEmpty": "Create your first bot",
   "mobileBotMembers": "Choose group members",
   "mobileBotSettings": "Settings",
-  "mobileBotModel": "Model ID",
+  "mobileBotModel": "Model",
   "mobileBotSave": "Save",
   "mobileBotKeySaved": "Key saved; leave blank to keep it",
   "mobileBotKeyMissing": "Enter your MiniMax key",
@@ -60,5 +60,17 @@
   "mobileBotSkinPixel": "Pixel",
   "mobileBotSkinSmiley": "Smiley",
   "mobileBotSkinToys": "Toys",
-  "mobileBotSkinMoon": "Moon"
+  "mobileBotSkinMoon": "Moon",
+  "mobileBotCreateHint": "Add a new teammate",
+  "mobileBotInstructions": "Instructions",
+  "mobileBotInstructionsHint": "How it should work, what it should produce, and what it should pay attention to",
+  "mobileBotModelDefault": "Follow default model",
+  "mobileBotEffort": "Reasoning effort",
+  "mobileBotEffortDefault": "Model default",
+  "mobileBotModelLoadFailed": "Could not load models. Tap to retry, or create using the default.",
+  "mobileBotHelpers": "Allow background helpers",
+  "mobileBotHelpersHint": "When off, helpers are used only when you ask",
+  "mobileBotAttachment": "Add attachment",
+  "mobileBotUploadLimit": "Up to 10 attachments per message, 16 MiB in total.",
+  "mobileBotUploadFailed": "Attachment upload did not finish. Completed uploads are kept; check before retrying."
 }

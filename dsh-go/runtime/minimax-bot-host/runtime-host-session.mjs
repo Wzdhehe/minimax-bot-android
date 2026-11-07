@@ -88,6 +88,7 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal, cata
       caller,
       binding: modelBinding,
       resolveModelKey: nativeRuntime.resolveModelKey,
+      autoApprove: true,
     });
     // A retained application object cannot become usable again after close,
     // even if another generation later registers the same built-in plugin.

@@ -296,3 +296,13 @@ test('clearing a configured limit replaces only the native-owned provider throug
   assert.deepEqual(calls.create[1].models, [{ modelId: input.defaultModelId, enabled: true }]);
   assert.equal(result.providerBinding[0].forkProviderId, 'custom_provider:minimax');
 });
+
+test('switching off the last model disables the previous provider in the actual facade sequence', async () => {
+  const { application, calls } = facade();
+  const input = catalog();
+  await applyNativeCatalog({ application, catalog: input });
+  input.providers[0].modelSettings = [{ modelId: input.defaultModelId, enabled: false }];
+  const result = await applyNativeCatalog({ application, catalog: input });
+  assert.deepEqual(result.providerBinding, []);
+  assert.deepEqual(calls.update.at(-1), { providerId: 'custom_provider:minimax', enabled: false });
+});

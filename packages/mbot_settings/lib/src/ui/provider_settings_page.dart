@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'loading_surface.dart';
 import '../providers/provider_contract.dart';
 import 'provider_editor_page.dart';
+import 'provider_model_page.dart';
 import 'provider_strings.dart';
 
 class MbotProviderSettingsPage extends StatefulWidget {
@@ -76,6 +77,38 @@ class _MbotProviderSettingsPageState extends State<MbotProviderSettingsPage> {
                 for (final row in provider.modelSettings)
                   row.modelId == model.modelId ? row.withEnabled(value) : row,
               ])));
+
+  Future<void> _editModel(
+      MbotProvider provider, MbotModelSettings model) async {
+    if (_busy || _editing) return;
+    setState(() => _editing = true);
+    try {
+      final route = MaterialPageRoute<MbotModelSettings>(
+          builder: (_) => MbotModelEditorPage(
+              model: model,
+              otherIds:
+                  provider.models.where((id) => id != model.modelId).toSet()));
+      final result = await Navigator.of(context).push(route);
+      await route.completed;
+      if (!mounted || result == null) return;
+      setState(() => _editing = false);
+      await _run(() => widget.port.save(MbotProviderDraft(
+            id: provider.id,
+            name: provider.name,
+            apiFormat: provider.apiFormat,
+            baseUrl: provider.baseUrl,
+            enabled: provider.enabled,
+            models: provider.models
+                .map((id) => id == model.modelId ? result.modelId : id)
+                .toList(),
+            modelSettings: provider.modelSettings
+                .map((row) => row.modelId == model.modelId ? result : row)
+                .toList(),
+          )));
+    } finally {
+      if (mounted) setState(() => _editing = false);
+    }
+  }
 
   Future<void> _probe(MbotProvider provider, String model) async {
     final test = widget.testProvider;
@@ -192,6 +225,9 @@ class _MbotProviderSettingsPageState extends State<MbotProviderSettingsPage> {
                                 ListTile(
                                   key: ValueKey(
                                       'mbot.model.row.${provider.id}.${model.modelId}'),
+                                  onTap: _busy || _editing
+                                      ? null
+                                      : () => _editModel(provider, model),
                                   title: Text(model.modelId,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis),

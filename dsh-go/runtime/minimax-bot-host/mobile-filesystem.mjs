@@ -41,6 +41,7 @@ export function installMobileFilesystem({ files, assets = [], code = null, metad
   const contentCache = new Map(), acknowledged = new Set();
   let previousChunks = new Set();
   const persistent = [runtimeRoot, workspaceRoot];
+  const uploadsRoot = path.join(workspaceRoot, '.mbot/uploads');
   const sqlite = path.join(runtimeRoot, 'v2/sqlite');
   const protectedSqlite = (value) => within(value, sqlite);
   const sqlPaths = [0, 1, 2, 3, 4].map((slot) => slot === 4 ? sqlite : path.join(sqlite,
@@ -260,6 +261,9 @@ export function installMobileFilesystem({ files, assets = [], code = null, metad
       try { return volume.realpathSync(name); }
       catch { try { return path.join(volume.realpathSync(path.dirname(name)), path.basename(name)); } catch { return name; } }
     });
+    // Official HTTP upload paths may never be redirected by a workspace
+    // symlink into private runtime configuration or another namespace.
+    if (selected.some((name, index) => within(name, uploadsRoot) && !within(resolved[index], uploadsRoot))) throw fault('EPERM');
     const changed = operation === 'open' ? (typeof args[1] === 'string' ? /^[wa]|\+/u.test(args[1]) : Boolean(args[1] & (1 | 2 | 64 | 512 | 1024))) : mutations.has(operation) || operation === 'createWriteStream';
     const targets = operation === 'copyFile' || operation === 'cp' ? resolved.slice(1) : resolved;
     if (changed && targets.some((name) => within(name, codeRoot))) throw fault('EROFS');
@@ -384,7 +388,18 @@ export function installMobileFilesystem({ files, assets = [], code = null, metad
     }
     syncBuiltinESMExports(); installed = true;
   } catch (error) { for (const restore of restores.reverse()) restore(); syncBuiltinESMExports(); throw error; }
-  return Object.freeze({ runtimeRoot, workspaceRoot, codeRoot, temporaryRoot,
+  const botFiles = Object.freeze({ dataDir: path.join(workspaceRoot, '.mbot'), root: workspaceRoot, maxUploadBytes: 16 * MAX,
+    async resolve(value) {
+      check();
+      if (typeof value !== 'string' || value.includes('\0') || value.length > 2048) throw fault('EPERM');
+      const name = path.resolve(workspaceRoot, value);
+      if (!within(name, workspaceRoot)) throw fault('EPERM');
+      const resolved = volume.realpathSync(name);
+      if (!within(resolved, workspaceRoot)) throw fault('EPERM');
+      return resolved;
+    },
+  });
+  return Object.freeze({ runtimeRoot, workspaceRoot, codeRoot, temporaryRoot, botFiles,
     close() { if (!active) return; active = false; /* Never rebind a retired execution unit. */ },
   });
 }

@@ -3,7 +3,7 @@
 // resolved from its own live process registration, never from Bot requests.
 import { NativeBindingError } from './native-model-binding.mjs';
 
-export function createBotAgentPort({ agent, caller, binding = null, resolveModelKey = null }) {
+export function createBotAgentPort({ agent, caller, binding = null, resolveModelKey = null, autoApprove = false }) {
   if (!agent || !['run', 'models', 'reply', 'answer'].every((name) => typeof agent[name] === 'function')) {
     throw new TypeError('A complete process-local agent port is required');
   }
@@ -45,11 +45,39 @@ export function createBotAgentPort({ agent, caller, binding = null, resolveModel
     return (async () => binding.runForModelKey(await modelKeyFor(input), call))();
   }
 
+  // Trusted product policy, never a Bot/HTTP input. Native capabilities and
+  // protected-path denials still apply. Replies grant one owned request only;
+  // they never install global rules or provide an unrestricted Android shell.
+  function turn(input, options, invoke) {
+    if (!autoApprove) return boundTurn(input, () => invoke(options.signal, options.onEvent));
+    const abort = new AbortController(), replies = new Map();
+    const signal = options.signal ? AbortSignal.any([options.signal, abort.signal]) : abort.signal;
+    let active = true, failed = false;
+    const onEvent = (event) => {
+      if (!active) return;
+      if (event.type !== 'permission.requested') { options.onEvent?.(event); return; }
+      if (typeof event.sessionId !== 'string' || !event.sessionId || typeof event.requestId !== 'string' || !event.requestId) {
+        failed = true; abort.abort(); return;
+      }
+      const key = JSON.stringify([event.sessionId, event.requestId]);
+      if (replies.has(key)) return;
+      if (replies.size >= 128) { failed = true; abort.abort(); return; }
+      const reply = Promise.resolve().then(() => agent.reply({ caller: identity, sessionId: event.sessionId,
+        requestId: event.requestId, decision: 'allowOnce' })).catch(() => { failed = true; abort.abort(); });
+      replies.set(key, reply);
+    };
+    return boundTurn(input, () => invoke(signal, onEvent)).then(async (value) => {
+      await Promise.all(replies.values());
+      if (failed) throw new Error('bot_permission_reply_failed');
+      return value;
+    }).finally(() => { active = false; abort.abort(); });
+  }
+
   return Object.freeze({
     run(input, options = {}) {
-      return boundTurn(input, () => agent.run({
+      return turn(input, options, (signal, onEvent) => agent.run({
         caller: identity, text: input.text, sessionId: input.sessionId,
-        agent: input.agent, model: input.model, signal: options.signal, onEvent: options.onEvent,
+        agent: input.agent, model: input.model, signal, onEvent,
       }));
     },
     models() { return agent.models({ caller: identity }); },
@@ -57,9 +85,9 @@ export function createBotAgentPort({ agent, caller, binding = null, resolveModel
       return agent.reply({ caller: identity, sessionId: input.sessionId, requestId: input.requestId, decision: input.decision });
     },
     answer(input, options = {}) {
-      return boundTurn(input, () => agent.answer({
+      return turn(input, options, (signal, onEvent) => agent.answer({
         caller: identity, sessionId: input.sessionId, requestId: input.requestId,
-        answers: input.answers, model: input.model, signal: options.signal, onEvent: options.onEvent,
+        answers: input.answers, model: input.model, signal, onEvent,
       }));
     },
   });

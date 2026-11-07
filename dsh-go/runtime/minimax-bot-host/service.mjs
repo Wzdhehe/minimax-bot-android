@@ -7,7 +7,7 @@ import { createProviderBroker } from './provider-broker.mjs';
 
 /** The descriptor belongs on a private Android host channel. This authenticates
  * HTTP requests; it does not isolate Agent code or provide model credentials. */
-export async function startBotService({ port, dataDir, filesDir, agent, modelBroker, getUsageQuota, signal, logger, authToken, fdTransport, storePersistence, memoryFilesystem, fileMode = 'workspace' }) {
+export async function startBotService({ port, dataDir, filesDir, agent, modelBroker, getUsageQuota, signal, logger, authToken, fdTransport, storePersistence, memoryFilesystem, fileMode = 'workspace', mobileFiles = null }) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError('A local port is required');
   // A trusted launcher may already have published this session in its private
   // descriptor. Validate before filesystem or listener side effects, and never
@@ -24,7 +24,9 @@ export async function startBotService({ port, dataDir, filesDir, agent, modelBro
   if (memoryFilesystem !== undefined && ['appendFile', 'copyFile', 'link', 'mkdir', 'readFile', 'rename', 'rm', 'stat', 'writeFile'].some((name) => typeof memoryFilesystem?.[name] !== 'function')) {
     throw new TypeError('A trusted Bot memory filesystem capability is required');
   }
-  if (!['workspace', 'unavailable'].includes(fileMode) || (fileMode === 'unavailable' && (!storePersistence || !memoryFilesystem))) {
+  if (!['workspace', 'unavailable', 'mobile'].includes(fileMode) || (fileMode !== 'workspace' && (!storePersistence || !memoryFilesystem)) ||
+      (fileMode === 'mobile' && (typeof mobileFiles?.resolve !== 'function' || mobileFiles.dataDir !== dataDir ||
+        mobileFiles.maxUploadBytes !== 16 * 1024 * 1024))) {
     throw new TypeError('A supported Bot file mode and persistence capabilities are required');
   }
   // The upstream service uses both after it opens its server. Reject an
@@ -40,7 +42,7 @@ export async function startBotService({ port, dataDir, filesDir, agent, modelBro
   // explicit mode supports Bot JSON/state while refusing all media/avatar
   // file routes until a separate bounded file capability exists.
   const filesUnavailable = fileMode === 'unavailable';
-  const workspace = filesUnavailable ? null : await createHostWorkspace(filesDir);
+  const workspace = fileMode === 'mobile' ? mobileFiles : filesUnavailable ? null : await createHostWorkspace(filesDir);
   // Provider probes use the same native stream capability as model calls.
   // No resolver returning plaintext credentials is accepted by this wrapper.
   const providerBroker = modelBroker ? createProviderBroker({ modelBroker }) : undefined;
@@ -48,7 +50,7 @@ export async function startBotService({ port, dataDir, filesDir, agent, modelBro
   const host = `127.0.0.1:${port}`;
   let lifecycle;
   try { lifecycle = await start({
-    pluginRoot: filesUnavailable ? '/mbot-no-client-assets' : fileURLToPath(new URL('../vendor/minimax-bot/', import.meta.url)),
+    pluginRoot: fileMode !== 'workspace' ? '/mbot-no-client-assets' : fileURLToPath(new URL('../vendor/minimax-bot/', import.meta.url)),
     dataDir, agent, signal, logger, listen: { host: '127.0.0.1', port },
   }, {
     listenServer: fdTransport?.listenServer,
@@ -60,6 +62,11 @@ export async function startBotService({ port, dataDir, filesDir, agent, modelBro
     getUsageQuota: (forceRefresh) => readUsageQuota(getUsageQuota, forceRefresh),
     authorizeRequest(request) {
       if (request.headers.origin !== undefined || request.headers.host !== host) return false;
+      if (fileMode === 'mobile' && request.method === 'POST' && request.url?.split('?')[0] === '/api/uploads') {
+        const length = request.headers['content-length'];
+        if (typeof length !== 'string' || !/^[0-9]+$/.test(length) ||
+            Number(length) < 1 || Number(length) > mobileFiles.maxUploadBytes) return false;
+      }
       const supplied = request.headers.authorization;
       if (typeof supplied !== 'string') return false;
       const bytes = Buffer.from(supplied);

@@ -10,10 +10,13 @@ class _Api extends MiniMaxBotApi {
   _Api() : super(Uri.parse('http://127.0.0.1:8788'));
   final pending = <String, Completer<Map<String, Object?>>>{};
   int sends = 0;
+
   /// Every create call, in the order the page made them.
   final creates = <String>[];
+
   /// When set, a create waits for it before answering.
   Completer<Map<String, Object?>>? gate;
+
   /// When set, a create fails with it.
   Object? failure;
 
@@ -28,6 +31,8 @@ class _Api extends MiniMaxBotApi {
     'groups': [],
   };
   @override
+  Future<Map<String, Object?>> models() async => {'models': []};
+  @override
   Future<Map<String, Object?>> messages(String chat, {int limit = 200, String? before}) =>
       pending[chat]?.future ??
       Future.value({
@@ -40,7 +45,7 @@ class _Api extends MiniMaxBotApi {
     String chat,
     String text, {
     required String clientMessageId,
-    List<Map<String, Object?>> attachments = const [],
+    List<String> attachments = const [],
   }) async {
     sends++;
     throw TimeoutException('Delivery unknown');
@@ -246,7 +251,9 @@ void main() {
     expect(api.creates, ['bot']);
 
     // The flow ends and the entry works again.
-    gate.complete({'bot': {'id': 'bot_new', 'name': '研究助手', 'role': ''}});
+    gate.complete({
+      'bot': {'id': 'bot_new', 'name': '研究助手', 'role': ''},
+    });
     await pumpUntil(tester, () => entryEnabled(tester));
     expect(api.creates, ['bot']);
     await tester.tap(find.byIcon(Icons.add));

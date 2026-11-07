@@ -11,13 +11,15 @@ export async function startMobileBotRuntime({ descriptorFd, ownerUid, Database, 
   if (!Array.isArray(dataFds) || dataFds.length !== 4 || dataFds.some((fd) => !Number.isInteger(fd) || fd < 3)) throw Error('mobile_database_grant_invalid');
   addon.setFdVfs(...dataFds);
   dataFds.forEach((fd) => fs.closeSync(fd)); // Before any SQLite locks exist.
-  if (!filesystem || typeof filesystem.close !== 'function' || filesystem.runtimeRoot !== '/mbot-data/runtime') throw Error('mobile_filesystem_required');
+  if (!filesystem || typeof filesystem.close !== 'function' || filesystem.runtimeRoot !== '/mbot-data/runtime' ||
+      filesystem.botFiles?.dataDir !== '/work/.mbot') throw Error('mobile_filesystem_required');
   const snapshotPort = createNativeSnapshotSqlitePort({ ...snapshots,
     openDatabase: createSnapshotFdDatabase({ Database, nativeBinding: addon, closeDescriptor: fs.closeSync }) });
   let handle;
   try {
     handle = await startBuiltinBotRuntimeFromFd({ descriptorFd, expectedOwnerUid: ownerUid,
-      runtimeDataDir: filesystem.runtimeRoot, botDataDir: '/mbot-bot', appVersion: 'android-bot', signal,
+      runtimeDataDir: filesystem.runtimeRoot, botDataDir: filesystem.botFiles.dataDir, mobileFiles: filesystem.botFiles,
+      appVersion: 'android-bot', signal,
       files, nativeBinding: models, connections, onReady,
       nativeSqlite: { open: (options) => new Database('state.db', { ...options, nativeBinding: addon }),
         metadata: (slot) => addon.fdVfsMetadata(slot), backup: snapshotPort.backup,

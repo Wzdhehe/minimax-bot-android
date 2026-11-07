@@ -8864,7 +8864,7 @@ class L10nEn extends L10n {
   String get mobileBotSettings => 'Settings';
 
   @override
-  String get mobileBotModel => 'Model ID';
+  String get mobileBotModel => 'Model';
 
   @override
   String get mobileBotSave => 'Save';
@@ -8960,6 +8960,44 @@ class L10nEn extends L10n {
 
   @override
   String get mobileBotSkinMoon => 'Moon';
+
+  @override
+  String get mobileBotCreateHint => 'Add a new teammate';
+
+  @override
+  String get mobileBotInstructions => 'Instructions';
+
+  @override
+  String get mobileBotInstructionsHint =>
+      'How it should work, what it should produce, and what it should pay attention to';
+
+  @override
+  String get mobileBotModelDefault => 'Follow default model';
+
+  @override
+  String get mobileBotEffort => 'Reasoning effort';
+
+  @override
+  String get mobileBotEffortDefault => 'Model default';
+
+  @override
+  String get mobileBotModelLoadFailed => 'Could not load models. Tap to retry, or create using the default.';
+
+  @override
+  String get mobileBotHelpers => 'Allow background helpers';
+
+  @override
+  String get mobileBotHelpersHint => 'When off, helpers are used only when you ask';
+
+  @override
+  String get mobileBotAttachment => 'Add attachment';
+
+  @override
+  String get mobileBotUploadLimit => 'Up to 10 attachments per message, 16 MiB in total.';
+
+  @override
+  String get mobileBotUploadFailed =>
+      'Attachment upload did not finish. Completed uploads are kept; check before retrying.';
 
   @override
   String get nearbyThisChat => 'This chat';

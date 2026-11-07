@@ -77,6 +77,10 @@ class MiniMaxBotApi {
       request.write(jsonEncode(body));
     }
     final response = await request.close().timeout(const Duration(seconds: 60));
+    return _readResponse(response);
+  }
+
+  Future<Map<String, Object?>> _readResponse(HttpClientResponse response) async {
     final bytes = BytesBuilder(copy: false);
     await for (final chunk in response.timeout(const Duration(seconds: 60))) {
       if (bytes.length + chunk.length > _maxResponse) {
@@ -100,6 +104,55 @@ class MiniMaxBotApi {
   }
 
   Future<Map<String, Object?>> state() => _request('GET', '/api/state');
+
+  /// Upload only a user-selected stream. No device pathname enters HTTP or the
+  /// guest descriptor. The mobile filesystem currently admits 16 MiB per file.
+  static const maxUploadBytes = 16 * 1024 * 1024;
+  Future<Map<String, Object?>> upload(String name, Stream<List<int>> data, {required int length}) async {
+    if (name.isEmpty ||
+        name.length > 200 ||
+        name.contains(RegExp(r'[/\\\x00]')) ||
+        length < 1 ||
+        length > maxUploadBytes) {
+      throw ArgumentError('Invalid attachment');
+    }
+    final request = await _client
+        .openUrl('POST', _uri('/api/uploads', {'name': name}))
+        .timeout(const Duration(seconds: 20));
+    request.followRedirects = false;
+    _headers.forEach(request.headers.set);
+    request.headers.contentType = ContentType.binary;
+    request.contentLength = length;
+    var sent = 0;
+    try {
+      await request.addStream(
+        data.timeout(const Duration(seconds: 60)).map((bytes) {
+          sent += bytes.length;
+          if (sent > length) throw const FormatException('Attachment size changed');
+          return bytes;
+        }),
+      );
+      if (sent != length) throw const FormatException('Attachment size changed');
+      final result = await _readResponse(await request.close().timeout(const Duration(seconds: 60)));
+      final upload = result['upload'];
+      if (upload is! Map ||
+          upload['id'] is! String ||
+          !RegExp(r'^[a-f0-9]{12}-[^/\\\x00]+$').hasMatch(upload['id'] as String) ||
+          (upload['id'] as String).contains('..') ||
+          upload['name'] is! String ||
+          upload['size'] != length ||
+          !['image', 'file'].contains(upload['kind'])) {
+        throw const FormatException('Invalid upload receipt');
+      }
+      return {
+        for (final key in ['id', 'name', 'size', 'kind']) key: upload[key],
+      };
+    } catch (_) {
+      request.abort();
+      rethrow;
+    }
+  }
+
   Future<Map<String, Object?>> models() => _request('GET', '/api/models');
   Future<Map<String, Object?>> usageQuota({bool forceRefresh = false}) =>
       _request('GET', '/api/usage-quota', query: {'refresh': '$forceRefresh'});
@@ -136,7 +189,7 @@ class MiniMaxBotApi {
     String chat,
     String text, {
     required String clientMessageId,
-    List<Map<String, Object?>> attachments = const [],
+    List<String> attachments = const [],
   }) => _request(
     'POST',
     '/api/chats/${_id(chat, _chatId)}/messages',

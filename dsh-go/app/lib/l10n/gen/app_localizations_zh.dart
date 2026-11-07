@@ -8408,7 +8408,7 @@ class L10nZh extends L10n {
   String get mobileBotSettings => '设置';
 
   @override
-  String get mobileBotModel => '模型 ID';
+  String get mobileBotModel => '模型';
 
   @override
   String get mobileBotSave => '保存';
@@ -8504,6 +8504,42 @@ class L10nZh extends L10n {
 
   @override
   String get mobileBotSkinMoon => '月岩';
+
+  @override
+  String get mobileBotCreateHint => '为团队添加一位新搭档';
+
+  @override
+  String get mobileBotInstructions => '详细指令';
+
+  @override
+  String get mobileBotInstructionsHint => '它该怎么工作、输出什么样子、有哪些注意事项';
+
+  @override
+  String get mobileBotModelDefault => '跟随默认模型';
+
+  @override
+  String get mobileBotEffort => '推理强度';
+
+  @override
+  String get mobileBotEffortDefault => '模型默认';
+
+  @override
+  String get mobileBotModelLoadFailed => '模型列表读取失败，点此重试；仍可跟随默认模型创建';
+
+  @override
+  String get mobileBotHelpers => '允许自动使用后台助手';
+
+  @override
+  String get mobileBotHelpersHint => '关闭后仅在你要求时使用';
+
+  @override
+  String get mobileBotAttachment => '添加附件';
+
+  @override
+  String get mobileBotUploadLimit => '每条消息最多10个附件，合计不超过16 MiB。';
+
+  @override
+  String get mobileBotUploadFailed => '附件未上传完成，已上传的附件会保留；请检查后重试。';
 
   @override
   String get nearbyThisChat => '本对话';

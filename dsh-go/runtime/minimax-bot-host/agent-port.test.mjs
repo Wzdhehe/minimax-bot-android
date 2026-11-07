@@ -197,3 +197,34 @@ test('refuses model turns before calling the gateway when no binding is configur
     (error) => error.code === 'native_binding_unavailable');
   assert.deepEqual(calls, []);
 });
+
+test('the trusted Bot policy approves owned asks once without exposing an approval mode to HTTP', async () => {
+  const replies = [], events = [];
+  let late;
+  const gateway = {
+    async run(input) {
+      late = input.onEvent;
+      const ask = { type: 'permission.requested', sessionId: 'owned', requestId: 'request-1' };
+      input.onEvent(ask); input.onEvent(ask);
+      input.onEvent({ type: 'question.asked', sessionId: 'owned', requestId: 'question-1' });
+      return { status: 'finished' };
+    },
+    async models() {}, async answer() {}, async reply(input) { replies.push(input); },
+  };
+  const port = createBotAgentPort({ agent: gateway, caller: { pluginId: 'builtin:minimax-bot', runId: 'r1' },
+    autoApprove: true, ...stubRoute });
+  await port.run({ text: 'work', autoApprove: false }, { onEvent: (event) => events.push(event.type) });
+  assert.deepEqual(replies, [{ caller: { pluginId: 'builtin:minimax-bot', runId: 'r1' }, sessionId: 'owned', requestId: 'request-1', decision: 'allowOnce' }]);
+  assert.deepEqual(events, ['question.asked']);
+  late({ type: 'permission.requested', sessionId: 'owned', requestId: 'after-retirement' });
+  await Promise.resolve(); assert.equal(replies.length, 1);
+});
+
+test('failed automatic approval aborts the run and never reports successful completion', async () => {
+  let signal;
+  const port = createBotAgentPort({ autoApprove: true, ...stubRoute, caller: { pluginId: 'builtin:minimax-bot', runId: 'r1' },
+    agent: { async models() {}, async answer() {}, async reply() { throw Error('fixture'); },
+      async run(input) { signal = input.signal; input.onEvent({ type: 'permission.requested', sessionId: 'owned', requestId: 'req' }); return {}; } } });
+  await assert.rejects(port.run({ text: 'work' }), /bot_permission_reply_failed/);
+  assert.equal(signal.aborted, true);
+});

@@ -201,9 +201,9 @@ class BotController extends ChangeNotifier {
     }
   }
 
-  Future<bool> send(String text) async {
+  Future<bool> send(String text, {List<String> attachments = const []}) async {
     final chat = selectedChat;
-    if (chat == null || sending || text.trim().isEmpty) return false;
+    if (chat == null || sending || (text.trim().isEmpty && attachments.isEmpty)) return false;
     sending = true;
     error = null;
     _changed();
@@ -212,6 +212,7 @@ class BotController extends ChangeNotifier {
         chat,
         text.trim(),
         clientMessageId: 'android-${DateTime.now().microsecondsSinceEpoch}-${_messageSequence++}',
+        attachments: attachments,
       );
       await refresh();
       return true;
@@ -224,8 +225,8 @@ class BotController extends ChangeNotifier {
     }
   }
 
-  Future<void> createBot(String name, String role) async {
-    final response = await api.createBot({'name': name.trim(), 'role': role.trim()});
+  Future<void> createBot(String name, String role, {Map<String, Object?> additional = const {}}) async {
+    final response = await api.createBot({...additional, 'name': name.trim(), 'role': role.trim()});
     await refresh();
     final bot = response['bot'] as Map;
     await select('bot:${bot['id']}');

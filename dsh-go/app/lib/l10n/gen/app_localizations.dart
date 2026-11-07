@@ -15449,7 +15449,7 @@ abstract class L10n {
   /// No description provided for @mobileBotModel.
   ///
   /// In zh, this message translates to:
-  /// **'模型 ID'**
+  /// **'模型'**
   String get mobileBotModel;
 
   /// No description provided for @mobileBotSave.
@@ -15637,6 +15637,78 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'月岩'**
   String get mobileBotSkinMoon;
+
+  /// No description provided for @mobileBotCreateHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'为团队添加一位新搭档'**
+  String get mobileBotCreateHint;
+
+  /// No description provided for @mobileBotInstructions.
+  ///
+  /// In zh, this message translates to:
+  /// **'详细指令'**
+  String get mobileBotInstructions;
+
+  /// No description provided for @mobileBotInstructionsHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'它该怎么工作、输出什么样子、有哪些注意事项'**
+  String get mobileBotInstructionsHint;
+
+  /// No description provided for @mobileBotModelDefault.
+  ///
+  /// In zh, this message translates to:
+  /// **'跟随默认模型'**
+  String get mobileBotModelDefault;
+
+  /// No description provided for @mobileBotEffort.
+  ///
+  /// In zh, this message translates to:
+  /// **'推理强度'**
+  String get mobileBotEffort;
+
+  /// No description provided for @mobileBotEffortDefault.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型默认'**
+  String get mobileBotEffortDefault;
+
+  /// No description provided for @mobileBotModelLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型列表读取失败，点此重试；仍可跟随默认模型创建'**
+  String get mobileBotModelLoadFailed;
+
+  /// No description provided for @mobileBotHelpers.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许自动使用后台助手'**
+  String get mobileBotHelpers;
+
+  /// No description provided for @mobileBotHelpersHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭后仅在你要求时使用'**
+  String get mobileBotHelpersHint;
+
+  /// No description provided for @mobileBotAttachment.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加附件'**
+  String get mobileBotAttachment;
+
+  /// No description provided for @mobileBotUploadLimit.
+  ///
+  /// In zh, this message translates to:
+  /// **'每条消息最多10个附件，合计不超过16 MiB。'**
+  String get mobileBotUploadLimit;
+
+  /// No description provided for @mobileBotUploadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'附件未上传完成，已上传的附件会保留；请检查后重试。'**
+  String get mobileBotUploadFailed;
 
   /// No description provided for @nearbyThisChat.
   ///

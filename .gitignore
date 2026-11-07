@@ -10,3 +10,6 @@ local.properties
 # Python test and tooling bytecode
 __pycache__/
 *.py[cod]
+
+# Installed dependencies for the product runtime bundler, not source assets.
+/dsh-go/tooling/mobile-runtime-bundle/node_modules/

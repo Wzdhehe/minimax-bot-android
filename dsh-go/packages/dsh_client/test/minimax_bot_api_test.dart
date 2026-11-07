@@ -33,6 +33,34 @@ void main() {
     await temp.delete(recursive: true);
   });
 
+  test('uploads binary bytes to the real Bot service and sends only the returned attachment id', () async {
+    final bytes = List<int>.generate(84 * 1024, (i) => i % 256);
+    final upload = await api.upload(
+      'notes.bin',
+      Stream.fromIterable([bytes.sublist(0, 1024), bytes.sublist(1024)]),
+      length: bytes.length,
+    );
+    expect(upload['size'], bytes.length);
+    expect(upload['name'], 'notes.bin');
+    expect(upload.keys, unorderedEquals(['id', 'name', 'size', 'kind']));
+    final bot = (await api.createBot({'name': 'Attachment receiver'}))['bot'] as Map;
+    final response = await api.sendMessage(
+      'bot:${bot['id']}',
+      '',
+      clientMessageId: 'upload-contract-1',
+      attachments: [upload['id'] as String],
+    );
+    final message = response['message'] as Map;
+    expect((message['attachments'] as List).single['id'], upload['id']);
+    expect((message['attachments'] as List).single['size'], bytes.length);
+    await expectLater(api.upload('../private.txt', Stream.value([1]), length: 1), throwsArgumentError);
+    await expectLater(
+      api.upload('too-big.bin', const Stream.empty(), length: MiniMaxBotApi.maxUploadBytes + 1),
+      throwsArgumentError,
+    );
+    await api.deleteBot(bot['id'] as String);
+  });
+
   test('talks to the real MiniMax Bot service for bots, groups and history', () async {
     final initial = await api.state();
     final initialBots = initial['bots'] as List<Object?>;

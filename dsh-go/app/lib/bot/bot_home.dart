@@ -9,10 +9,15 @@ import 'bot_settings_hub.dart';
 import 'bot_schedule_notifications.dart';
 import 'bot_profile.dart';
 import 'bot_avatar.dart';
+import 'bot_create_page.dart';
+import 'bot_attachments.dart';
+
+import 'package:dsh_client/dsh_client.dart' show MiniMaxBotApi;
 
 class BotHome extends StatefulWidget {
-  const BotHome({super.key, required this.controller});
+  const BotHome({super.key, required this.controller, this.pickAttachments = pickBotAttachments});
   final BotController controller;
+  final Future<List<BotPickedAttachment>> Function() pickAttachments;
   @override
   State<BotHome> createState() => _BotHomeState();
 }
@@ -27,6 +32,8 @@ class _BotHomeState extends State<BotHome> {
   /// create request and the refresh that follows it. The entry is disabled
   /// while it runs, and the method refuses a second flow on its own.
   bool _creating = false;
+  bool _uploading = false;
+  final _attachments = <String, List<Map<String, Object?>>>{};
 
   @override
   void initState() {
@@ -53,6 +60,15 @@ class _BotHomeState extends State<BotHome> {
     final role = TextEditingController();
     final members = <String>{};
     try {
+      if (!group) {
+        final route = MaterialPageRoute<Map<String, Object?>>(builder: (_) => BotCreatePage(api: bot.api));
+        final draft = await Navigator.of(context).push(route);
+        await route.completed;
+        if (draft == null || !mounted) return;
+        await bot.createBot(draft['name'] as String, draft['role'] as String, additional: draft);
+        if (mounted) _composer.clear();
+        return;
+      }
       final route = DialogRoute<bool>(
         context: context,
         builder: (context) => StatefulBuilder(
@@ -340,10 +356,49 @@ class _BotHomeState extends State<BotHome> {
   Future<void> _send() async {
     final text = _composer.text;
     final chat = bot.selectedChat;
-    final sent = await bot.send(text);
+    final attachments = List<Map<String, Object?>>.of(_attachments[chat] ?? const []);
+    final sent = await bot.send(text, attachments: attachments.map((row) => row['id'] as String).toList());
     if (!mounted) return;
+    if (sent) {
+      setState(() => _attachments[chat!]?.removeWhere((row) => attachments.any((sent) => sent['id'] == row['id'])));
+    }
     if (sent && _composer.text == text && bot.selectedChat == chat) _composer.clear();
     if (!sent) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.mobileBotSendFailed)));
+  }
+
+  Future<void> _attach() async {
+    final chat = bot.selectedChat;
+    if (chat == null || _uploading || bot.sending) return;
+    setState(() => _uploading = true);
+    try {
+      final selected = await widget.pickAttachments();
+      if (!mounted || bot.selectedChat != chat || selected.isEmpty) return;
+      final previous = _attachments[chat] ?? const <Map<String, Object?>>[];
+      final total =
+          selected.fold<int>(0, (sum, item) => sum + item.length) +
+          previous.fold<int>(0, (sum, item) => sum + (item['size'] as int));
+      if (previous.length + selected.length > 10 ||
+          total > MiniMaxBotApi.maxUploadBytes ||
+          selected.any((item) => item.length < 1)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.mobileBotUploadLimit)));
+        return;
+      }
+      for (final file in selected) {
+        if (!mounted) return;
+        final receipt = await bot.api.upload(file.name, file.data, length: file.length);
+        if (!mounted) return;
+        setState(() {
+          final draft = _attachments.putIfAbsent(chat, () => []);
+          if (!draft.any((row) => row['id'] == receipt['id'])) draft.add(receipt);
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.mobileBotUploadFailed)));
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
   }
 
   Future<void> _profile(String id) async {
@@ -427,6 +482,24 @@ class _BotHomeState extends State<BotHome> {
                             style: const TextStyle(color: Color(0xff81c7b7)),
                           ),
                         SelectableText(message['text']?.toString() ?? ''),
+                        if (message['attachments'] is List)
+                          for (final attachment in (message['attachments'] as List).whereType<Map>())
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.attach_file, size: 16),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      attachment['name']?.toString() ?? context.l10n.mobileBotAttachment,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                         if (message['status'] == 'streaming')
                           const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
                       ],
@@ -437,11 +510,41 @@ class _BotHomeState extends State<BotHome> {
             ),
           ),
         ),
+        if (_uploading) const LinearProgressIndicator(),
+        if ((_attachments[bot.selectedChat] ?? const []).isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  for (final attachment in _attachments[bot.selectedChat]!)
+                    InputChip(
+                      avatar: const Icon(Icons.attach_file, size: 16),
+                      label: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        child: Text(attachment['name'] as String, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                      onDeleted: _uploading || bot.sending
+                          ? null
+                          : () => setState(() => _attachments[bot.selectedChat]?.remove(attachment)),
+                    ),
+                ],
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              IconButton(
+                key: const Key('mbot.chat.attach'),
+                tooltip: context.l10n.mobileBotAttachment,
+                onPressed: _uploading || bot.sending ? null : _attach,
+                icon: const Icon(Icons.add_circle_outline),
+              ),
               Expanded(
                 child: TextField(
                   controller: _composer,
@@ -456,7 +559,7 @@ class _BotHomeState extends State<BotHome> {
               ),
               IconButton(
                 tooltip: context.l10n.mobileBotSend,
-                onPressed: bot.sending ? null : _send,
+                onPressed: bot.sending || _uploading ? null : _send,
                 icon: bot.sending
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.arrow_upward),

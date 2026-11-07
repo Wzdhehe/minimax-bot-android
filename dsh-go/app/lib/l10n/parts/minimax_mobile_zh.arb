@@ -22,7 +22,7 @@
   "mobileBotEmpty": "创建你的第一个 Bot",
   "mobileBotMembers": "选择群成员",
   "mobileBotSettings": "设置",
-  "mobileBotModel": "模型 ID",
+  "mobileBotModel": "模型",
   "mobileBotSave": "保存",
   "mobileBotKeySaved": "已保存 Key；留空保留现有 Key",
   "mobileBotKeyMissing": "请输入你的 MiniMax Key",
@@ -60,5 +60,17 @@
   "mobileBotSkinPixel": "像素",
   "mobileBotSkinSmiley": "笑脸球",
   "mobileBotSkinToys": "玩具",
-  "mobileBotSkinMoon": "月岩"
+  "mobileBotSkinMoon": "月岩",
+  "mobileBotCreateHint": "为团队添加一位新搭档",
+  "mobileBotInstructions": "详细指令",
+  "mobileBotInstructionsHint": "它该怎么工作、输出什么样子、有哪些注意事项",
+  "mobileBotModelDefault": "跟随默认模型",
+  "mobileBotEffort": "推理强度",
+  "mobileBotEffortDefault": "模型默认",
+  "mobileBotModelLoadFailed": "模型列表读取失败，点此重试；仍可跟随默认模型创建",
+  "mobileBotHelpers": "允许自动使用后台助手",
+  "mobileBotHelpersHint": "关闭后仅在你要求时使用",
+  "mobileBotAttachment": "添加附件",
+  "mobileBotUploadLimit": "每条消息最多10个附件，合计不超过16 MiB。",
+  "mobileBotUploadFailed": "附件未上传完成，已上传的附件会保留；请检查后重试。"
 }

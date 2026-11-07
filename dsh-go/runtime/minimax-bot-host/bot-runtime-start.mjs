@@ -15,7 +15,7 @@ const failure = (code) => Object.assign(new Error(code), { code });
  * Bot persistence uses only files; no workspace/media access or guest listener.
  */
 export async function startBotRuntimeFromFd({ descriptorFd, expectedOwnerUid, runtimeDataDir, botDataDir,
-  appVersion, nativeBinding, nativeSqlite, files, connections, onReady, signal, logger, startRuntime } = {}) {
+  appVersion, nativeBinding, nativeSqlite, files, connections, onReady, signal, logger, startRuntime, mobileFiles = null } = {}) {
   const descriptor = readRuntimeDescriptorFd({ fd: descriptorFd, expectedOwnerUid });
   if (descriptor.broker !== null ||
       typeof runtimeDataDir !== 'string' || !isAbsolute(runtimeDataDir) || runtimeDataDir.includes('\0') ||
@@ -88,7 +88,7 @@ export async function startBotRuntimeFromFd({ descriptorFd, expectedOwnerUid, ru
     }
     ensureLive();
     service = await startBotService({ port: descriptor.port, authToken: descriptor.token,
-      dataDir: botDataDir, fileMode: 'unavailable', ...persistence, agent: runtime.agent,
+      dataDir: botDataDir, fileMode: mobileFiles ? 'mobile' : 'unavailable', mobileFiles, ...persistence, agent: runtime.agent,
       signal: controller.signal, logger, fdTransport: transport });
     ensureLive();
     ingress = startBotFdIngress({ transport, next: () => connections.next(), signal: controller.signal });
