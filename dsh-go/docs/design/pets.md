@@ -1,7 +1,9 @@
+> 历史上游设计参考：MiniMax Bot 已移除内置桌宠素材及生成工具。当前实现不提供内置宠物；协议源码保留用于学习。参见 ../../ASSETS.md。
+
 # dsh-go 宠物系统设计
 
 > 2026-10-25。本文是宠物系统实现规格的正式版，相对规格改过的地方集中列在 §12。
-> 素材：Deepy 小鲸鱼（Clawd on Desk 主题包）、鲸娘（dshtui.com 序列帧），源文件在 `app/tool/pet_src/`，作者与授权见仓库根目录的 `ASSETS.md`。
+> 素材：Deepy 小鲸鱼（Clawd on Desk 主题包）、鲸娘（dshtui.com 序列帧），源文件已移除，作者与授权见仓库根目录的 `ASSETS.md`。
 
 ## 0. 结论
 
@@ -201,7 +203,7 @@ app/assets/pets/<id>/<anim>.png     # 序列帧图，默认单行横条；帧多
 
 ### 3.2 pack.json（schema 1）
 
-下面是 `deepy-whale` 的实际内容（`animations` 只列一段，`frames` 截短）。完整格式、每个字段的解析规则以 `app/lib/pets/pet_pack.dart` 为准，生成工具是 `app/tool/make_pet_pack.py`。
+下面是 `deepy-whale` 的实际内容（`animations` 只列一段，`frames` 截短）。完整格式、每个字段的解析规则以 `app/lib/pets/pet_pack.dart` 为准，原生成工具已随素材移除。
 
 ```json
 {
@@ -338,7 +340,7 @@ Codex Pet 的图集是 8 列 × 9 行，每格 192×208。也有 11 行的 v2 �
 | tickle | jumping |
 | drag | 按拖动方向用 running-left 或 running-right |
 
-Clawd 主题 zip 的导入走宠物包转换工具（`app/tool/make_pet_pack.py`），在手机端运行之前要先确定 APNG 和 GIF 怎么解码。
+Clawd 主题 zip 的导入走原宠物包转换工具（当前分支已移除），在手机端运行之前要先确定 APNG 和 GIF 怎么解码。
 
 ## 4. 状态归约 `PetMood`
 

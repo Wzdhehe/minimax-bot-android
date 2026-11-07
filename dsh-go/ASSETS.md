@@ -1,23 +1,25 @@
-# 品牌与吉祥物素材
+# 品牌与吉祥物素材 / Brand and mascot assets
 
-DSH Go 的源码以 AGPL-3.0 发布（见 [LICENSE](LICENSE)），但下面这些品牌和美术素材**不在 AGPL-3.0 授权范围内**。它们的版权归 ccch1mneyyy（DSH-TUI）所有，保留所有权利。
+MiniMax Bot 已从当前源码树移除上游 DSH Go / DSH-TUI 非 AGPL 美术素材：
 
-你可以为了构建、测试和运行本仓库而使用它们。如果你以修改版或衍生作品的身份再发布，请换成自己的名称和素材。
+- 品牌 SVG、生成的 Dart 鱼尾/气泡路径和原版 Android 启动图标；
+- Deepy 小鲸鱼、鲸娘的源图与宠物包，以及求 Star 的鲸娘贴纸；
+- 鲸尾活动图（包括 DeepSeek 官方图标）及其源图；
+- 上游 README 的展示图、桌宠动图、社交预览图和社群二维码；
+- 依赖这些原图的生成脚本。上游展示网站不在当前源码树中。
 
-| 素材 | 位置 | 来源 |
-|---|---|---|
-| DSH Go 品牌标识（鱼尾与气泡） | `app/assets/brand/`；由它生成的 `app/lib/ui/shell/brand_glyph.g.dart`、启动图标 `app/android/app/src/main/res/mipmap-*/`、`drawable/ic_launcher_*` | DSH Go 自己的品牌图形 |
-| Deepy 小鲸鱼（像素鲸鱼桌宠） | 源文件 `app/tool/pet_src/deepy-whale/`；宠物包 `app/assets/pets/deepy-whale/` | DSH-TUI 的吉祥物。源文件按 [Clawd on Desk](https://github.com/rullerzhou-afk/clawd-on-desk) 的主题包格式制作，只沿用了它的格式 |
-| 鲸娘（像素鲸鱼娘表情） | 源文件 `app/tool/pet_src/whale-girl/`（`index.html` 是 https://dshtui.com/pets/whale-girl-emoji/ 原页面，里面有事件对应关系和逐帧时长）；宠物包 `app/assets/pets/whale-girl/`；求 Star 弹窗的贴纸 `app/assets/star/star_whale.webp` | DSH-TUI 的吉祥物，最初发布在 dshtui.com |
+启动图标和界面品牌标记已替换为本分支原创的几何字母 **M**（不使用字体或上游图片），四种图标变体保留原资源名及 adaptive-icon XML。可运行 `python3 app/tool/make_neutral_icons.py` 重建。活动指示器改为代码绘制的圆点，Star 提示改用 Material 星形。应用不提供内置桌宠；旧宠物偏好迁移为「不显示」。通用宠物协议/渲染器源码保留用于学习和测试，测试只用数字几何夹具与纯色矩形，不打包原图。
 
-鲸鱼尾巴图形（`app/assets/whale/`，源文件 `app/tool/whale_src/`）：其中一个是 DeepSeek 的官方图标，版权和商标归 DeepSeek 所有，仅用于表明本应用连接的是 DeepSeek 服务；其余几张是基于它的二创。它们同样不在 AGPL-3.0 授权范围内。如果权利人提出要求，我们会替换。
+源码继续遵守 [AGPL-3.0](LICENSE) 及各子目录自己的许可证。删除素材不改变上游权利：旧版本中的 DSH Go / DSH-TUI 品牌和吉祥物不属于 AGPL 授权，DeepSeek 商标仍归其权利人；**Git 历史未清除**。第三方代码、字体、图标及运行时通知继续见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-这些鲸鱼形象是 DSH-TUI 自己的非官方形象，和 DeepSeek 没有关系，也不代表 DeepSeek。
+## English
 
-go.dshtui.com 首页（`site/home/`）由社区开发者 ClayGao233 / 采云师烧饼制作，网页本身的来源和使用条件见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。其中的 `dist/assets/dsh-go.svg`（`app/assets/brand/tile.svg` 的副本）、`dist/assets/dsh-go-pop.svg`（由品牌图形改出的立体版）和功能展示图里的品牌图形、鲸娘形象同样适用本页的条件。
+The current MiniMax Bot source tree removes the upstream non-AGPL DSH Go / DSH-TUI brand masters and generated glyphs, original launcher artwork, both mascot source/packed images, Star sticker, whale activity sprites (including the DeepSeek icon), README showcase/social/QR images, and generators depending on them. The upstream showcase website is not present in this checkout.
 
-仓库首页 README 用到的展示素材 `docs/assets/`（首图、社交预览图、桌宠动图、社群二维码）同样适用本页的条件：可以随本仓库一起查看和转载介绍，不要用在你自己发布的产品上。
+Original geometric M placeholders replace launcher and in-app marks, procedural dots replace activity artwork, and a Material star replaces the sticker. There are no built-in pets; obsolete saved selections migrate to none. Generic renderer/protocol code and test-only numeric/rectangle fixtures remain. Existing source and third-party licenses are preserved; removing files does not grant rights to upstream artwork or trademarks. Git history has not been rewritten.
 
-宠物包由 `app/tool/make_pet_pack.py` 从 `app/tool/pet_src/` 生成，品牌图形的代码由 `app/tool/make_brand_mark.py` 从 `app/assets/brand/` 生成。工具脚本本身和其他源码一样，以 AGPL-3.0 发布。
+## 验证边界 / Verification boundary
 
-第三方的代码、字体、图标和运行时组件见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本分支尚需兼容 Flutter / Dart SDK 进行 widget 与 golden 验证。现有 golden 基线可能含旧版图形，不能据此宣称全仓已完成美术权利清理或可立即公开发布；详细验证记录见根目录 `docs/handoff/T-Remove-Brand-Assets.md`。
+
+Widget and golden verification needs a compatible Flutter / Dart SDK. Existing golden baselines may embed old artwork; this change is not a full-history or screenshot-rights clearance. See the root handoff note for exact verification limits.

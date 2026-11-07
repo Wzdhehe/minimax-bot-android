@@ -50,7 +50,9 @@ used with the author's permission.
 | 许可 | 作者交付给本项目用于 go.dshtui.com；交付包未附许可证声明，不在本仓库的 AGPL-3.0 授权范围内 |
 | 用途 | `https://go.dshtui.com/` 首页 |
 
-本仓库位置：`site/home/`。在交付版本上的改动：产品名统一写作「DSH Go」，填写作者、下载、仓库、贡献者和分享元信息（`dist/site-config.js`），加入页面 CSP、下载二维码、第二个下载链接和 Star 数（`dist/index.html`、`dist/author-ui.js`、`dist/refinements.css` 末尾），统一换行符；没有发布的工作文件（作者说明、备份脚本、未用到的图片）未收入。功能展示图依据 DSH Go 的界面截图制作，含 DSH Go 的品牌图形和鲸娘形象（见 `ASSETS.md`）。页底保留作者的「网页开发」署名。
+上游曾在 `site/home/` 收录该交付网站；当前 MiniMax Bot 源码树不含此目录。本次移除上游品牌、吉祥物和 README 展示图片，未将它们重新授权为 AGPL。此条仅保留来源记录；当前替代图形与移除范围见 [ASSETS.md](ASSETS.md)。
+
+The delivered upstream showcase site is not included in this MiniMax Bot checkout. Upstream brand/mascot and README artwork has been removed, not relicensed. This notice preserves provenance only; see ASSETS.md for replacements and scope.
 
 ### PiPilot（MIT）
 
@@ -324,7 +326,7 @@ GPL / LGPL 组件的对应源码：proot、libtalloc、libandroid-shmem 的二�
 
 ## 五、格式兼容与致谢（未复制代码）
 
-- **Clawd on Desk**（https://github.com/rullerzhou-afk/clawd-on-desk，AGPL-3.0）：桌宠的主题包格式、状态名、优先级与时长默认值与它兼容，宠物包可以在两边通用。本项目没有复制它的代码。
+- **Clawd on Desk**（https://github.com/rullerzhou-afk/clawd-on-desk，AGPL-3.0）：桌宠的主题包格式、状态名、优先级与时长默认值与它兼容，通用协议兼容性保留，但 MiniMax Bot 已移除内置宠物素材。本项目没有复制它的代码。
 - **Streamdown**（https://github.com/vercel/streamdown）：`app/lib/ui/chat/render/stream_repair.dart` 修补流式 Markdown 末尾的方式参照了它的 `remend`。
 - **DS Bot**：dsh-ui 组件的名称与 DS Bot 一致。
 - **Open-Meteo**（https://open-meteo.com，数据 CC BY 4.0）：示例插件 `examples/plugins/dsh-go-example-weather` 使用它的天气数据，卡片上注明来源。

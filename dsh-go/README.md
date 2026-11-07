@@ -1,12 +1,11 @@
-<p align="center">
-  <b>简体中文</b> · <a href="README.en.md">English</a>
-</p>
+# MiniMax Bot：上游来源文档
+
+> 本目录来自 [DSH Go](https://github.com/ccch1mneyyy/dsh-go)，保留源码来源及许可证。
+> MiniMax Bot 已移除上游非 AGPL 品牌、桌宠、展示图和二维码，不内置桌宠。
+> 下文保留上游功能背景，不是当前产品承诺；当前状态见 [根目录 README](../README.md) 和 [交接](../docs/HANDOFF.md)。素材说明见 [ASSETS.md](ASSETS.md)。
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-zh-dark.webp">
-    <img src="docs/assets/hero-zh-light.webp" alt="DSH Go：把 DeepSeek Harness 装进口袋" width="100%">
-  </picture>
+  <b>简体中文</b> · <a href="README.en.md">English</a>
 </p>
 
 <p align="center">
@@ -18,20 +17,6 @@
   <a href="LICENSE"><img alt="许可证 AGPL-3.0" src="https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-AGPL--3.0-4B67B4?style=flat-square&labelColor=2B3245"></a>
   <a href="https://forum.dshtui.com"><img alt="论坛" src="https://img.shields.io/badge/%E8%AE%BA%E5%9D%9B-forum.dshtui.com-4B67B4?style=flat-square&labelColor=2B3245"></a>
   <a href="https://qm.qq.com/q/OEy2RqZnqY"><img alt="QQ 群 1132118290" src="https://img.shields.io/badge/QQ%20%E7%BE%A4-1132118290-4B67B4?style=flat-square&logo=tencentqq&logoColor=white&labelColor=2B3245"></a>
-</p>
-
-<br>
-
-<h3 align="center">Deepy 和鲸娘，陪你干活</h3>
-
-<p align="center">干活时敲代码，做完来个空翻，等你确认会举手。打开「App 外显示」，它们还会跟你到桌面。</p>
-
-<p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-deepy-typing-zh-dark.gif"><img src="docs/assets/pet-deepy-typing-zh-light.gif" width="168" alt="Deepy 敲代码"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-deepy-happy-zh-dark.gif"><img src="docs/assets/pet-deepy-happy-zh-light.gif" width="168" alt="Deepy 完成"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-deepy-notification-zh-dark.gif"><img src="docs/assets/pet-deepy-notification-zh-light.gif" width="168" alt="Deepy 等你确认"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-deepy-sleeping-zh-dark.gif"><img src="docs/assets/pet-deepy-sleeping-zh-light.gif" width="168" alt="Deepy 睡觉"></picture>
-</p>
-
-<p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-girl-typing-zh-dark.gif"><img src="docs/assets/pet-girl-typing-zh-light.gif" width="168" alt="鲸娘 敲代码"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-girl-happy-zh-dark.gif"><img src="docs/assets/pet-girl-happy-zh-light.gif" width="168" alt="鲸娘 完成"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-girl-notification-zh-dark.gif"><img src="docs/assets/pet-girl-notification-zh-light.gif" width="168" alt="鲸娘 等你确认"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-girl-sleeping-zh-dark.gif"><img src="docs/assets/pet-girl-sleeping-zh-light.gif" width="168" alt="鲸娘 睡觉"></picture>
 </p>
 
 <br>
@@ -64,25 +49,11 @@
 
 <p align="center">内置 Linux 环境，免 Root、免 Termux。电脑上的 DSH，也能一键切过去接着用。</p>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-remote-zh-dark.webp">
-    <img src="docs/assets/f-remote-zh-light.webp" width="100%" alt="本机对话、切换主机、电脑上的对话">
-  </picture>
-</p>
-
 <br>
 
 <h3 align="center">插话、打断，过程自动收好</h3>
 
 <p align="center">回复中途也能插话，排队的消息随时「立即发送」。做完的过程折叠成一行。</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-steer-zh-dark.webp">
-    <img src="docs/assets/f-steer-zh-light.webp" width="100%" alt="生成中排队一条消息；完成后过程折叠">
-  </picture>
-</p>
 
 <br>
 
@@ -90,25 +61,11 @@
 
 <p align="center">和官方网页版一键切换，停在同一段对话，下次打开还是你上次用的那个。</p>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-web-zh-dark.webp">
-    <img src="docs/assets/f-web-zh-light.webp" width="100%" alt="同一段对话的原生界面与网页版">
-  </picture>
-</p>
-
 <br>
 
 <h3 align="center">分享卡、对话回放和链接</h3>
 
 <p align="center">回复一键做成分享卡。整段对话生成链接，对方在浏览器里回放，链接端到端加密。</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-share-zh-dark.webp">
-    <img src="docs/assets/f-share-zh-light.webp" width="100%" alt="分享卡、对话回放、我的分享链接">
-  </picture>
-</p>
 
 <br>
 
@@ -116,25 +73,11 @@
 
 <p align="center">横屏手机和平板重新排版：侧栏常驻，内容居中，弹出键盘也不挤。</p>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-adaptive-zh-dark.webp">
-    <img src="docs/assets/f-adaptive-zh-light.webp" width="100%" alt="平板与横屏手机">
-  </picture>
-</p>
-
 <br>
 
 <h3 align="center">主题配色与桌面图标</h3>
 
 <p align="center">六套主题色，也能跟随壁纸或自选颜色。四款桌面图标，三种功能图标风格。</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-theme-zh-dark.webp">
-    <img src="docs/assets/f-theme-zh-light.webp" width="100%" alt="主题设置与两种主题色">
-  </picture>
-</p>
 
 <br>
 
@@ -142,25 +85,11 @@
 
 <p align="center">全部界面支持英文，在设置里切换，默认跟随系统。</p>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-lang-dark.webp">
-    <img src="docs/assets/f-lang-light.webp" width="100%" alt="同一段对话的中文与英文界面">
-  </picture>
-</p>
-
 <br>
 
 <h3 align="center">手机操控</h3>
 
 <p align="center">看屏幕、帮你点，三档确认随你选。付款、密码和验证码，永远交还给你。</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-phone-zh-dark.webp">
-    <img src="docs/assets/f-phone-zh-light.webp" width="100%" alt="手机操控与确认方式">
-  </picture>
-</p>
 
 <br>
 
@@ -286,7 +215,6 @@ DSH_BETA_TOKEN_FILE= bash tooling/build-apk.sh --dry-run -f all
 | `sdk/plugin-kit/` | 原生插件作者工具包；在仓库中使用，未发布到 npm |
 | `examples/plugins/` | 插件示例 |
 | `docs/guide/`、`docs/plugins/` | 用户指南与插件开发文档 |
-| `docs/assets/` | 本页用到的展示图、桌宠动图和社群二维码 |
 | `tooling/` | 工具链、APK 构建与诊断脚本 |
 | `services/`、`site/`、`infra/` | 配套分享服务、网站和部署材料 |
 
@@ -304,10 +232,6 @@ DSH_BETA_TOKEN_FILE= bash tooling/build-apk.sh --dry-run -f all
 - **QQ 群**：`1132118290`（[点此加群](https://qm.qq.com/q/OEy2RqZnqY)）
 - **微信群**：扫下方二维码，过期请加 QQ 群
 <!-- Telegram：链接待定，拿到后加一行 -->
-
-<p align="center">
-  <a href="https://qm.qq.com/q/OEy2RqZnqY"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/qr-qq-zh-dark.webp"><img src="docs/assets/qr-qq-zh-light.webp" width="300" alt="QQ 群 DSH-Go！！，群号 1132118290"></picture></a>&emsp;&emsp;<picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/qr-wechat-zh-dark.webp"><img src="docs/assets/qr-wechat-zh-light.webp" width="300" alt="微信群 DSHGo 2群"></picture>
-</p>
 
 <p align="center">
   <sub>QQ 群号 <code>1132118290</code>，电脑上可<a href="https://qm.qq.com/q/OEy2RqZnqY">直接点此加群</a>。微信群二维码每周更新，过期请加 QQ 群。</sub>

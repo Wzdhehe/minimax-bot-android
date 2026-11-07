@@ -1,12 +1,11 @@
-<p align="center">
-  <a href="README.md">简体中文</a> · <b>English</b>
-</p>
+# MiniMax Bot: upstream reference
+
+> This directory derives from [DSH Go](https://github.com/ccch1mneyyy/dsh-go); source attribution and licenses are preserved.
+> MiniMax Bot removes upstream non-AGPL brand artwork, pets, showcase images and QR codes, and ships no built-in pets.
+> The upstream background below is not a current-product promise. See the [root README](../README.md), [handoff](../docs/HANDOFF.md), and [asset notice](ASSETS.md).
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-en-dark.webp">
-    <img src="docs/assets/hero-en-light.webp" alt="DSH Go: DeepSeek Harness, in your pocket" width="100%">
-  </picture>
+  <a href="README.md">简体中文</a> · <b>English</b>
 </p>
 
 <p align="center">
@@ -18,20 +17,6 @@
   <a href="LICENSE"><img alt="License AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-4B67B4?style=flat-square&labelColor=2B3245"></a>
   <a href="https://forum.dshtui.com"><img alt="Forum" src="https://img.shields.io/badge/forum-forum.dshtui.com-4B67B4?style=flat-square&labelColor=2B3245"></a>
   <a href="https://qm.qq.com/q/OEy2RqZnqY"><img alt="QQ group 1132118290" src="https://img.shields.io/badge/QQ%20group-1132118290-4B67B4?style=flat-square&logo=tencentqq&logoColor=white&labelColor=2B3245"></a>
-</p>
-
-<br>
-
-<h3 align="center">Deepy and Whale girl keep you company</h3>
-
-<p align="center">They code, flip, wave and nap along with DSH, and can follow you to the home screen.</p>
-
-<p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-deepy-typing-en-dark.gif"><img src="docs/assets/pet-deepy-typing-en-light.gif" width="168" alt="Deepy coding"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-deepy-happy-en-dark.gif"><img src="docs/assets/pet-deepy-happy-en-light.gif" width="168" alt="Deepy done"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-deepy-notification-en-dark.gif"><img src="docs/assets/pet-deepy-notification-en-light.gif" width="168" alt="Deepy needs you"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-deepy-sleeping-en-dark.gif"><img src="docs/assets/pet-deepy-sleeping-en-light.gif" width="168" alt="Deepy asleep"></picture>
-</p>
-
-<p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-girl-typing-en-dark.gif"><img src="docs/assets/pet-girl-typing-en-light.gif" width="168" alt="Whale girl coding"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-girl-happy-en-dark.gif"><img src="docs/assets/pet-girl-happy-en-light.gif" width="168" alt="Whale girl done"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-girl-notification-en-dark.gif"><img src="docs/assets/pet-girl-notification-en-light.gif" width="168" alt="Whale girl needs you"></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/pet-girl-sleeping-en-dark.gif"><img src="docs/assets/pet-girl-sleeping-en-light.gif" width="168" alt="Whale girl asleep"></picture>
 </p>
 
 <br>
@@ -64,25 +49,11 @@
 
 <p align="center">A Linux environment built in, no root and no Termux. Switch to the DSH on your computer in one tap.</p>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-remote-en-dark.webp">
-    <img src="docs/assets/f-remote-en-light.webp" width="100%" alt="A chat on the phone, the host switcher, a chat on the computer">
-  </picture>
-</p>
-
 <br>
 
 <h3 align="center">Chime in, interrupt, stay tidy</h3>
 
 <p align="center">Send a message while DSH is replying, and tap "Send now" whenever you like. Finished steps fold into one line.</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-steer-en-dark.webp">
-    <img src="docs/assets/f-steer-en-light.webp" width="100%" alt="A queued message during a reply; the folded process after it">
-  </picture>
-</p>
 
 <br>
 
@@ -90,25 +61,11 @@
 
 <p align="center">Switch between the native app and the official web interface on the same chat. It reopens in whichever you used last.</p>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-web-en-dark.webp">
-    <img src="docs/assets/f-web-en-light.webp" width="100%" alt="The same chat in the native and the web interface">
-  </picture>
-</p>
-
 <br>
 
 <h3 align="center">Share cards, replays and links</h3>
 
 <p align="center">Turn a reply into a share card. Share a whole chat as a link that replays in any browser, end-to-end encrypted.</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-share-en-dark.webp">
-    <img src="docs/assets/f-share-en-light.webp" width="100%" alt="A share card, a chat replay and the list of shared links">
-  </picture>
-</p>
 
 <br>
 
@@ -116,25 +73,11 @@
 
 <p align="center">New layouts for landscape phones and tablets: the sidebar stays, content stays centered, the keyboard never crowds.</p>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-adaptive-en-dark.webp">
-    <img src="docs/assets/f-adaptive-en-light.webp" width="100%" alt="A tablet and a phone on its side">
-  </picture>
-</p>
-
 <br>
 
 <h3 align="center">Colors and home screen icons</h3>
 
 <p align="center">Six accent colors, your wallpaper's, or your own. Four home screen icons and three icon styles.</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-theme-en-dark.webp">
-    <img src="docs/assets/f-theme-en-light.webp" width="100%" alt="Theme settings and two accent colors">
-  </picture>
-</p>
 
 <br>
 
@@ -142,25 +85,11 @@
 
 <p align="center">The whole app speaks both. It follows your system, or pick one in Settings.</p>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-lang-dark.webp">
-    <img src="docs/assets/f-lang-light.webp" width="100%" alt="The same chat in Chinese and in English">
-  </picture>
-</p>
-
 <br>
 
 <h3 align="center">Phone control</h3>
 
 <p align="center">DSH reads the screen and taps for you. Payments, passwords and codes always stay with you.</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/f-phone-en-dark.webp">
-    <img src="docs/assets/f-phone-en-light.webp" width="100%" alt="Phone control and its confirmation modes">
-  </picture>
-</p>
 
 <br>
 
@@ -286,7 +215,6 @@ DSH_BETA_TOKEN_FILE= bash tooling/build-apk.sh --dry-run -f all
 | `sdk/plugin-kit/` | Native plugin authoring kit, used from the repository and not published to npm |
 | `examples/plugins/` | Example plugins |
 | `docs/guide/`, `docs/plugins/` | User and plugin development guides |
-| `docs/assets/` | Showcase images, pet animations and community QR codes used on this page |
 | `tooling/` | Toolchain, APK build and diagnostic scripts |
 | `services/`, `site/`, `infra/` | Companion sharing service, website and deployment materials |
 
@@ -304,10 +232,6 @@ Report security issues through [SECURITY.en.md](SECURITY.en.md). Keep vulnerabil
 - **QQ group**: `1132118290` ([join](https://qm.qq.com/q/OEy2RqZnqY))
 - **WeChat group**: scan the code below; if it has expired, join the QQ group
 <!-- Telegram: link to come, add a line here -->
-
-<p align="center">
-  <a href="https://qm.qq.com/q/OEy2RqZnqY"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/qr-qq-en-dark.webp"><img src="docs/assets/qr-qq-en-light.webp" width="300" alt="QQ group DSH-Go!!, number 1132118290"></picture></a>&emsp;&emsp;<picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/qr-wechat-en-dark.webp"><img src="docs/assets/qr-wechat-en-light.webp" width="300" alt="WeChat group DSHGo 2群"></picture>
-</p>
 
 <p align="center">
   <sub>QQ group <code>1132118290</code>. On a computer, <a href="https://qm.qq.com/q/OEy2RqZnqY">join with one click</a>. The WeChat code changes every week; if it has expired, join the QQ group.</sub>
