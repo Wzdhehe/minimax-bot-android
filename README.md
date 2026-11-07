@@ -57,3 +57,13 @@ javac -cp "$JSON_JAR" -d /tmp/minimax-tests app/src/main/java/com/example/minima
 java -cp "$JSON_JAR:/tmp/minimax-tests" com.example.minimaxbot.AgentTest
 java -cp "$JSON_JAR:/tmp/minimax-tests" com.example.minimaxbot.AcpClientTest
 ```
+
+## 许可证
+
+本仓库源码以 [GNU AGPL-3.0](LICENSE) 发布（与 `dsh-go/` 的 DSH Go 基线一致）。例外与补充：
+
+- `dsh-go/` 中的品牌、吉祥物等美术素材不在 AGPL-3.0 范围内，见 [dsh-go/ASSETS.md](dsh-go/ASSETS.md)。
+- 第三方代码、字体与运行时组件各按其原许可证，见 [dsh-go/THIRD_PARTY_NOTICES.md](dsh-go/THIRD_PARTY_NOTICES.md)。
+- 子目录自带 LICENSE 的（如 `packages/mbot-workspace-guard/`、`dsh-go/sdk/plugin-kit/`）以该文件为准。
+
+分发 APK 时须按 AGPL-3.0 第 6 条提供对应源码。
