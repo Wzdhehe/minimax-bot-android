@@ -58,7 +58,7 @@ class PetSettingsPage extends ConsumerWidget {
     return AppPage.list(
       title: l10n.botsPets,
       children: [
-        SettingsSection(footer: Text(l10n.botsPetSource), children: const [PetPicker()]),
+        const SettingsSection(children: [PetPicker()]),
         ExpandReveal(
           open: prefs.enabled,
           child: Column(

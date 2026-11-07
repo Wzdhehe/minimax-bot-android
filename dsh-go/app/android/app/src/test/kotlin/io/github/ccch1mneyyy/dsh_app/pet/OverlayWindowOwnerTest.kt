@@ -344,13 +344,13 @@ class OverlayWindowOwnerTest {
     @Test fun resettingProducerClearsTargetAndActiveStateUntilFreshPush() {
         val machine = OverlayMachine().apply { enabled = true; alwaysShow = true; canHost = true; hasPet = true }
         machine.onForeground(false, 1_000)
-        machine.onPush(PetPush("whale-girl", "working", 1, null, "old-session", "old-host", true, "medium"), 1_001)
+        machine.onPush(PetPush("test-rectangle-1x", "working", 1, null, "old-session", "old-host", true, "medium"), 1_001)
         assertEquals(Visibility.SHOWN, machine.decide(1_002).visibility)
         machine.resetProducer()
         assertNull(machine.last)
         assertEquals(Visibility.HIDDEN, machine.decide(1_003).visibility)
         assertEquals(0L, machine.lastActiveAt)
-        machine.onPush(PetPush("whale-girl", "working", 1, null, "new-session", "new-host", true, "medium"), 1_004)
+        machine.onPush(PetPush("test-rectangle-1x", "working", 1, null, "new-session", "new-host", true, "medium"), 1_004)
         assertEquals("new-session", machine.last?.sessionId)
         assertEquals(Visibility.SHOWN, machine.decide(1_005).visibility)
     }

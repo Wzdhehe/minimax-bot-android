@@ -31,7 +31,7 @@ void main() {
         ),
         active: true,
         foreground: false,
-        packId: 'deepy-whale',
+        packId: 'test-rectangle-5x',
         size: PetSize.large,
         quiet: false,
         reduceMotion: true,
@@ -41,7 +41,7 @@ void main() {
       final args = native.calls.single.arguments as Map;
       expect(args['state'], 'working');
       expect(args['tier'], 2);
-      expect(args['packId'], 'deepy-whale');
+      expect(args['packId'], 'test-rectangle-5x');
       expect(args['size'], 'large');
       expect(args['active'], isTrue);
       expect(args['reduceMotion'], isTrue);

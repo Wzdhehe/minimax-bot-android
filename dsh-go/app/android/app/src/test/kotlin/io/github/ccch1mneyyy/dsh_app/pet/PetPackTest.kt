@@ -6,7 +6,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
-import java.io.File
 
 class PetPackTest {
     private fun anim(name: String, frames: Int, box: String = """{"x": 12, "y": 12, "w": 52, "h": 49}""", loop: Boolean = true, scale: Int = 1): String {
@@ -17,7 +16,7 @@ class PetPackTest {
     }
 
     private val json = """
-        {"schema": 1, "id": "whale-girl", "name": "鲸娘", "pixelArt": true, "scale": 1,
+        {"schema": 1, "id": "test-rectangle-1x", "name": "Test rectangle 1x", "pixelArt": true, "scale": 1,
          "canvas": {"w": 69, "h": 66}, "anchor": {"x": 35.5, "baseline": 60},
          "contentBox": {"x": 12, "y": 12, "w": 52, "h": 49},
          "animations": {${listOf(
@@ -37,8 +36,8 @@ class PetPackTest {
 
     @Test fun parsesTheRuntimeFormat() {
         val p = PetPack.parse(json)
-        assertEquals("whale-girl", p.id)
-        assertEquals("鲸娘", p.name)
+        assertEquals("test-rectangle-1x", p.id)
+        assertEquals("Test rectangle 1x", p.name)
         assertTrue(p.pixelArt)
         assertTrue(p.crisp)
         assertEquals(1, p.scale)
@@ -165,7 +164,7 @@ class PetPackTest {
         }
         // A high-ratio pack is still pixel art: always whole.
         val hiRes = PetPack.parse(
-            """{"schema": 1, "id": "deepy-whale", "pixelArt": true, "scale": 5, "canvas": {"w": 52, "h": 52},
+            """{"schema": 1, "id": "test-rectangle-5x", "pixelArt": true, "scale": 5, "canvas": {"w": 52, "h": 52},
                 "contentBox": {"x": 12, "y": 26, "w": 36, "h": 22},
                 "animations": {"idle": {"sheet": "idle.png", "frameW": 180, "frameH": 120, "cols": 21,
                   "box": {"x": 12, "y": 26, "w": 36, "h": 24}, "frames": [{"i": 0, "ms": 50}]}}}""",
@@ -188,14 +187,14 @@ class PetPackTest {
     @Test fun screenScaleMatchesTheAppForTheShippedPacks() {
         val packs = shipped()
         val expected = mapOf(
-            "whale-girl" to mapOf(
+            "test-rectangle-1x" to mapOf(
                 2.0f to listOf(1, 2, 3),
                 2.625f to listOf(1, 2, 3),
                 2.75f to listOf(1, 2, 3),
                 3.0f to listOf(1, 2, 3),
                 3.5f to listOf(2, 3, 4),
             ),
-            "deepy-whale" to mapOf(
+            "test-rectangle-5x" to mapOf(
                 2.0f to listOf(2, 3, 4),
                 2.625f to listOf(3, 4, 5),
                 2.75f to listOf(3, 4, 5),
@@ -225,7 +224,7 @@ class PetPackTest {
             "[]",
             json.replace("\"schema\": 1", "\"schema\": 2"),
             json.replace("\"scale\": 1,", ""),
-            json.replace("\"id\": \"whale-girl\",", ""),
+            json.replace("\"id\": \"test-rectangle-1x\",", ""),
             // A state naming a missing animation.
             json.replace("\"waking\": [\"waking\"]", "\"waking\": [\"yawn\"]"),
             json.replace("\"tapLeft\": \"poke-left\"", "\"tapLeft\": \"poke\""),
@@ -244,25 +243,17 @@ class PetPackTest {
         }
     }
 
-    /** The bundled packs, by id, with their folder. */
-    private fun shippedDirs(): Map<String, Pair<File, PetPack>> {
-        val root = generateSequence(File("").absoluteFile) { it.parentFile }.map { File(it, "app/assets/pets") }.firstOrNull { it.isDirectory }
-            ?: generateSequence(File("").absoluteFile) { it.parentFile }.map { File(it, "assets/pets") }.firstOrNull { it.isDirectory }
-            ?: return emptyMap()
-        return root.listFiles { f -> File(f, "pack.json").isFile }.orEmpty().associate { dir ->
-            dir.name to (dir to PetPack.parse(File(dir, "pack.json").readText()))
-        }
-    }
+    /** Numeric compatibility fixtures, never shipped as pet packs. */
+    private fun shipped(): Map<String, PetPack> = PetFixture.ids.associateWith(PetFixture::pack)
 
-    private fun shipped(): Map<String, PetPack> = shippedDirs().mapValues { it.value.second }
-
-    /** The bundled packs parse, and every sheet fits the decode budget at the scale it is drawn. */
-    @Test fun shippedPacksParse() {
-        for ((id, dirAndPack) in shippedDirs()) {
-            val (dir, p) = dirAndPack
+    @Test fun fixturePacksParseAndFitDecodeBudget() {
+        assertEquals(2, shipped().size)
+        for ((id, p) in shipped()) {
             assertEquals(id, p.id)
             for (a in p.animations.values) {
-                assertTrue("${p.id}/${a.sheet}", File(dir, a.sheet).isFile)
+                val bounds = PetFixture.bounds(id, a.name)
+                assertTrue(bounds[0] >= 0 && bounds[1] >= 0)
+                assertTrue(bounds[2] <= a.frameW && bounds[3] <= a.frameH)
                 for (size in PetSize.values()) {
                     val k = p.screenScale(size, 3.5f)
                     val r = PetSprites.perLogicalFor(p.scale, k, a, PetSprites.SHEET_BYTES)

@@ -34,12 +34,11 @@ final probePetProvider = NotifierProvider<ProbePetController, PetState>(ProbePet
 
 class ProbePetController extends Notifier<PetState> {
   @override
-  PetState build() =>
-      const PetState(packId: 'whale-girl', foreground: false, target: PetTarget(probeHost, probeSession));
+  PetState build() => const PetState(packId: 'none', foreground: false, target: PetTarget(probeHost, probeSession));
 
   void show(PetEvent event) {
     state = PetState(
-      packId: 'whale-girl',
+      packId: 'none',
       foreground: false,
       active: true,
       state: PetStateName.notification,

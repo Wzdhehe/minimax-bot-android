@@ -1,5 +1,5 @@
 // Pixel art stays sharp (docs/design/pets.md §2.10, §11): at device pixel
-// ratios 2.0 / 2.625 / 2.75 / 3.0 / 3.5 every art pixel of 鲸娘 is the same
+// ratios 2.0 / 2.625 / 2.75 / 3.0 / 3.5 every art pixel of Test rectangle 1x is the same
 // whole number of device pixels (blocks of one colour, no blending), and
 // Deepy's 5× sheets are sampled nearest-neighbour: no colour on screen that
 // is not in the sheet.
@@ -68,7 +68,9 @@ void main() {
 
   for (final dpr in ratios) {
     for (final size in PetSize.values) {
-      testWidgets('鲸娘 at ${dpr}x, ${size.name}: whole device pixels per art pixel, one colour each', (tester) async {
+      testWidgets('Test rectangle 1x at ${dpr}x, ${size.name}: whole device pixels per art pixel, one colour each', (
+        tester,
+      ) async {
         final anim = girl.animFor(PetStateName.idle);
         final (rgba, w, h, k) = await render(tester, girl, anim, size, dpr);
         expect(w, girl.canvas.width * k);
@@ -136,18 +138,18 @@ void main() {
     // app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/pet/PetPackTest.kt
     // (`screenScaleMatchesTheAppForTheShippedPacks`): change one, change both.
     const expected = [
-      ('whale-girl', 2.0, [1, 2, 3]),
-      ('whale-girl', 2.625, [1, 2, 3]),
-      ('whale-girl', 2.75, [1, 2, 3]),
-      ('whale-girl', 3.0, [1, 2, 3]),
-      ('whale-girl', 3.5, [2, 3, 4]),
-      ('deepy-whale', 2.0, [2, 3, 4]),
-      ('deepy-whale', 2.625, [3, 4, 5]),
-      ('deepy-whale', 2.75, [3, 4, 5]),
-      ('deepy-whale', 3.0, [3, 4, 5]),
-      ('deepy-whale', 3.5, [4, 5, 6]),
+      ('test-rectangle-1x', 2.0, [1, 2, 3]),
+      ('test-rectangle-1x', 2.625, [1, 2, 3]),
+      ('test-rectangle-1x', 2.75, [1, 2, 3]),
+      ('test-rectangle-1x', 3.0, [1, 2, 3]),
+      ('test-rectangle-1x', 3.5, [2, 3, 4]),
+      ('test-rectangle-5x', 2.0, [2, 3, 4]),
+      ('test-rectangle-5x', 2.625, [3, 4, 5]),
+      ('test-rectangle-5x', 2.75, [3, 4, 5]),
+      ('test-rectangle-5x', 3.0, [3, 4, 5]),
+      ('test-rectangle-5x', 3.5, [4, 5, 6]),
     ];
-    final packs = {'whale-girl': girl, 'deepy-whale': deepy};
+    final packs = {'test-rectangle-1x': girl, 'test-rectangle-5x': deepy};
     for (final (id, dpr, ks) in expected) {
       final pack = packs[id]!;
       expect([for (final s in PetSize.values) petDevicePixels(pack, s, dpr)], ks, reason: '$id at $dpr×');

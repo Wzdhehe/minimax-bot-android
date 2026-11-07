@@ -1,10 +1,12 @@
-// Shared setup for the pet tests: the shipped packs read straight from disk,
+// Shared setup for the pet tests: numeric compatibility fixtures from disk,
 // sheets decoded ahead (decoding needs real async), and a chat-bottom
 // harness: a page with a list stand-in, the run strip, the composer and the
 // pet stage over them, as on the chat page.
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:dsh_app/pets/pet_mood.dart';
 import 'package:dsh_app/pets/pet_pack.dart';
@@ -26,14 +28,62 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
-export '../chat/support/harness.dart' show testApp, usePhoneView, testTheme;
+import '../chat/support/harness.dart' as chat;
 
-/// A shipped pack, from `assets/pets/<id>/pack.json`.
+export '../chat/support/harness.dart' show usePhoneView, testTheme;
+
+Widget testApp(Widget home, {Brightness brightness = Brightness.light, List<Override> overrides = const []}) =>
+    chat.testApp(
+      DefaultAssetBundle(bundle: fixtureBundle, child: home),
+      brightness: brightness,
+      overrides: overrides,
+    );
+
+/// A numeric renderer fixture; no shipped pet pack or artwork is used.
 PetPack diskPack(String id) =>
-    PetPack.parse(jsonDecode(File('assets/pets/$id/pack.json').readAsStringSync()) as Map<String, Object?>);
+    PetPack.parse(jsonDecode(File('test/pets/fixtures/$id.json').readAsStringSync()) as Map<String, Object?>);
 
-final deepy = diskPack('deepy-whale');
-final girl = diskPack('whale-girl');
+final deepy = diskPack('test-rectangle-5x');
+final girl = diskPack('test-rectangle-1x');
+
+/// Generates solid geometric rectangles for the old numeric layout contracts.
+/// Test-only: this bundle and its JSON fixtures are not listed in pubspec.yaml.
+final fixtureBundle = RectangleBundle();
+
+class RectangleBundle extends CachingAssetBundle {
+  @override
+  Future<ByteData> load(String key) async {
+    if (!key.startsWith('assets/pets/test-rectangle-')) return rootBundle.load(key);
+    final parts = key.split('/');
+    final pack = diskPack(parts[2]);
+    final anim = pack.animations.values.firstWhere((a) => a.sheet == parts.last);
+    final count = anim.frames.map((f) => f.i).reduce((a, b) => a > b ? a : b) + 1;
+    final width = anim.frameWidth * anim.cols;
+    final height = anim.frameHeight * ((count + anim.cols - 1) ~/ anim.cols);
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    for (var i = 0; i < count; i++) {
+      final row = File('test/pets/fixtures/${pack.id}.bounds')
+          .readAsLinesSync()
+          .firstWhere(
+            (line) => line.startsWith('${pack.animations.values.firstWhere((a) => a.sheet == anim.sheet).name} '),
+          )
+          .split(' ');
+      final bounds = row.skip(1).map(double.parse).toList();
+      final origin = anim.sourceRect(i).topLeft;
+      canvas.drawRect(
+        Rect.fromLTRB(bounds[0], bounds[1], bounds[2], bounds[3]).shift(origin),
+        Paint()..color = const Color(0xFF397DB0),
+      );
+    }
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(width, height);
+    picture.dispose();
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    return data!;
+  }
+}
 
 /// Decodes [anims] of [pack] (default: every animation it may play in a test).
 Future<void> warmSheets(WidgetTester tester, PetPack pack, [Iterable<PetAnimation>? anims]) async {
@@ -43,7 +93,7 @@ Future<void> warmSheets(WidgetTester tester, PetPack pack, [Iterable<PetAnimatio
   PetSheets.instance.pin(pack, pack.animFor(PetStateName.idle));
   await tester.runAsync(() async {
     for (final anim in all) {
-      final image = await PetSheets.instance.load(pack, anim, rootBundle);
+      final image = await PetSheets.instance.load(pack, anim, fixtureBundle);
       image.dispose();
     }
   });

@@ -1,4 +1,4 @@
-// Picks the pet (Deepy 小鲸鱼, 鲸娘, 不显示) with live previews, for 宠物设置 and the pet's
+// Generic pet picker (no built-in artwork), for 宠物设置 and the pet's
 // long-press menu. Same grid as the other pickers on the 主题 page (PickerGrid:
 // 16 in, 12 apart, label 8 under).
 
@@ -17,11 +17,7 @@ import '../theme/theme.dart';
 import 'pet_sprite.dart';
 
 /// Names for the picker before a pack has loaded (and for 不显示).
-Map<String, String> get petNames => {
-  'deepy-whale': appL10n.botsPetDeepy,
-  'whale-girl': appL10n.botsPetWhaleGirl,
-  noPetId: appL10n.botsPetNone,
-};
+Map<String, String> get petNames => {noPetId: appL10n.botsPetNone};
 
 /// Three previews in a row, the chosen one ringed in the accent:
 ///

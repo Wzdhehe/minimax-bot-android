@@ -6,119 +6,17 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.util.zip.Inflater
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
-
-/**
- * The alpha of a palette PNG (how the bundled sheets are stored: 4- or 8-bit indices with a tRNS
- * table), decoded by hand: unit tests compile against android.jar, without javax.imageio.
- */
-private class PaletteAlpha(val width: Int, val height: Int, private val alpha: ByteArray) {
-    fun alpha(x: Int, y: Int): Int = alpha[y * width + x].toInt() and 0xff
-
-    companion object {
-        fun read(file: File): PaletteAlpha {
-            val d = file.readBytes()
-            fun int(at: Int) = ((d[at].toInt() and 0xff) shl 24) or ((d[at + 1].toInt() and 0xff) shl 16) or
-                ((d[at + 2].toInt() and 0xff) shl 8) or (d[at + 3].toInt() and 0xff)
-            var w = 0
-            var h = 0
-            var depth = 0
-            var trns = ByteArray(0)
-            val idat = ByteArrayOutputStream()
-            var i = 8
-            while (i < d.size) {
-                val n = int(i)
-                when (String(d, i + 4, 4, Charsets.US_ASCII)) {
-                    "IHDR" -> {
-                        w = int(i + 8)
-                        h = int(i + 12)
-                        depth = d[i + 16].toInt()
-                        check(d[i + 17].toInt() == 3 && d[i + 20].toInt() == 0) { "${file.name}: not a plain palette PNG" }
-                    }
-                    "tRNS" -> trns = d.copyOfRange(i + 8, i + 8 + n)
-                    "IDAT" -> idat.write(d, i + 8, n)
-                }
-                i += 12 + n
-            }
-            val stride = (w * depth + 7) / 8
-            val raw = ByteArray(h * (stride + 1))
-            Inflater().run {
-                setInput(idat.toByteArray())
-                var got = 0
-                while (got < raw.size && !finished()) got += inflate(raw, got, raw.size - got)
-                end()
-            }
-            val out = ByteArray(w * h)
-            var prev = ByteArray(stride)
-            for (y in 0 until h) {
-                val row = raw.copyOfRange(y * (stride + 1) + 1, (y + 1) * (stride + 1))
-                val filter = raw[y * (stride + 1)].toInt()
-                for (x in 0 until stride) {
-                    val a = if (x > 0) row[x - 1].toInt() and 0xff else 0
-                    val b = prev[x].toInt() and 0xff
-                    val c = if (x > 0) prev[x - 1].toInt() and 0xff else 0
-                    val add = when (filter) {
-                        1 -> a
-                        2 -> b
-                        3 -> (a + b) / 2
-                        4 -> {
-                            val p = a + b - c
-                            val pa = abs(p - a)
-                            val pb = abs(p - b)
-                            val pc = abs(p - c)
-                            if (pa <= pb && pa <= pc) a else if (pb <= pc) b else c
-                        }
-                        else -> 0
-                    }
-                    row[x] = ((row[x].toInt() and 0xff) + add).toByte()
-                }
-                for (x in 0 until w) {
-                    val index = if (depth == 8) {
-                        row[x].toInt() and 0xff
-                    } else {
-                        val perByte = 8 / depth
-                        val shift = 8 - depth * (x % perByte + 1)
-                        ((row[x / perByte].toInt() and 0xff) shr shift) and ((1 shl depth) - 1)
-                    }
-                    out[y * w + x] = if (index < trns.size) trns[index] else 0xff.toByte()
-                }
-                prev = row
-            }
-            return PaletteAlpha(w, h, out)
-        }
-    }
-}
-
 
 /**
  * The out-of-app window's frames (rest, held around the lifted pose, grown around every animation
  * that reaches past rest), where they are touched, and their placement.
  */
 class PetFramesTest {
-    private fun packDir(id: String): File? =
-        generateSequence(File("").absoluteFile) { it.parentFile }
-            .flatMap { sequenceOf(File(it, "app/assets/pets/$id"), File(it, "assets/pets/$id")) }
-            .firstOrNull { File(it, "pack.json").isFile }
-
-    private fun shipped(id: String): PetPack {
-        val dir = packDir(id)
-        assertNotNull("bundled pack $id", dir)
-        return PetPack.parse(File(dir, "pack.json").readText())
-    }
-
-    /** Every bundled pack: each directory under assets/pets with a pack.json. */
-    private val packs: List<String> by lazy {
-        val root = packDir("deepy-whale")?.parentFile
-        assertNotNull("bundled packs", root)
-        root!!.listFiles().orEmpty().filter { File(it, "pack.json").isFile }.map { it.name }.sorted().also {
-            assertTrue("both bundled pets at least: $it", it.containsAll(listOf("deepy-whale", "whale-girl")))
-        }
-    }
+    private fun shipped(id: String): PetPack = PetFixture.pack(id)
+    private val packs = PetFixture.ids
 
     private fun frames(p: PetPack, size: String = "medium", density: Float = 2.75f) =
         PetFrames.of(p, p.windowBox(), p.screenScale(PetSize.fromName(size), density))
@@ -127,30 +25,11 @@ class PetFramesTest {
     private fun shownAnims(p: PetPack) =
         p.usedAnimations(skipStates = setOf("roam")).map { p.animations.getValue(it) }.filter { it.name != p.reaction("drag")?.name }
 
-    /** Per pack and animation: the visible pixels of all its frames, in cell (sheet) px, [l, t, r, b). */
-    private val opaqueCache = HashMap<String, IntArray>()
-
-    private fun opaque(id: String, a: PetAnimation): IntArray = opaqueCache.getOrPut("$id/${a.name}") {
-        val sheet = PaletteAlpha.read(File(packDir(id), a.sheet))
-        val b = intArrayOf(Int.MAX_VALUE, Int.MAX_VALUE, Int.MIN_VALUE, Int.MIN_VALUE)
-        for (cell in a.frames.map { it.cell }.toSet()) {
-            val ox = (cell % a.cols) * a.frameW
-            val oy = (cell / a.cols) * a.frameH
-            assertTrue("$id ${a.name} cell $cell inside ${a.sheet}", ox + a.frameW <= sheet.width && oy + a.frameH <= sheet.height)
-            for (y in 0 until a.frameH) for (x in 0 until a.frameW) {
-                if (sheet.alpha(ox + x, oy + y) == 0) continue
-                b[0] = minOf(b[0], x)
-                b[1] = minOf(b[1], y)
-                b[2] = maxOf(b[2], x + 1)
-                b[3] = maxOf(b[3], y + 1)
-            }
-        }
-        assertTrue("$id ${a.name} draws something", b[2] > b[0])
-        b
-    }
+    // Numeric painted extents of the synthetic rectangles (shared with Dart).
+    private fun opaque(id: String, a: PetAnimation): IntArray = PetFixture.bounds(id, a.name)
 
     /**
-     * Against the art itself: the visible pixels of every frame of [a], in physical px around the
+     * Against numeric rectangle extents: the visible pixels of every frame of [a], in physical px around the
      * rest origin, as PetView's drawBitmap(src, dst) scales the cell into [PetFrames.cell].
      */
     private fun drawn(id: String, a: PetAnimation, f: PetFrames): FramePx {
@@ -171,7 +50,7 @@ class PetFramesTest {
 
     /** The held bug: picked up, Deepy is drawn 14 art px higher than the window ever reached. */
     @Test fun deepyHeldGrowsUpwardsAroundTheLiftedPose() {
-        val p = shipped("deepy-whale")
+        val p = shipped("test-rectangle-5x")
         val drag = p.reaction("drag")!!
         assertEquals("react-drag", drag.name)
         // Rest: wide hit box (8, 18, 44 × 31) with the idle cell's shadow row → 44 × 32 art px.
@@ -188,7 +67,7 @@ class PetFramesTest {
     }
 
     @Test fun girlHeldGrowsLeftAndUp() {
-        val p = shipped("whale-girl")
+        val p = shipped("test-rectangle-1x")
         val drag = p.reaction("drag")!!
         assertEquals(PetBox(10f, 12f, 54f, 49f), p.windowBox())
         // Crisp: 2 px per art px. drag reaches 5 art px left and 2 up of the rest frame.
@@ -204,23 +83,23 @@ class PetFramesTest {
      * frame, and this much of the art (medium on a 2.75 phone) fell outside it.
      */
     @Test fun thinkingAndJugglingWereCutAtRest() {
-        val deepy = shipped("deepy-whale")
+        val deepy = shipped("test-rectangle-5x")
         val d = frames(deepy)
         assertEquals(FramePx(0, 0, 176, 128), d.rest)
         // thinking: the cloud 45 px (11.2 art px) over the rest frame's top and 31 px (7.6) left of it.
-        assertEquals(FramePx(-31, -45, 155, 128), drawn("deepy-whale", deepy.primary("thinking", 0), d))
+        assertEquals(FramePx(-31, -45, 155, 128), drawn("test-rectangle-5x", deepy.primary("thinking", 0), d))
         // juggling, one sub-agent: music, 32 px up and 24 left; two or more: conducting, 72 up and 28 left.
-        assertEquals(FramePx(-24, -32, 168, 128), drawn("deepy-whale", deepy.primary("juggling", 1), d))
-        assertEquals(FramePx(-28, -72, 176, 128), drawn("deepy-whale", deepy.primary("juggling", 2), d))
-        val girl = shipped("whale-girl")
+        assertEquals(FramePx(-24, -32, 168, 128), drawn("test-rectangle-5x", deepy.primary("juggling", 1), d))
+        assertEquals(FramePx(-28, -72, 176, 128), drawn("test-rectangle-5x", deepy.primary("juggling", 2), d))
+        val girl = shipped("test-rectangle-1x")
         val g = frames(girl)
         assertEquals(FramePx(0, 0, 108, 98), g.rest)
         // thinking: 22 px (11 art px) up and 6 right; conducting 22 up, 20 left, 8 right; music 4 left, 2 up.
-        assertEquals(FramePx(4, -22, 114, 98), drawn("whale-girl", girl.primary("thinking", 0), g))
-        assertEquals(FramePx(-20, -22, 116, 98), drawn("whale-girl", girl.primary("juggling", 2), g))
-        assertEquals(FramePx(-4, -2, 106, 98), drawn("whale-girl", girl.primary("juggling", 1), g))
+        assertEquals(FramePx(4, -22, 114, 98), drawn("test-rectangle-1x", girl.primary("thinking", 0), g))
+        assertEquals(FramePx(-20, -22, 116, 98), drawn("test-rectangle-1x", girl.primary("juggling", 2), g))
+        assertEquals(FramePx(-4, -2, 106, 98), drawn("test-rectangle-1x", girl.primary("juggling", 1), g))
         // Now each is whole in the frame the window takes for it.
-        for ((id, p, f) in listOf(Triple("deepy-whale", deepy, d), Triple("whale-girl", girl, g))) {
+        for ((id, p, f) in listOf(Triple("test-rectangle-5x", deepy, d), Triple("test-rectangle-1x", girl, g))) {
             for (a in listOf(p.primary("thinking", 0), p.primary("juggling", 1), p.primary("juggling", 2))) {
                 val art = drawn(id, a, f)
                 assertFalse("$id ${a.name} cut at rest", f.rest.contains(art))
@@ -231,7 +110,7 @@ class PetFramesTest {
 
     /** Deepy: each animation grows only where its art reaches past the rest frame. */
     @Test fun deepyGrowsOnlyWhereEachAnimationNeedsIt() {
-        val p = shipped("deepy-whale")
+        val p = shipped("test-rectangle-5x")
         val f = frames(p)
         // typing: the laptop, 8 art px left (32 px); above only its top row's 1 art px; right and bottom as at rest.
         assertEquals(FramePx(-32, -4, 176, 128), f.grown["typing"])
@@ -255,7 +134,7 @@ class PetFramesTest {
     }
 
     @Test fun girlGrowsOnlyWhereEachAnimationNeedsIt() {
-        val p = shipped("whale-girl")
+        val p = shipped("test-rectangle-1x")
         val f = frames(p)
         // typing: what it shows above her head reaches 8 art px up, and nothing reaches past rest elsewhere.
         assertEquals(FramePx(0, -16, 108, 98), f.grown["typing"])
@@ -294,7 +173,7 @@ class PetFramesTest {
     }
 
     /**
-     * Against the art: every visible pixel of every react-drag / drag frame lands inside the held
+     * Against numeric rectangle extents: every visible pixel of every react-drag / drag frame lands inside the held
      * frame, and for Deepy a good part of the body was above the rest frame.
      */
     @Test fun everyDragPixelIsInsideTheHeldFrame() {
@@ -304,7 +183,7 @@ class PetFramesTest {
             val d = drawn(id, p.reaction("drag")!!, f)
             assertTrue("$id: $d in ${f.held}", f.held.contains(d))
             assertFalse("$id: $d would be cut at rest ${f.rest}", f.rest.contains(d))
-            if (id == "deepy-whale") assertTrue("Deepy's lifted head: $d", d.top <= -50)
+            if (id == "test-rectangle-5x") assertTrue("Deepy's lifted head: $d", d.top <= -50)
         }
     }
 
@@ -365,12 +244,12 @@ class PetFramesTest {
                 assertEquals(f.rest, f.hit(null))
             }
         }
-        val p = shipped("deepy-whale")
+        val p = shipped("test-rectangle-5x")
         val f = frames(p)
         // thinking: the whole cloud shows, none of it is a target.
         val thinking = p.primary("thinking", 0)
         assertEquals(f.rest, f.hit(thinking))
-        val cloud = drawn("deepy-whale", thinking, f)
+        val cloud = drawn("test-rectangle-5x", thinking, f)
         assertTrue(f.frameFor(thinking, holding = false).contains(cloud.left + 1f, cloud.top + 1f))
         assertFalse(f.hit(thinking).contains(cloud.left + 1f, cloud.top + 1f))
         // happy: the air over the rest frame isn't the pet's either (the chat page hit-tests the wide box too).
@@ -384,7 +263,7 @@ class PetFramesTest {
     }
 
     @Test fun eachFrameLastsWhileItsPictureIsUp() {
-        val p = shipped("deepy-whale")
+        val p = shipped("test-rectangle-5x")
         val f = frames(p)
         val idle = p.primary(PetPack.IDLE, 0)
         val drag = p.reaction("drag")!!
@@ -405,7 +284,7 @@ class PetFramesTest {
     }
 
     @Test fun aPackWithoutADragReactionOrGrownStatesNeverGrows() {
-        val p = shipped("deepy-whale")
+        val p = shipped("test-rectangle-5x")
         val f = PetFrames(p.windowBox(), 3.75f, heldAnim = null)
         assertEquals(f.rest, f.held)
         assertEquals(f.rest, f.reach)
@@ -415,7 +294,7 @@ class PetFramesTest {
 
     /** Growing and shrinking moves nothing: a cell lands on the same screen pixels in every frame. */
     @Test fun theAnchorStaysPutAcrossFrames() {
-        val p = shipped("deepy-whale")
+        val p = shipped("test-rectangle-5x")
         val f = frames(p)
         val rest = WindowPos(907, 1405)
         val all = listOf(f.rest, f.held) + f.grown.values
@@ -481,7 +360,7 @@ class PetFramesTest {
 
     /** Away from the edges, held follows the finger exactly: the dock on release is as before. */
     @Test fun heldFollowsTheFingerAndReleasesWhereTheRestFrameIs() {
-        val f = frames(shipped("deepy-whale"))
+        val f = frames(shipped("test-rectangle-5x"))
         val start = WindowPos(400, 1200)
         val window = EdgeSnap.carry(start, -120, 300, f.held, portrait)
         assertEquals(WindowPos(400 - 120, 1200 + 300 - 56), window)
@@ -493,7 +372,7 @@ class PetFramesTest {
 
     /** At every edge the whole held window, lifted head and all, stays on screen and clear of the bars. */
     @Test fun heldStaysWholeOnScreenAtTheEdges() {
-        val f = frames(shipped("deepy-whale"))
+        val f = frames(shipped("test-rectangle-5x"))
         val m = 22
         val top = EdgeSnap.position(Dock(Side.RIGHT, 0f), f.reach, portrait, m)
         for ((dx, dy) in listOf(0 to 0, 0 to -3000, 3000 to 0, -3000 to 0, 0 to 3000, -3000 to -3000, 3000 to 3000)) {
@@ -516,7 +395,7 @@ class PetFramesTest {
 
     /** Dragged into a corner on the left: the held window stops at the screen edge, no part cut. */
     @Test fun girlHeldAtTheLeftEdgeKeepsItsSwingingSide() {
-        val f = frames(shipped("whale-girl"))
+        val f = frames(shipped("test-rectangle-1x"))
         // drag reaches 10 px left of the rest frame: pushed against x 0, the rest frame stops at 10.
         val w = EdgeSnap.carry(WindowPos(300, 1000), -3000, 0, f.held, portrait)
         assertEquals(0, w.x)

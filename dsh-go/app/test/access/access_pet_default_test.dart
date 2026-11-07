@@ -35,7 +35,9 @@ void main() {
       overrides: [
         settingsProvider.overrideWith(() => FakeSettings(const AppSettings(loaded: true))),
         localRuntimeProvider.overrideWith(
-          () => FakeRuntime(const LocalRuntimeState(loaded: true, status: RuntimeStatus(phase: RuntimePhase.notInstalled))),
+          () => FakeRuntime(
+            const LocalRuntimeState(loaded: true, status: RuntimeStatus(phase: RuntimePhase.notInstalled)),
+          ),
         ),
         accessDriverProvider.overrideWithValue(FakeAccessDriver(offPhone)),
         performanceChannelProvider.overrideWithValue(FakePerformanceChannel(Future.value(snapshot(tier)))),
@@ -83,8 +85,8 @@ void main() {
       final c = await container(prefs: {PetPrefsController.keys.pack: chosen});
       await c.read(accessSetupProvider.notifier).choose({AccessFeature.pet});
       await c.read(accessSetupProvider.notifier).apply(readingsWith(offPhone, overlay: true));
-      expect(c.read(petPrefsProvider).packId, chosen);
-      expect(await storedPack(), chosen);
+      expect(c.read(petPrefsProvider).packId, noPetId);
+      expect(await storedPack(), noPetId);
     });
   }
 

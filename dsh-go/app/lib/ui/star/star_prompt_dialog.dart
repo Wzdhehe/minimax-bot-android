@@ -1,21 +1,4 @@
-// The star prompt's dialog (docs/design/star-prompt.md §3): the whale girl
-// holding out her star, how long she has kept the person company, why a star
-// helps, then 「去 GitHub 点 Star」 and, quieter under it, 「已经点过啦」 and
-// 「下次再说」. Back or a tap outside is 「下次再说」.
-//
-// ```
-// ╭──────────────────────────────────╮
-// │            ( 鲸娘 )              │  192 at most, a soft glow of the palette behind
-// │  本鱼已经在 DSH Go 里陪你半个小时啦~ │  titleLarge · centred
-// │   这是一个免费开源的项目，如果它……   │  bodyMedium · onSurfaceVariant
-// │      拜托你啦~ 这真的很重要！！      │  bodyMedium w600 · primary
-// │ ┌──────────────────────────────┐ │
-// │ │      ☆ 去 GitHub 点 Star      │ │  filled, full width
-// │ └──────────────────────────────┘ │
-// │            已经点过啦             │  text · primary
-// │             下次再说              │  text · tertiary
-// ╰──────────────────────────────────╯
-// ```
+// Star prompt with a neutral Material star (no mascot artwork).
 
 import 'dart:async';
 
@@ -81,9 +64,6 @@ class StarPromptDialog extends StatelessWidget {
 
   /// Whole hours of use (0: half an hour).
   final int hours;
-
-  /// The picture: 576 px, the 192 dp it is drawn at most, at 3×.
-  static const asset = 'assets/star/star_whale.webp';
 
   /// The picture's side: 30 % of the height the dialog may take, within these.
   static const pictureMax = 192.0;
@@ -225,9 +205,7 @@ class BalancedText extends StatelessWidget {
   }
 }
 
-/// The whale girl and her star on a soft glow of the palette, [side] square,
-/// never cropped. She rises in with a little bob; with animations off she is
-/// simply there.
+/// A neutral star on a soft glow, with optional entrance animation.
 class StarPicture extends StatelessWidget {
   const StarPicture({super.key, required this.side});
 
@@ -252,7 +230,7 @@ class StarPicture extends StatelessWidget {
               gradient: RadialGradient(colors: [glow, glow.withValues(alpha: 0)], stops: const [0.3, 1]),
             ),
           ),
-          Image.asset(StarPromptDialog.asset, fit: BoxFit.contain, excludeFromSemantics: true),
+          Icon(Icons.star_rounded, size: side * 0.65, color: scheme.primary),
         ],
       ),
     );

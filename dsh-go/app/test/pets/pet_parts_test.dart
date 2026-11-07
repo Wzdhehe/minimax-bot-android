@@ -181,7 +181,9 @@ void main() {
 
     test('quiet, hidden or off the chat page: not on screen (the banner comes back)', () {
       final c = ProviderContainer(
-        overrides: [petPrefsProvider.overrideWith(() => FixedPetPrefs(const PetPrefs(loaded: true)))],
+        overrides: [
+          petPrefsProvider.overrideWith(() => FixedPetPrefs(const PetPrefs(packId: 'test-rectangle-5x', loaded: true))),
+        ],
       );
       addTearDown(c.dispose);
       c.read(petLayerShownProvider.notifier).set(true);
@@ -281,37 +283,14 @@ void main() {
       image!.dispose();
     });
 
-    testWidgets('three choices with names, the source line, size and quiet mode', (tester) async {
-      await page(tester);
-      expect(find.text('Deepy 小鲸鱼'), findsOneWidget);
-      expect(find.text('鲸娘'), findsOneWidget);
-      expect(find.text('不显示'), findsOneWidget);
-      expect(find.text('来自 DSH-TUI'), findsOneWidget);
-      expect(find.text('大小'), findsOneWidget);
-      for (final s in ['小', '标准', '大']) {
-        expect(find.text(s), findsOneWidget);
-      }
-      expect(find.text('安静模式'), findsOneWidget);
-      expect(find.text('只做动作，不冒气泡'), findsOneWidget);
-    });
-
-    testWidgets('choosing: the pet, its size, quiet; 不显示 folds the rest away', (tester) async {
+    testWidgets('no built-in pets are offered after artwork removal', (tester) async {
       final c = await page(tester);
-      await tester.tap(find.text('鲸娘'));
-      await tester.pump();
-      expect(c.read(petPrefsProvider).packId, 'whale-girl');
-      await tester.tap(find.text('大'));
-      await tester.pump();
-      expect(c.read(petPrefsProvider).size, PetSize.large);
-      await tester.tap(find.text('安静模式'));
-      await tester.pump();
-      expect(c.read(petPrefsProvider).quiet, isTrue);
-      await tester.tap(find.text('不显示'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      expect(builtInPets, isEmpty);
       expect(c.read(petPrefsProvider).packId, noPetId);
+      expect(find.text('不显示'), findsOneWidget);
+      expect(find.byType(PetPreview), findsOneWidget);
+      expect(find.text('来自 DSH-TUI'), findsNothing);
       expect(find.text('安静模式'), findsNothing);
-      expect(find.byType(PetPreview), findsNWidgets(3));
     });
   });
 }

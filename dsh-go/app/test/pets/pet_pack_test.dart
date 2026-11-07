@@ -13,13 +13,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support.dart';
 
 Map<String, Object?> _json(String id) =>
-    jsonDecode(File('assets/pets/$id/pack.json').readAsStringSync()) as Map<String, Object?>;
+    jsonDecode(File('test/pets/fixtures/$id.json').readAsStringSync()) as Map<String, Object?>;
 
 void main() {
-  group('Deepy 小鲸鱼', () {
+  group('Test rectangle 5x', () {
     test('canvas, 5× sheets, foot point, body', () {
-      expect(deepy.id, 'deepy-whale');
-      expect(deepy.name, 'Deepy 小鲸鱼');
+      expect(deepy.id, 'test-rectangle-5x');
+      expect(deepy.name, 'Test rectangle 5x');
       expect(deepy.scale, 5);
       expect(deepy.pixelArt, isTrue);
       expect(deepy.canvas, const Size(52, 52));
@@ -84,7 +84,7 @@ void main() {
     });
 
     test('hit boxes: byAnim, then sleeping, then wide, then default', () {
-      final hits = _json('deepy-whale')['hitBoxes']! as Map<String, Object?>;
+      final hits = _json('test-rectangle-5x')['hitBoxes']! as Map<String, Object?>;
       Rect rect(Object? m) {
         final r = m! as Map<String, Object?>;
         return Rect.fromLTWH(
@@ -123,9 +123,9 @@ void main() {
     });
   });
 
-  group('鲸娘', () {
+  group('Test rectangle 1x', () {
     test('1× pixel art, front-facing swim, attention extras', () {
-      expect(girl.name, '鲸娘');
+      expect(girl.name, 'Test rectangle 1x');
       expect(girl.scale, 1);
       expect(girl.canvas, const Size(69, 66));
       expect(girl.anchorX, 35.5);
@@ -155,7 +155,7 @@ void main() {
   });
 
   group('broken packs are refused', () {
-    Map<String, Object?> base() => _json('whale-girl');
+    Map<String, Object?> base() => _json('test-rectangle-1x');
 
     test('another schema', () {
       expect(() => PetPack.parse({...base(), 'schema': 2}), throwsFormatException);

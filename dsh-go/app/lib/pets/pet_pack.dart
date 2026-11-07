@@ -1,6 +1,6 @@
 // The runtime pet pack (`assets/pets/<id>/pack.json` plus one frame grid per
 // animation), shared by the chat page's pet layer, the overlay (Kotlin) and
-// the converter (`tool/make_pet_pack.py`). Format: `docs/design/pets.md` §3.
+// the upstream converter (removed with its artwork). Format: `docs/design/pets.md` §3.
 // Event and state names follow Clawd on Desk.
 
 import 'dart:convert';

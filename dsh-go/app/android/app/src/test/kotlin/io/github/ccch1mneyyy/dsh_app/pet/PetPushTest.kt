@@ -18,11 +18,11 @@ class PetPushTest {
                     "host" to """{"kind":"local","id":"local"}""", "sessionId" to "01JB", "untilMs" to now + 4_000,
                 ),
                 "sessionId" to "01JB", "host" to """{"kind":"local","id":"local"}""",
-                "active" to true, "foreground" to false, "packId" to "deepy-whale", "size" to "large",
+                "active" to true, "foreground" to false, "packId" to "test-rectangle-5x", "size" to "large",
             ),
             now,
         )
-        assertEquals("deepy-whale", p.packId)
+        assertEquals("test-rectangle-5x", p.packId)
         assertEquals("working", p.state)
         assertEquals(2, p.tier)
         assertEquals("01JB", p.sessionId)

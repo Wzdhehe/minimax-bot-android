@@ -267,7 +267,7 @@ void main() {
       await gesture.up();
       await tester.pump(const Duration(milliseconds: 400));
 
-      // 6. Dark, on the strip, 鲸娘.
+      // 6. Dark, on the strip, Test rectangle 1x.
       await fresh();
       c = await shot(
         pack: girl,

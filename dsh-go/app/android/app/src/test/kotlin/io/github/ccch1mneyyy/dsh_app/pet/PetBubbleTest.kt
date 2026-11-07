@@ -5,20 +5,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * The out-of-app bubble over the bundled pets, as PetOverlay places it: over the picture on screen
  * (the body and the current animation's cell), never in front of it, at every kind of dock.
  */
 class PetBubbleTest {
-    private fun shipped(id: String): PetPack {
-        val dir = generateSequence(File("").absoluteFile) { it.parentFile }
-            .flatMap { sequenceOf(File(it, "app/assets/pets/$id"), File(it, "assets/pets/$id")) }
-            .firstOrNull { File(it, "pack.json").isFile }
-        assertNotNull("bundled pack $id", dir)
-        return PetPack.parse(File(dir, "pack.json").readText())
-    }
+    private fun shipped(id: String): PetPack = PetFixture.pack(id)
 
     // A 1080×2400 phone at 2.75 px per dp: 96 px status bar, 63 px gesture bar; the overlay's
     // 8 dp edge and 4 dp gap; a 「标题 · 做完了」 card about 110 × 35 dp with its 6 dp tail.
@@ -42,7 +35,7 @@ class PetBubbleTest {
 
     /** Docked right or left mid-screen: above the picture, whatever it is, the tail at the body. */
     @Test fun midScreenTheBubbleSitsOverThePicture() {
-        for (id in listOf("deepy-whale", "whale-girl")) {
+        for (id in listOf("test-rectangle-5x", "test-rectangle-1x")) {
             val p = shipped(id)
             val f = PetFrames.of(p, p.windowBox(), p.screenScale(PetSize.MEDIUM, 2.75f))
             for (dock in mid) {
@@ -68,7 +61,7 @@ class PetBubbleTest {
 
     /** The owner's case: mid-jump, the whale is under the bubble's bottom edge, not behind it. */
     @Test fun duringHappyTheBubbleBottomIsAboveThePicture() {
-        val p = shipped("deepy-whale")
+        val p = shipped("test-rectangle-5x")
         val f = PetFrames.of(p, p.windowBox(), p.screenScale(PetSize.MEDIUM, 2.75f))
         val rest = EdgeSnap.position(Dock.DEFAULT, f.reach, area, margin)
         val happy = p.animations.getValue("happy")
@@ -90,7 +83,7 @@ class PetBubbleTest {
 
     /** Docked at the top: no room above, so beside the picture, towards the middle, clear of the bars. */
     @Test fun dockedAtTheTopTheBubbleGoesBeside() {
-        for (id in listOf("deepy-whale", "whale-girl")) {
+        for (id in listOf("test-rectangle-5x", "test-rectangle-1x")) {
             val p = shipped(id)
             val f = PetFrames.of(p, p.windowBox(), p.screenScale(PetSize.MEDIUM, 2.75f))
             for (dock in top) {
@@ -114,7 +107,7 @@ class PetBubbleTest {
 
     /** Every dock, every size: wherever it goes, the bubble is on screen and never over the picture. */
     @Test fun neverOverThePictureNorOffScreen() {
-        for (id in listOf("deepy-whale", "whale-girl")) {
+        for (id in listOf("test-rectangle-5x", "test-rectangle-1x")) {
             val p = shipped(id)
             for (size in listOf("small", "medium", "large")) {
                 val f = PetFrames.of(p, p.windowBox(), p.screenScale(PetSize.fromName(size), 2.75f))

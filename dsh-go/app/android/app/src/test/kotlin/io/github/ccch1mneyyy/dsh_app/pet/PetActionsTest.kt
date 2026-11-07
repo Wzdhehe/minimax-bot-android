@@ -44,7 +44,7 @@ class PetActionsTest {
     }
 
     @Test fun menuOnlyOffersApplicableShortcuts() {
-        val base = PetPush.fromMap(mapOf("packId" to "deepy-whale"), 100)
+        val base = PetPush.fromMap(mapOf("packId" to "test-rectangle-5x"), 100)
         assertEquals(listOf(PetMenuItem.ASK, PetMenuItem.NEW_CHAT, PetMenuItem.SNOOZE, PetMenuItem.SETTINGS), PetMenuItem.of(base))
         val busy = base.copy(canStop = true, hosts = listOf(PetHost("a", "A", true), PetHost("b", "B", false)))
         assertTrue(PetMenuItem.of(busy).containsAll(listOf(PetMenuItem.STOP, PetMenuItem.SWITCH_HOST)))
@@ -54,7 +54,7 @@ class PetActionsTest {
         val machine = OverlayMachine().apply {
             enabled = true; canHost = true; hasPet = true
             onForeground(false, 1)
-            onPush(PetPush.fromMap(mapOf("packId" to "deepy-whale", "active" to false), 1), 1)
+            onPush(PetPush.fromMap(mapOf("packId" to "test-rectangle-5x", "active" to false), 1), 1)
             holding = true
         }
         assertEquals(Visibility.SHOWN, machine.decide(600_000).visibility)

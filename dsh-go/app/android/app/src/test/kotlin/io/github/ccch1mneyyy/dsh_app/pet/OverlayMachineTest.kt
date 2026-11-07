@@ -11,7 +11,7 @@ class OverlayMachineTest {
     private val collapse = OverlayMachine.IDLE_COLLAPSE_MS
     private val dim = OverlayMachine.DIM_AFTER_MS
 
-    private fun push(state: String, active: Boolean = state != "idle" && state != "sleeping", bubble: PetBubble? = null, pack: String? = "whale-girl") =
+    private fun push(state: String, active: Boolean = state != "idle" && state != "sleeping", bubble: PetBubble? = null, pack: String? = "test-rectangle-1x") =
         PetPush(pack, state, if (state == "working") 1 else 0, bubble, "s1", null, active, "medium")
 
     private fun bubble(id: String, until: Long) = PetBubble(id, "done", "做完了", "修复登录", "s1", null, until)

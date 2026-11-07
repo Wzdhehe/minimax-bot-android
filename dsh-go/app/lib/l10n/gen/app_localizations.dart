@@ -27677,13 +27677,13 @@ abstract class L10n {
   /// The star prompt's first line. hours is the whole hours of use so far, rounded down; 0 is half an hour (the first ask comes after 30 minutes). The word joiner keeps the ~ on the line of the word before it.
   ///
   /// In zh, this message translates to:
-  /// **'{hours, plural, =0{本鱼已经在 DSH Go 里陪你半个小时啦⁠~} =1{本鱼已经在 DSH Go 里陪你一个小时啦⁠~} other{本鱼已经在 DSH Go 里陪你 {hours} 个小时啦⁠~}}'**
+  /// **'{hours, plural, =0{感谢你使用 MiniMax Bot 半个小时} =1{感谢你使用 MiniMax Bot 一个小时} other{感谢你使用 MiniMax Bot {hours} 个小时}}'**
   String starPromptTitle(int hours);
 
   /// No description provided for @starPromptBody.
   ///
   /// In zh, this message translates to:
-  /// **'这是一个免费开源的项目，如果它让你的移动端体验更好了一点，拜托点个 Star 支持一下，这对本鱼是很大的鼓励！'**
+  /// **'这是一个免费开源的项目，如果它让你的移动端体验更好了一点，拜托点个 Star 支持一下，这对项目是很大的鼓励！'**
   String get starPromptBody;
 
   /// No description provided for @starPromptPlea.

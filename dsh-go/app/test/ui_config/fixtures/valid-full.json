@@ -27,7 +27,7 @@
   "density": "compact",
   "hide": ["turnFooter", "tokenCount", "reasoningDetails"],
   "theme": { "mode": "system", "accentPreset": "daiqing" },
-  "pet": { "id": "deepy-whale", "position": "bottom-right", "quiet": true },
+  "pet": { "id": "test-rectangle-5x", "position": "bottom-right", "quiet": true },
   "shortcuts": [{ "keys": "ctrl+k", "action": { "type": "open", "page": "search" } }],
   "plugins": { "seats": { "conversation.input.dock": { "dsh-cost-meter": "hidden" } } }
 }

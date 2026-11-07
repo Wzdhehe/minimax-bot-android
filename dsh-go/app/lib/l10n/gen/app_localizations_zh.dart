@@ -1,6 +1,5 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -15117,15 +15116,15 @@ class L10nZh extends L10n {
     String _temp0 = intl.Intl.pluralLogic(
       hours,
       locale: localeName,
-      other: '本鱼已经在 DSH Go 里陪你 $hours 个小时啦⁠~',
-      one: '本鱼已经在 DSH Go 里陪你一个小时啦⁠~',
-      zero: '本鱼已经在 DSH Go 里陪你半个小时啦⁠~',
+      other: '感谢你使用 MiniMax Bot $hours 个小时',
+      one: '感谢你使用 MiniMax Bot 一个小时',
+      zero: '感谢你使用 MiniMax Bot 半个小时',
     );
     return '$_temp0';
   }
 
   @override
-  String get starPromptBody => '这是一个免费开源的项目，如果它让你的移动端体验更好了一点，拜托点个 Star 支持一下，这对本鱼是很大的鼓励！';
+  String get starPromptBody => '这是一个免费开源的项目，如果它让你的移动端体验更好了一点，拜托点个 Star 支持一下，这对项目是很大的鼓励！';
 
   @override
   String get starPromptPlea => '拜托你啦~ 这真的很重要！！';

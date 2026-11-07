@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dsh_app/performance/performance_state.dart';
 import 'package:dsh_app/pets/pet_prefs.dart';
+import 'package:dsh_app/pets/pet_signals.dart';
 import 'package:dsh_app/pets/pet_state.dart';
 import 'package:dsh_app/state/settings_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -89,6 +90,21 @@ void main() {
       });
     }
 
+    for (final removed in ['deepy-whale', 'whale-girl', 'unknown-pet']) {
+      test('removed pet $removed migrates to none without loading artwork', () async {
+        SharedPreferences.setMockInitialValues({'pet.pack': removed});
+        start(tier: DeviceTier.high);
+        await loaded(container);
+        expect(builtInPets, isEmpty);
+        expect(container.read(petPrefsProvider).enabled, isFalse);
+        expect(container.read(currentPetPackProvider), isNull);
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getString('pet.pack'), noPetId);
+        await container.read(petPrefsProvider.notifier).setPack(removed);
+        expect(container.read(petPrefsProvider).packId, noPetId);
+      });
+    }
+
     test('hardware Enter preference defaults off, persists, and reloads', () async {
       start();
       await loaded(container);
@@ -120,7 +136,7 @@ void main() {
       await loaded(container);
       channel.events.add(snapshot(DeviceTier.low, hot: true, sequence: 2));
       expect(container.read(settingsProvider).autoStartLocal, isTrue);
-      expect(container.read(petPrefsProvider).packId, 'whale-girl');
+      expect(container.read(petPrefsProvider).packId, noPetId);
       expect(container.read(settingsProvider).autoStartLocalExplicit, isTrue);
       expect(container.read(petPrefsProvider).packExplicit, isTrue);
     });
@@ -158,15 +174,15 @@ void main() {
       await loaded(container);
       channel.events.add(snapshot(DeviceTier.high, hot: true, sequence: 2));
       await container.read(settingsProvider.notifier).setAutoStartLocal(true);
-      await container.read(petPrefsProvider.notifier).setPack('whale-girl');
+      await container.read(petPrefsProvider.notifier).setPack(noPetId);
       await container.read(performancePrefsProvider.notifier).setMode(PerformanceMode.light);
       channel.events.add(snapshot(DeviceTier.high, sequence: 3));
       expect(container.read(settingsProvider).autoStartLocal, isTrue);
-      expect(container.read(petPrefsProvider).packId, 'whale-girl');
+      expect(container.read(petPrefsProvider).packId, noPetId);
       expect(container.read(performanceDefaultsProvider).lightweight, isTrue);
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool('auto_start_local'), isTrue);
-      expect(prefs.getString('pet.pack'), 'whale-girl');
+      expect(prefs.getString('pet.pack'), noPetId);
     });
 
     test('startup settings remain loading while device facts are pending', () async {
@@ -248,7 +264,7 @@ void main() {
       expect(container.read(performanceDefaultsProvider).blur, isFalse);
       expect(container.read(performanceDefaultsProvider).reduceMotion, isTrue);
       expect(container.read(settingsProvider).autoStartLocal, isTrue);
-      expect(container.read(petPrefsProvider).packId, 'whale-girl');
+      expect(container.read(petPrefsProvider).packId, noPetId);
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.containsKey('performance.blur'), isFalse);
       expect(prefs.containsKey('performance.animations'), isFalse);

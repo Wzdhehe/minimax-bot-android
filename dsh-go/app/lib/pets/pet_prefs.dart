@@ -10,10 +10,10 @@ import '../performance/performance_state.dart';
 import 'pet_state.dart';
 
 /// The pets that ship with the app, in picker order.
-const builtInPets = ['deepy-whale', 'whale-girl'];
+const builtInPets = <String>[];
 
 /// The default pet.
-const defaultPetId = 'deepy-whale';
+const defaultPetId = noPetId;
 
 @immutable
 class PetPrefs {
@@ -111,11 +111,17 @@ class PetPrefsController extends Notifier<PetPrefs> {
       await performanceReady(ref);
       if (!ref.mounted) return;
       final pack = prefs.getString(keys.pack);
-      final explicit = pack == noPetId || builtInPets.contains(pack);
+      final explicit = pack != null;
+      final selected = pack == noPetId || builtInPets.contains(pack) ? pack! : noPetId;
+      // A saved upstream mascot must not trigger an asset load after upgrading.
+      if (pack != null && pack != selected) {
+        await prefs.setString(keys.pack, selected);
+        if (!ref.mounted) return;
+      }
       final hidden = prefs.getInt(keys.hidden);
       state = PetPrefs(
         packId: explicit
-            ? pack!
+            ? selected
             : ref.read(performanceDefaultsProvider).petEnabled
             ? defaultPetId
             : noPetId,
@@ -145,11 +151,14 @@ class PetPrefsController extends Notifier<PetPrefs> {
   }
 
   /// A pet, or [noPetId]. Choosing one also brings a hidden pet back.
-  Future<void> setPack(String id) =>
-      _save((s) => s.copyWith(packId: id, packExplicit: true, clearHidden: true), (p) async {
-        await p.setString(keys.pack, id);
-        await p.remove(keys.hidden);
-      });
+  Future<void> setPack(String id) {
+    final selected = builtInPets.contains(id) ? id : noPetId;
+    return _save((s) => s.copyWith(packId: selected, packExplicit: true, clearHidden: true), (p) async {
+      await p.setString(keys.pack, selected);
+      await p.remove(keys.hidden);
+    });
+  }
+
   /// First run's 「桌宠与悬浮窗」 was picked: the default pet, unless a pet
   /// (or 「不显示」) was chosen already. Without it a light phone, whose
   /// default is no pet, would turn on 「App 外显示」 with nothing to show.

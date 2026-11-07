@@ -15,7 +15,7 @@ import android.util.Log
  *
  * ```
  * adb shell am broadcast -a io.github.ccch1mneyyy.dsh_app.PET_PROBE --es cmd push \
- *     --es pet whale-girl --es state working --ei tier 1 --es session s1 \
+ *     --es pet none --es state working --ei tier 1 --es session s1 \
  *     [--ez active true --es size medium --es bubble 做完了 --es title 修复登录 --es bubbleId b1 --el ttl 6000]
  *     [--es detail '回复的头两行' | --es askText '运行：git push' --es askKind approval --ez approvable true
  *      --es choices 'A|B|C' --es eventId e1] [--ez canStop true --es hosts '本机|电脑 · SSH']
@@ -35,7 +35,7 @@ internal object PetOverlayProbe {
                 when (intent.getStringExtra("cmd")) {
                     "push" -> PetOverlay.push(
                         mapOf(
-                            "packId" to (intent.getStringExtra("pet") ?: "whale-girl"),
+                            "packId" to (intent.getStringExtra("pet") ?: "none"),
                             "state" to (intent.getStringExtra("state") ?: "idle"),
                             "tier" to intent.getIntExtra("tier", 0),
                             "sessionId" to intent.getStringExtra("session"),

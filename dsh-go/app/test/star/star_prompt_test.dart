@@ -263,9 +263,8 @@ Future<_Bench> _pumpDialog(
   );
   await tester.pump();
   // Decoded for real (FakeAsync never finishes a decode), as the host does before it opens.
-  await tester.runAsync(
-    () => precacheImage(const AssetImage(StarPromptDialog.asset), tester.element(find.byType(Scaffold))),
-  );
+  expect(find.byIcon(Icons.star_rounded), findsOneWidget);
+  expect(find.byType(Image), findsNothing);
   await tester.tap(find.text('打开'));
   await tester.pump();
   return bench;
@@ -302,12 +301,12 @@ void main() {
     test('the first line tells the real time: half an hour, then whole hours', () {
       final zh = lookupL10n(AppLocale.zhCN);
       final en = lookupL10n(AppLocale.en);
-      expect(zh.starPromptTitle(0), '本鱼已经在 DSH Go 里陪你半个小时啦⁠~');
-      expect(zh.starPromptTitle(1), '本鱼已经在 DSH Go 里陪你一个小时啦⁠~');
-      expect(zh.starPromptTitle(5), '本鱼已经在 DSH Go 里陪你 5 个小时啦⁠~');
-      expect(en.starPromptTitle(0), 'I’ve kept you company in DSH Go for half an hour now~');
-      expect(en.starPromptTitle(1), 'I’ve kept you company in DSH Go for an hour now~');
-      expect(en.starPromptTitle(6), 'I’ve kept you company in DSH Go for 6 hours now~');
+      expect(zh.starPromptTitle(0), '感谢你使用 MiniMax Bot 半个小时');
+      expect(zh.starPromptTitle(1), '感谢你使用 MiniMax Bot 一个小时');
+      expect(zh.starPromptTitle(5), '感谢你使用 MiniMax Bot 5 个小时');
+      expect(en.starPromptTitle(0), 'Thanks for using MiniMax Bot for half an hour');
+      expect(en.starPromptTitle(1), 'Thanks for using MiniMax Bot for an hour');
+      expect(en.starPromptTitle(6), 'Thanks for using MiniMax Bot for 6 hours');
     });
 
     test('keeps through JSON; the earlier prompt’s record keeps only whether it was finished', () {
@@ -352,7 +351,7 @@ void main() {
       await bench.settle();
       expect(bench.showing, isTrue);
       expect(find.text(_title(0)), findsOneWidget);
-      expect(find.text('本鱼已经在 DSH Go 里陪你半个小时啦⁠~'), findsOneWidget);
+      expect(find.text('感谢你使用 MiniMax Bot 半个小时'), findsOneWidget);
       expect(bench.store.record, const StarPromptRecord(used: _halfHour, shows: 1, askedAt: _halfHour));
     });
 
@@ -477,7 +476,7 @@ void main() {
       expect(await comesBack(bench, const Duration(hours: 4, minutes: 59)), isFalse);
       expect(await comesBack(bench, const Duration(minutes: 1)), isTrue);
       expect(find.text(_title(5)), findsOneWidget);
-      expect(find.text('本鱼已经在 DSH Go 里陪你 5 个小时啦⁠~'), findsOneWidget);
+      expect(find.text('感谢你使用 MiniMax Bot 5 个小时'), findsOneWidget);
       // The back gesture: as 下次再说, the second time.
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
@@ -804,7 +803,7 @@ void main() {
       await _pumpDialog(tester, width: 360, height: 780, scale: 1.3, locale: const Locale('en'), hours: 6);
       await tester.pumpAndSettle();
       fits(tester);
-      expect(find.text('I’ve kept you company in DSH Go for 6 hours now~'), findsOneWidget);
+      expect(find.text('Thanks for using MiniMax Bot for 6 hours'), findsOneWidget);
     });
 
     testWidgets('animations on: the whale bobs in and comes to rest at full size', (tester) async {

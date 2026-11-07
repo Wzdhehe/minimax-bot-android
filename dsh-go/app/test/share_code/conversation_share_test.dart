@@ -23,9 +23,9 @@ import '../replay/support/conversation_fixture.dart';
 
 final _now = DateTime.utc(2026, 10, 25, 3);
 
-ConversationShare _build({int? from, int? to, bool thinking = true, bool tools = true}) =>
-    ConversationExport(fixtureSource())
-        .build(from: from, to: to, thinking: thinking, toolOutput: tools, now: _now, app: 'dsh-go 1.0.0');
+ConversationShare _build({int? from, int? to, bool thinking = true, bool tools = true}) => ConversationExport(
+  fixtureSource(),
+).build(from: from, to: to, thinking: thinking, toolOutput: tools, now: _now, app: 'dsh-go 1.0.0');
 
 String _code(Map<String, Object?> json) {
   final body = utf8.encode(jsonEncode(json));
@@ -356,8 +356,8 @@ void main() {
       expect(shrunk.bytes.length, lessThan(png!.length));
       final small = (await tester.runAsync(
         () => shrinkImage(
-          File('assets/brand/glyph-light.png').existsSync()
-              ? File('assets/brand/glyph-light.png').readAsBytesSync()
+          File('android/app/src/main/res/mipmap-mdpi/ic_launcher.png').existsSync()
+              ? File('android/app/src/main/res/mipmap-mdpi/ic_launcher.png').readAsBytesSync()
               : png,
         ),
       ))!;

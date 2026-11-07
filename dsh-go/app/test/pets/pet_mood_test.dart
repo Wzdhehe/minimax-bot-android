@@ -579,12 +579,12 @@ void main() {
         target: const PetTarget(local, 's'),
         active: true,
         foreground: false,
-        packId: 'deepy-whale',
+        packId: 'test-rectangle-5x',
       );
       final map = state.toMap();
       expect(map['state'], 'working');
       expect(map['tier'], 2);
-      expect(map['packId'], 'deepy-whale');
+      expect(map['packId'], 'test-rectangle-5x');
       expect(map['size'], 'medium');
       expect(map['quiet'], false);
       expect((map['target']! as Map)['sessionId'], 's');

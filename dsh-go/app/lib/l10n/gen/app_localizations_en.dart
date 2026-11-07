@@ -1,6 +1,5 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -15948,16 +15947,16 @@ class L10nEn extends L10n {
     String _temp0 = intl.Intl.pluralLogic(
       hours,
       locale: localeName,
-      other: 'I’ve kept you company in DSH Go for $hours hours now~',
-      one: 'I’ve kept you company in DSH Go for an hour now~',
-      zero: 'I’ve kept you company in DSH Go for half an hour now~',
+      other: 'Thanks for using MiniMax Bot for $hours hours',
+      one: 'Thanks for using MiniMax Bot for an hour',
+      zero: 'Thanks for using MiniMax Bot for half an hour',
     );
     return '$_temp0';
   }
 
   @override
   String get starPromptBody =>
-      'DSH Go is free and open source. If it’s made your phone a little nicer to use, please give it a Star — it means so much to this little whale!';
+      'MiniMax Bot is free and open source. If it’s made your phone a little nicer to use, please give it a Star — it helps the project!';
 
   @override
   String get starPromptPlea => 'Pretty please~ It really matters!!';
