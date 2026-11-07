@@ -185,7 +185,11 @@ class _BotCreatePageState extends State<BotCreatePage> {
                 key: const Key('mbot.create.model'),
                 initialValue: _selection,
                 isExpanded: true,
-                decoration: InputDecoration(labelText: t.mobileBotModel),
+                decoration: InputDecoration(
+                  labelText: t.mobileBotModel,
+                  helperText: !_loading && !_failed && _default == null ? t.mobileBotNoDefaultModel : null,
+                  helperMaxLines: 3,
+                ),
                 items: [
                   DropdownMenuItem(value: '', child: Text(t.mobileBotModelDefault)),
                   for (final row in _models)

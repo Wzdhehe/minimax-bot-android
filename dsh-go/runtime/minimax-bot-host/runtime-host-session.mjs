@@ -12,6 +12,9 @@ import { createNativeModelRuntime } from './native-model-runtime.mjs';
 // reader. An installed package cannot replace this built-in arena by name.
 const BUILTIN_ID = 'builtin:minimax-bot';
 const construction = new AsyncLocalStorage();
+// Only a metadata read may have no default. Model turns use the original
+// resolver and authorization, even while another request lists the catalog.
+const catalogRead = new AsyncLocalStorage();
 const failure = (code) => Object.assign(new Error(code), { code });
 
 /** Re-exported ONLY at the pinned RuntimeServices gateway construction seam. */
@@ -22,6 +25,11 @@ export function createMiniAppAgentGateway(options) {
     if (resolve(options.dataDir) !== scope.dataDir) throw failure('runtime_gateway_scope_mismatch');
     if (scope.gateway) throw failure('runtime_gateway_ambiguous');
     scope.gateway = gateway;
+    const bind = gateway.bind.bind(gateway);
+    gateway.bind = (ports) => bind({ ...ports,
+      resolveModel: (requested) => catalogRead.getStore() === gateway && requested === undefined
+        ? Promise.resolve(undefined) : ports.resolveModel(requested),
+    });
   }
   return gateway;
 }
@@ -90,11 +98,24 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal, cata
       resolveModelKey: nativeRuntime.resolveModelKey,
       autoApprove: true,
     });
+    async function models() {
+      const result = catalog && !nativeRuntime.defaultSelection
+        ? await catalogRead.run(scope.gateway, () => bot.models())
+        : await bot.models();
+      if (!catalog) return result;
+      // The upstream still owns the option shape, variants and efforts. Only
+      // expose models Main has admitted, including when no default is chosen.
+      const allowed = (row) => providerBinding.some((entry) =>
+        entry.forkProviderId === row?.providerId && entry.models.includes(row?.modelId));
+      const entries = result.models.filter(allowed);
+      const selected = nativeRuntime.defaultSelection && allowed(result.default) ? result.default : undefined;
+      return { models: entries, ...(selected ? { default: selected } : {}) };
+    }
     // A retained application object cannot become usable again after close,
     // even if another generation later registers the same built-in plugin.
     const agent = Object.freeze(Object.fromEntries(['run', 'models', 'reply', 'answer'].map((method) => [method, (...args) => {
       if (closed) return Promise.reject(failure('AGENT_UNAVAILABLE'));
-      return bot[method](...args);
+      return method === 'models' ? models() : bot[method](...args);
     }])));
     apiHost.close = close;
     signal?.addEventListener('abort', onAbort, { once: true });

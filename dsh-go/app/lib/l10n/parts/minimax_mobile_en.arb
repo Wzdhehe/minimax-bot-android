@@ -72,5 +72,6 @@
   "mobileBotHelpersHint": "When off, helpers are used only when you ask",
   "mobileBotAttachment": "Add attachment",
   "mobileBotUploadLimit": "Up to 10 attachments per message, 16 MiB in total.",
-  "mobileBotUploadFailed": "Attachment upload did not finish. Completed uploads are kept; check before retrying."
+  "mobileBotUploadFailed": "Attachment upload did not finish. Completed uploads are kept; check before retrying.",
+  "mobileBotNoDefaultModel": "No default model is set. Choose a model here, or set a default in Accounts and models."
 }

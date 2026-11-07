@@ -47,11 +47,11 @@ function forkProviderMap(providerBinding) {
 export async function createNativeModelRuntime({
   application, catalog = null, probe = null, nativeBinding = null, fetchTarget = null,
 }) {
-  if (!catalog) return { providerBinding: [], binding: null, resolveModelKey: null };
+  if (!catalog) return { providerBinding: [], defaultSelection: null, binding: null, resolveModelKey: null };
   const projected = await applyNativeCatalog({ application, catalog, probe });
   const providerBinding = projected.providerBinding;
   if (!providerBinding.length || !nativeBinding) {
-    return { providerBinding, binding: null, resolveModelKey: null };
+    return { providerBinding, defaultSelection: projected.defaultSelection, binding: null, resolveModelKey: null };
   }
   const binding = createNativeModelBinding({
     byForkProviderId: forkProviderMap(providerBinding),
@@ -60,7 +60,9 @@ export async function createNativeModelRuntime({
   if (fetchTarget) binding.install(fetchTarget);
   return {
     providerBinding,
+    defaultSelection: projected.defaultSelection,
     binding,
-    resolveModelKey: (sessionId) => resolveModelKeyFor(application, sessionId),
+    resolveModelKey: (sessionId) => !sessionId && !projected.defaultSelection
+      ? Promise.resolve(null) : resolveModelKeyFor(application, sessionId),
   };
 }

@@ -15,7 +15,7 @@ function deferred() {
 function boundFixture() {
   return {
     catalog: { providers: [{ providerId: 'fixture-provider', apiFormat: 'openai-completions',
-      enabled: true, models: ['fixture-model'] }] },
+      enabled: true, models: ['fixture-model'] }], defaultProviderId: 'fixture-provider', defaultModelId: 'fixture-model' },
     nativeBinding: { open() { throw new Error('model execution is stubbed'); }, cancel() {} },
   };
 }
@@ -32,11 +32,11 @@ function fixtureModels() {
     },
   };
 }
-function fixture(dataDir, { runTurn, onClose = async () => {}, modelApplication = null } = {}) {
+function fixture(dataDir, { runTurn, onClose = async () => {}, modelApplication = null, resolveModel, listModels } = {}) {
   const owners = new Map();
   const created = [];
   const turns = [];
-  const selection = { providerId: 'fixture-provider', modelId: 'fixture-model' };
+  const selection = { providerId: 'custom_provider:fixture-provider', modelId: 'fixture-model' };
   const gateway = createMiniAppAgentGateway({ dataDir, logger: { info() {}, warn() {} }, nowMs: Date.now });
   gateway.bind({
     subscribePermissionAsks: () => () => {},
@@ -49,8 +49,8 @@ function fixture(dataDir, { runTurn, onClose = async () => {}, modelApplication 
     getOwner: async (id) => owners.get(id),
     resolveMiniAppRoot: async (id) => owners.has(id) ? { rootSessionId: id, pluginId: owners.get(id) } : undefined,
     defaultSessionModel: async () => ({ selection }),
-    resolveModel: async (requested) => requested ?? selection,
-    listModels: async () => [{ ...selection, displayName: 'Fixture' }],
+    resolveModel: resolveModel ?? (async (requested) => requested ?? selection),
+    listModels: listModels ?? (async () => [{ ...selection, displayName: 'Fixture' }]),
     readSessionModel: async () => selection,
     setSessionModel: async () => {},
     resolveHostSession: async () => undefined,
@@ -292,4 +292,71 @@ test('aborting an acquired session revokes it and a later session cannot revive 
     await assert.rejects(old.agent.models(), (error) => error.code === 'AGENT_UNAVAILABLE');
   } finally { await fresh.close(); }
   assert.equal(closes, 2);
+});
+
+test('no default lists admitted upstream options without resolving a turn model', async (t) => {
+  let resolutions = 0;
+  const setup = boundFixture();
+  delete setup.catalog.defaultProviderId;
+  delete setup.catalog.defaultModelId;
+  const selection = { providerId: 'custom_provider:fixture-provider', modelId: 'fixture-model' };
+  const row = { ...selection, displayName: 'Fixture', thinking: { efforts: ['medium', 'high'] } };
+  const session = await createBotRuntimeSession({ dataDir: '/fixture/no-default', ...setup,
+    startHost: async ({ dataDir }) => fixture(dataDir, {
+      async resolveModel(requested) {
+        resolutions++;
+        if (!requested) throw new Error('No default configured');
+        return requested;
+      },
+      async listModels() { return [row, { providerId: 'builtin', modelId: 'unconfigured' }]; },
+    }).assembled,
+  });
+  t.after(() => session.close());
+  assert.deepEqual(await session.agent.models(), { models: [row] });
+  assert.equal(resolutions, 0);
+  await assert.rejects(session.agent.run({ text: 'no implicit choice' }), (error) => error.code === 'model_not_available');
+  assert.equal(resolutions, 0);
+  const result = await session.agent.run({ text: 'explicit choice', model: selection });
+  assert.equal(result.text, 'fixture reply');
+  assert.ok(resolutions > 0, 'turns must still invoke the actual resolver');
+  assert.deepEqual(await session.agent.models(), { models: [row] });
+});
+
+test('no-default metadata reads preserve upstream list failures and caller authorization', async (t) => {
+  const setup = boundFixture();
+  delete setup.catalog.defaultProviderId;
+  delete setup.catalog.defaultModelId;
+  let host;
+  const session = await createBotRuntimeSession({ dataDir: '/fixture/list-failure', ...setup,
+    startHost: async ({ dataDir }) => {
+      host = fixture(dataDir, { async listModels() { throw new Error('fixture list unavailable'); } });
+      return host.assembled;
+    },
+  });
+  t.after(() => session.close());
+  await assert.rejects(session.agent.models());
+  await assert.rejects(host.application.models({ caller: { pluginId: 'builtin:minimax-bot', runId: 'forged' } }),
+    (error) => error.code === 'AGENT_UNAVAILABLE');
+});
+
+test('catalog read scope cannot suppress concurrent turn resolution', async (t) => {
+  const setup = boundFixture();
+  delete setup.catalog.defaultProviderId;
+  delete setup.catalog.defaultModelId;
+  const started = deferred(), finish = deferred();
+  let resolutions = 0;
+  const selection = { providerId: 'custom_provider:fixture-provider', modelId: 'fixture-model' };
+  const session = await createBotRuntimeSession({ dataDir: '/fixture/parallel-catalog', ...setup,
+    startHost: async ({ dataDir }) => fixture(dataDir, {
+      async resolveModel(requested) { resolutions++; if (!requested) throw new Error('no default'); return requested; },
+      async listModels() { started.resolve(); await finish.promise; return [selection]; },
+    }).assembled,
+  });
+  t.after(() => session.close());
+  const reading = session.agent.models();
+  await started.promise;
+  assert.equal((await session.agent.run({ text: 'during metadata read', model: selection })).text, 'fixture reply');
+  assert.ok(resolutions > 0);
+  finish.resolve();
+  assert.deepEqual(await reading, { models: [selection] });
 });

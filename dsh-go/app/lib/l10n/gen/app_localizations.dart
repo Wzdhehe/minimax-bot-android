@@ -15710,6 +15710,12 @@ abstract class L10n {
   /// **'附件未上传完成，已上传的附件会保留；请检查后重试。'**
   String get mobileBotUploadFailed;
 
+  /// No description provided for @mobileBotNoDefaultModel.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未设置默认模型。可在这里选择专用模型，或在账号与模型中设置默认模型。'**
+  String get mobileBotNoDefaultModel;
+
   /// No description provided for @nearbyThisChat.
   ///
   /// In zh, this message translates to:

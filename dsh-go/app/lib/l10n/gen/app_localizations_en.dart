@@ -9000,6 +9000,10 @@ class L10nEn extends L10n {
       'Attachment upload did not finish. Completed uploads are kept; check before retrying.';
 
   @override
+  String get mobileBotNoDefaultModel =>
+      'No default model is set. Choose a model here, or set a default in Accounts and models.';
+
+  @override
   String get nearbyThisChat => 'This chat';
 
   @override

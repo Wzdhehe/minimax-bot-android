@@ -87,7 +87,7 @@ test('refuses a model that is not in the projected catalog', async () => {
 test('leaves the guest untouched without a catalog', async () => {
   const { application, calls } = facade();
   const runtime = await createNativeModelRuntime({ application, nativeBinding: { open() {}, cancel() {} } });
-  assert.deepEqual(runtime, { providerBinding: [], binding: null, resolveModelKey: null });
+  assert.deepEqual(runtime, { providerBinding: [], defaultSelection: null, binding: null, resolveModelKey: null });
   assert.deepEqual(calls.create, []);
   assert.deepEqual(calls.select, []);
 });
@@ -99,4 +99,18 @@ test('reads the session model from the upstream model list', async () => {
   const empty = facade({ selected: null });
   assert.equal(await resolveModelKeyFor(empty.application, undefined), null);
   assert.deepEqual(empty.calls.list, [{}]);
+});
+
+test('no native default never falls back to a stale global selection, but retains session choices', async () => {
+  const { application, calls } = facade();
+  const runtime = await createNativeModelRuntime({ application,
+    catalog: { providers: CATALOG.providers, defaultProviderId: null, defaultModelId: null },
+    nativeBinding: { open() {}, cancel() {} }, fetchTarget: {},
+  });
+  assert.equal(runtime.defaultSelection, null);
+  assert.equal(await runtime.resolveModelKey(undefined), null);
+  assert.deepEqual(calls.list, []);
+  assert.deepEqual(calls.select, []);
+  assert.equal(await runtime.resolveModelKey('explicit-session'), 'custom_provider:minimax/m1');
+  assert.deepEqual(calls.list, [{ sessionId: 'explicit-session' }]);
 });

@@ -5377,6 +5377,7 @@
   "mobileBotAttachment": "添加附件",
   "mobileBotUploadLimit": "每条消息最多10个附件，合计不超过16 MiB。",
   "mobileBotUploadFailed": "附件未上传完成，已上传的附件会保留；请检查后重试。",
+  "mobileBotNoDefaultModel": "尚未设置默认模型。可在这里选择专用模型，或在账号与模型中设置默认模型。",
   "nearbyThisChat": "本对话",
   "nearbyPermissionTitle": "本对话的权限",
   "nearbyNewChatDefault": "新对话默认：{name}",

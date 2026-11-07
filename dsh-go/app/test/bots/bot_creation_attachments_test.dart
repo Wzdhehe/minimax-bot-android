@@ -13,7 +13,7 @@ class _Api extends MiniMaxBotApi {
   Map<String, Object?>? created;
   final sent = <List<String>>[];
   int uploads = 0;
-  bool refuseSend = false;
+  bool refuseSend = false, noDefault = false;
   Completer<Map<String, Object?>>? uploadGate;
   @override
   Stream<Map<String, Object?>> events() => const Stream.empty();
@@ -39,7 +39,7 @@ class _Api extends MiniMaxBotApi {
         'variants': ['thinking', ''],
       },
     ],
-    'default': {'providerId': 'custom_provider:p', 'modelId': 'm1'},
+    if (!noDefault) 'default': {'providerId': 'custom_provider:p', 'modelId': 'm1'},
   };
   @override
   Future<Map<String, Object?>> messages(String chat, {int limit = 200, String? before}) async => {'messages': []};
@@ -140,6 +140,38 @@ void main() {
       'variant': 'thinking',
       'thinking': {'effort': 'high'},
     });
+  });
+
+  testWidgets('a catalog without a default still offers an explicit model and its efforts', (tester) async {
+    final api = _Api()..noDefault = true;
+    await mount(tester, api, () async => []);
+    await tester.tap(find.byType(PopupMenuButton<bool>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('创建 Bot'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('mbot.create.name')), 'Researcher');
+    await scrollTo(tester, find.byKey(const Key('mbot.create.model')));
+    expect(find.text('尚未设置默认模型。可在这里选择专用模型，或在账号与模型中设置默认模型。'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mbot.create.effort.')), findsNothing);
+    await tester.tap(find.byKey(const Key('mbot.create.model')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Research model').last);
+    await tester.pumpAndSettle();
+    final effort = find.byKey(const ValueKey('mbot.create.effort.custom_provider:p/m1'));
+    await scrollTo(tester, effort);
+    await tester.tap(effort);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('high').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, '创建'));
+    await tester.pumpAndSettle();
+    expect(api.created!['model'], {
+      'providerId': 'custom_provider:p',
+      'modelId': 'm1',
+      'variant': 'thinking',
+      'thinking': {'effort': 'high'},
+    });
+    expect(api.noDefault, true);
   });
 
   testWidgets('attachment-only sending uses upload ids and keeps the draft after a single uncertain send', (

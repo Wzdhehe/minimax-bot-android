@@ -9,9 +9,9 @@ import { randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-const [bundleInput, addonInput, wrapperInput, directoryInput, scenario = 'empty'] = process.argv.slice(2);
+const [bundleInput, addonInput, wrapperInput, directoryInput, scenario = 'empty', connectionFdInput] = process.argv.slice(2);
 if (!directoryInput) throw Error('Expected <mobile-bundle> <host-FD-addon> <sqlite-wrapper> <private-fixture-dir>');
-if (!['empty', 'basic', 'advanced', 'disabled'].includes(scenario)) throw Error('Unknown catalog smoke case');
+if (!['empty', 'basic', 'advanced', 'disabled', 'no-default'].includes(scenario)) throw Error('Unknown catalog smoke case');
 if (process.versions.node !== '24.22.2' || typeof process.getuid !== 'function') throw Error('This host composition smoke requires POSIX Node 24.22.2 matching the Android addon headers');
 const bundle = resolve(bundleInput), directory = resolve(directoryInput);
 const require = createRequire(import.meta.url);
@@ -30,7 +30,7 @@ const fds = ['data', 'data-wal', 'data-shm', 'data-journal'].map((name) => {
 const descriptor = join(directory, 'descriptor.json');
 const providerId = '4a931f3d-8b37-4c71-a000-111111111111';
 const modelSettings = { modelId: 'fixture-model', enabled: true, effortOptions: [], modalities: { input: ['text'], output: ['text'] } };
-if (scenario === 'advanced') Object.assign(modelSettings, { limit: { context: 1000000, output: 128000 },
+if (['advanced', 'no-default'].includes(scenario)) Object.assign(modelSettings, { limit: { context: 1000000, output: 128000 },
   effortOptions: ['high', 'medium'], modalities: { input: ['text', 'image', 'pdf', 'video', 'audio'], output: ['text'] } });
 const catalog = { providers: scenario === 'empty' ? [] : [{ providerId, name: 'Fixture', apiFormat: 'openai-completions',
   enabled: scenario !== 'disabled', models: ['fixture-model'], modelSettings: [modelSettings] }],
@@ -83,6 +83,9 @@ const lease = installMobileFilesystem({ files, assets: resources, code: source, 
 const url = 'file:///mbot-code/runtime.mjs';
 registerHooks({ resolve(s, c, next) { return s === url ? { url, shortCircuit: true } : next(s, c); },
   load(u, c, next) { return u === url ? { source, format: 'module', shortCircuit: true } : next(u, c); } });
+const connectionFd = connectionFdInput === undefined ? null : Number(connectionFdInput);
+if (connectionFd !== null && (!Number.isSafeInteger(connectionFd) || connectionFd < 3)) throw Error('Expected inherited fixture socket FD');
+let offered = false;
 let take;
 const waiting = new Promise((resolve) => { take = resolve; });
 const timeout = setTimeout(() => { console.error('FAIL: exact product startup timed out; host only'); process.exit(1); }, 45_000);
@@ -93,20 +96,25 @@ try {
     addon: addon.exports, dataFds: fds, files, filesystem: lease,
     models: { open() { throw Error('no_model_requested'); }, cancel() {} },
     snapshots: snapshotFixture,
-    connections: { next() { return waiting; }, cancel() { take(-1); } }, onReady() { ready = true; } });
+    connections: { next() {
+      if (!offered && connectionFd !== null) { offered = true; return Promise.resolve(connectionFd); }
+      return waiting;
+    }, cancel() { take(-1); } }, onReady() { ready = true; } });
   assert.equal(ready, true);
   assert.ok(values.has('runtime-fs-state.json'));
-  if (['basic', 'advanced'].includes(scenario)) {
+  if (['basic', 'advanced', 'no-default'].includes(scenario)) {
+    // Read after startup: the socket fixture may concurrently query /api/models.
     const config = fs.readFileSync('/mbot-data/runtime/config.yaml', 'utf8');
-    assert.ok(config.includes(`custom_provider:${providerId}/fixture-model`));
+    if (scenario !== 'no-default') assert.ok(config.includes(`custom_provider:${providerId}/fixture-model`));
     assert.ok(config.includes('native-broker-placeholder'));
     assert.ok(config.includes('https://models.mbot.invalid/v1'));
-    if (scenario === 'advanced') {
+    if (['advanced', 'no-default'].includes(scenario)) {
       assert.match(config, /context:\s*1000000/);
       assert.match(config, /output:\s*128000/);
       assert.match(config, /effortOptions:/);
     }
   }
+  if (connectionFd !== null) await new Promise((done) => process.stdin.once('data', done));
   await handle.close();
   console.log(`PASS: ${scenario} catalog; exact mobile product entry starts the real pinned factory and official Bot using the virtual filesystem, actual FD SQLite and Main-file fixture, then closes; host only, no Android execution or model turn`);
   process.exit(0); // Match the product's one-VM process retirement after close.
