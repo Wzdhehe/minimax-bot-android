@@ -8,6 +8,7 @@
 import 'package:dsh_app/state/adaptive_layout_state.dart';
 import 'package:dsh_app/ui/chat/chat_screen.dart';
 import 'package:dsh_app/ui/chat/composer.dart';
+import 'package:dsh_app/ui/chat/widgets/whale_tail.dart';
 import 'package:dsh_app/ui/session/session_detail_page.dart';
 import 'package:dsh_app/ui/shell/adaptive/detail_sheet.dart';
 import 'package:dsh_app/ui/shell/sessions_drawer.dart';
@@ -56,7 +57,12 @@ Future<void> _openSheet(WidgetTester tester, {bool full = false}) async {
 }
 
 void main() {
-  setUpAll(loadTestFonts);
+  setUpAll(() async {
+    await loadTestFonts();
+    // Start the procedural dot animation at the same phase whether a golden
+    // runs alone or after the geometry tests have already warmed the atlas.
+    await WhaleSprites.load();
+  });
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     freezeClocks();
