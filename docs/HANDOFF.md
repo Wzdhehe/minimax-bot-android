@@ -1,4 +1,15 @@
-# 开发接手入口（2026-11-05续写）
+# 开发接手入口（2026-11-07 产品设备结果）
+
+**当前事实覆盖下文旧的“正式入口仍 DSH / 尚无产品 APK / runtime 未启动”等阶段描述。** `feat/t-plugins@94fb2d8e79018c209ce4c7e6683b0d8d6f3a8325` 已由本机 Windows agent 构建产品 APK，并在 API35 / x86_64 模拟器 `emulator-5554` 验收。证据来源是用户转述的本机报告，云端未直接读取截图、APK或设备日志；构建时 tracked 工作树干净，本轮设备方零源码改动。
+
+- 产品入口是官方 `BotHome`，实际显示官方服务的 `Chief`；APK 包含 full-ICU Node、FD SQLite、备份 JNI 和完整 JS/资源，未包含 DSH/PRoot rootfs。`useLegacyPackaging=false` 与清单 `extractNativeLibs=false` 配套。
+- 应用 ID：`io.github.ccch1mneyyy.dsh_app.mbot`。Main 为 `u0_a152`，guest 为独立 UID `u0_i9003`；三次启动均记录到 `bot_ready`（只有实际匿名403/授权200健康检查通过后才记录）。首冷启约62秒，后续约16–17秒。无引擎时设置及供应商表单可达，**未输入真实 Key，未发起模型回合**；Chief 的首条问候不算模型证据。
+- debug x86_64 APK：289,484,604字节，SHA256 `dce0a016258c0d12e49ece91482a613f5c32620775eeb7e15adf15b6b2429dc3`。APK、截图、完整日志和本机报告均未入库、未发布。仅该确切提交/API35/x86_64 的产品启动有此设备结果，不能扩成后续代码或手机结果。
+- **后续主线**：App内由用户配置真实供应商后验聊天/流式/取消；ARM64 full-ICU Node 源构建、对应 addon/产品打包及手机验证；随后补 Bot 可信调用与插件等业务。产品聊天、记忆/快照、平板、插件及通知尚无本轮设备证据。
+- 新增独立 ARM64 producer：`dsh-go/tooling/android-node-probe/build-arm64-source.py` 与 `node-arm64-source-build.json`，保留原 x86_64 五个授权输入不变；只共享只读的配方变换。**目前仅入参/结果验证用例通过，未实际编译 ARM64，也未放开产品 ARM64 admission。** GitHub最新任务仍因计费限制零步骤启动；该 producer 可在有工具链的 Linux x86_64 主机执行。不要把脚本落地说成手机包落地。
+- 本轮将 descriptor 等待从60秒调到既有启动预算90秒，修复上述首冷启62秒会被 UI 提前报告为无服务的窗口；这一后续调整尚未设备复跑。
+
+以下历史内容保留作证据背景；旧任务卡及 NEXT-AGENT 的旧“当前入口”不能推翻以上结果。继续只用 `feat/t-plugins`，不动 main/dev/integration，不 force、不 PR、不发布二进制，不向 runtime 传真实 Key。
 
 **2026-11-06 当前入口**：昨晚 `698201a` → `2ce7b2d` → `8d9d6d9` → `f5fd12e` 已推送，工作树干净；详见 [NEXT-AGENT 当前日间主线](handoff/NEXT-AGENT.md)。已有 Main 运行代次管理、descriptor FD 的可信 guest 启动器，以及真实 runtime 两个 SQLite loader 的受控入口；仍缺 Android 完整文件系统、迁移备份能力与产品装配，**没有可聊天产品 APK**。宿主通过不能代替设备验证。
 

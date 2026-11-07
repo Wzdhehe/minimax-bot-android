@@ -98,7 +98,10 @@ internal object BotRuntimeManager {
     }
     fun descriptorWhenSettled(reply: (Map<String, String>?) -> Unit) {
         readers.execute {
-            val deadline = System.nanoTime() + 60_000_000_000L
+            // First-install seeding took 62s in the API35 product run. Keep
+            // the UI waiting within the launcher's existing 90s startup
+            // budget instead of declaring a still-starting service absent.
+            val deadline = System.nanoTime() + 90_000_000_000L
             var descriptor: Map<String, String>? = null
             do {
                 descriptor = BotRuntimeEndpoint.descriptor()
