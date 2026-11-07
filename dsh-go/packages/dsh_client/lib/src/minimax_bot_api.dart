@@ -30,6 +30,13 @@ class MiniMaxBotApi {
   final HttpClient _client;
   final bool _ownsClient;
   final Map<String, String> _headers;
+
+  /// Compare native-published service identities without exposing or logging
+  /// the session credential. A restarted guest can reuse its old port.
+  bool sameServiceAs(MiniMaxBotApi other) =>
+      _base == other._base &&
+      _headers.length == other._headers.length &&
+      _headers.entries.every((entry) => other._headers[entry.key] == entry.value);
   static const _maxResponse = 2 * 1024 * 1024;
   static final _botId = RegExp(r'^bot_[a-zA-Z0-9]+$');
   static final _groupId = RegExp(r'^grp_[a-zA-Z0-9]+$');

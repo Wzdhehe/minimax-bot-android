@@ -9,8 +9,9 @@ import { randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-const [bundleInput, addonInput, wrapperInput, directoryInput] = process.argv.slice(2);
+const [bundleInput, addonInput, wrapperInput, directoryInput, scenario = 'empty'] = process.argv.slice(2);
 if (!directoryInput) throw Error('Expected <mobile-bundle> <host-FD-addon> <sqlite-wrapper> <private-fixture-dir>');
+if (!['empty', 'basic', 'advanced', 'disabled'].includes(scenario)) throw Error('Unknown catalog smoke case');
 if (process.versions.node !== '24.22.2' || typeof process.getuid !== 'function') throw Error('This host composition smoke requires POSIX Node 24.22.2 matching the Android addon headers');
 const bundle = resolve(bundleInput), directory = resolve(directoryInput);
 const require = createRequire(import.meta.url);
@@ -27,8 +28,16 @@ const fds = ['data', 'data-wal', 'data-shm', 'data-journal'].map((name) => {
   return fd;
 });
 const descriptor = join(directory, 'descriptor.json');
+const providerId = '4a931f3d-8b37-4c71-a000-111111111111';
+const modelSettings = { modelId: 'fixture-model', enabled: true, effortOptions: [], modalities: { input: ['text'], output: ['text'] } };
+if (scenario === 'advanced') Object.assign(modelSettings, { limit: { context: 1000000, output: 128000 },
+  effortOptions: ['high', 'medium'], modalities: { input: ['text', 'image', 'pdf', 'video', 'audio'], output: ['text'] } });
+const catalog = { providers: scenario === 'empty' ? [] : [{ providerId, name: 'Fixture', apiFormat: 'openai-completions',
+  enabled: scenario !== 'disabled', models: ['fixture-model'], modelSettings: [modelSettings] }],
+  defaultProviderId: ['basic', 'advanced'].includes(scenario) ? providerId : null,
+  defaultModelId: ['basic', 'advanced'].includes(scenario) ? 'fixture-model' : null };
 fs.writeFileSync(descriptor, JSON.stringify({ entryPath: '/mbot-code/runtime.mjs', pinCommit: '97818b2890b4acae1c6bd1200a226ff506680628',
-  port: 32181, token: randomBytes(32).toString('hex'), catalog: { providers: [], defaultProviderId: null, defaultModelId: null } }), { mode: 0o600 });
+  port: 32181, token: randomBytes(32).toString('hex'), catalog }), { mode: 0o600 });
 const descriptorFd = fs.openSync(descriptor, 'r');
 const rawRead = fs.readFileSync.bind(fs), rawWrite = fs.writeFileSync.bind(fs);
 const statePath = join(directory, 'state.json');
@@ -87,8 +96,19 @@ try {
     connections: { next() { return waiting; }, cancel() { take(-1); } }, onReady() { ready = true; } });
   assert.equal(ready, true);
   assert.ok(values.has('runtime-fs-state.json'));
+  if (['basic', 'advanced'].includes(scenario)) {
+    const config = fs.readFileSync('/mbot-data/runtime/config.yaml', 'utf8');
+    assert.ok(config.includes(`custom_provider:${providerId}/fixture-model`));
+    assert.ok(config.includes('native-broker-placeholder'));
+    assert.ok(config.includes('https://models.mbot.invalid/v1'));
+    if (scenario === 'advanced') {
+      assert.match(config, /context:\s*1000000/);
+      assert.match(config, /output:\s*128000/);
+      assert.match(config, /effortOptions:/);
+    }
+  }
   await handle.close();
-  console.log('PASS: exact mobile product entry starts the real pinned factory and official Bot using the virtual filesystem, actual FD SQLite and Main-file fixture, then closes; host only, no Android execution or model turn');
+  console.log(`PASS: ${scenario} catalog; exact mobile product entry starts the real pinned factory and official Bot using the virtual filesystem, actual FD SQLite and Main-file fixture, then closes; host only, no Android execution or model turn`);
   process.exit(0); // Match the product's one-VM process retirement after close.
 } catch (error) {
   console.error('FAIL: host product composition:', String(error.code ?? error.message).slice(0, 160));

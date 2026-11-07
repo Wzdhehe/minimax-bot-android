@@ -286,3 +286,38 @@ test('extra environment values use the same allowlist and cannot introduce a sec
   } });
   assert.deepEqual(env, { PATH: '/usr/bin', HOME: '/private', LANG: 'zh_CN.UTF-8' });
 });
+
+for (const mode of ['basic', 'advanced', 'disabled']) {
+  test(`native per-model metadata survives the actual FD reader: ${mode}`, () => {
+    const { priv } = makeDirs();
+    const model = { modelId: 'm1', enabled: true, effortOptions: [], modalities: { input: ['text'], output: ['text'] } };
+    if (mode === 'advanced') Object.assign(model, { limit: { context: 1000000, output: 128000 },
+      effortOptions: ['high', 'medium'], modalities: { input: ['text', 'image', 'pdf', 'video', 'audio'], output: ['text'] } });
+    const descriptor = createRuntimeDescriptor({ entryPath: '/mbot-code/runtime.mjs', pinCommit: PIN, port: 43117,
+      token: 'c'.repeat(64), catalog: { providers: [{ providerId: '4a931f3d-8b37-4c71-a000-111111111111',
+        name: 'Provider', apiFormat: 'openai-completions', enabled: mode !== 'disabled', models: ['m1'], modelSettings: [model] }],
+        defaultProviderId: null, defaultModelId: null } });
+    const path = writeRuntimeDescriptor({ dir: priv, descriptor, allowedRoots: [priv] });
+    const fd = openSync(path, 'r');
+    assert.deepEqual(readRuntimeDescriptorFd({ fd, expectedOwnerUid: process.getuid() }), descriptor);
+    assert.throws(() => fstatSync(fd), { code: 'EBADF' });
+  });
+}
+
+test('the transferred model metadata allowlist rejects secrets and malformed entries even in disabled providers', () => {
+  const { priv } = makeDirs(); mkdirSync(priv, { recursive: true, mode: 0o700 });
+  const path = join(priv, 'bad-models.json');
+  const patches = [
+    { apiKey: 'fixture-only-forbidden' }, { baseUrl: 'https://example.invalid' },
+    { limit: { context: 0 } }, { limit: { output: '128000' } },
+    { enabled: 'false' }, { modalities: { input: ['shell'] } },
+    { unknown: true }, { limit: { apiKey: 'fixture-only-forbidden' } },
+  ];
+  for (const patch of patches) {
+    writeFileSync(path, JSON.stringify({ entryPath: '/mbot-code/runtime.mjs', pinCommit: PIN, port: 43117, token: 'c'.repeat(64),
+      catalog: { providers: [{ providerId: 'p', enabled: false, models: ['m1'], modelSettings: [{ modelId: 'm1', ...patch }] }] } }), { mode: 0o600 });
+    const fd = openSync(path, 'r');
+    assert.throws(() => readRuntimeDescriptorFd({ fd, expectedOwnerUid: process.getuid() }), { code: 'descriptor_invalid' });
+    assert.throws(() => fstatSync(fd), { code: 'EBADF' });
+  }
+});

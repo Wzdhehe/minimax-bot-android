@@ -13,17 +13,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// A service that answers without a socket, and counts how often it was closed.
 class _Api extends MiniMaxBotApi {
-  _Api() : super(Uri.parse('http://127.0.0.1:8788'));
+  _Api({String session = 'fixture-session', this.name = 'Alice'})
+    : super(Uri.parse('http://127.0.0.1:8788'), headers: {'Authorization': 'Bearer $session'});
   int closes = 0;
+  int stateReads = 0;
+  String name;
+  Object? failure;
   @override
   Stream<Map<String, Object?>> events() => const Stream.empty();
   @override
-  Future<Map<String, Object?>> state() async => {
-    'bots': [
-      {'id': 'bot_a', 'name': 'Alice'},
-    ],
-    'groups': [],
-  };
+  Future<Map<String, Object?>> state() async {
+    stateReads++;
+    if (failure != null) throw failure!;
+    return {
+      'bots': [
+        {'id': 'bot_a', 'name': name},
+      ],
+      'groups': [],
+    };
+  }
+
   @override
   void close() {
     closes++;
@@ -139,6 +148,68 @@ void main() {
     expect(find.text('本机没有运行中的 Bot 服务'), findsNothing);
     expect(reconnect(), findsOneWidget);
     expect(settingsButton(), findsOneWidget);
+  });
+
+  testWidgets('the Bot banner reconnect obtains the newly published endpoint and releases the failed run', (
+    tester,
+  ) async {
+    final old = _Api(session: 'old');
+    final fresh = _Api(session: 'new', name: 'Recovered');
+    final endpoint = _Endpoint(service: old);
+    await tester.pumpWidget(app(endpoint));
+    await pumpUntil(tester, () => find.text('Alice').evaluate().isNotEmpty);
+    final controller = tester.widget<BotHome>(find.byType(BotHome)).controller;
+    old.failure = StateError('fixture-old-service-stopped');
+    await controller.refresh();
+    await tester.pump();
+    expect(find.byType(MaterialBanner), findsOneWidget);
+    endpoint.service = fresh;
+    final ready = Completer<MiniMaxBotApi?>();
+    endpoint.gates.add(ready);
+    final reads = old.stateReads;
+    await tester.tap(find.descendant(of: find.byType(MaterialBanner), matching: find.byType(TextButton)));
+    await tester.pump();
+    expect(tester.widget<PopupMenuButton<bool>>(find.byType(PopupMenuButton<bool>)).enabled, isFalse);
+    ready.complete(fresh);
+    await pumpUntil(tester, () => find.text('Recovered').evaluate().isNotEmpty);
+    expect(endpoint.reads, 2);
+    expect(old.stateReads, reads, reason: 'a retired endpoint must not be polled to validate the new run');
+    expect(old.closes, 1);
+    expect(fresh.closes, 0);
+    expect(find.byType(MaterialBanner), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('leaving Bot settings adopts a new token even when the old port still answers', (tester) async {
+    final old = _Api(session: 'old');
+    final fresh = _Api(session: 'new', name: 'New run');
+    final endpoint = _Endpoint(service: old);
+    await tester.pumpWidget(app(endpoint));
+    await pumpUntil(tester, () => find.text('Alice').evaluate().isNotEmpty);
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BotSettingsHub), findsOneWidget);
+    final reads = old.stateReads;
+    endpoint.service = fresh;
+    Navigator.of(tester.element(find.byType(BotSettingsHub))).pop();
+    await pumpUntil(tester, () => find.text('New run').evaluate().isNotEmpty);
+    expect(endpoint.reads, 2);
+    expect(old.stateReads, reads);
+    expect(old.closes, 1);
+    expect(fresh.closes, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('reconnecting the same run reopens SSE without closing the client it still owns', (tester) async {
+    final api = _Api();
+    final endpoint = _Endpoint(service: api);
+    await tester.pumpWidget(app(endpoint));
+    await pumpUntil(tester, () => find.text('Alice').evaluate().isNotEmpty);
+    await tester.tap(find.widgetWithText(TextButton, '重新连接'));
+    await pumpUntil(tester, () => endpoint.reads == 2);
+    expect(api.closes, 0);
+    await tester.pumpWidget(const SizedBox());
+    expect(api.closes, 1);
   });
 
   testWidgets('the settings are reachable without a running service', (tester) async {

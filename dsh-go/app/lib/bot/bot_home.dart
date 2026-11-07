@@ -15,9 +15,10 @@ import 'bot_attachments.dart';
 import 'package:dsh_client/dsh_client.dart' show MiniMaxBotApi;
 
 class BotHome extends StatefulWidget {
-  const BotHome({super.key, required this.controller, this.pickAttachments = pickBotAttachments});
+  const BotHome({super.key, required this.controller, this.pickAttachments = pickBotAttachments, this.onReconnect});
   final BotController controller;
   final Future<List<BotPickedAttachment>> Function() pickAttachments;
+  final Future<void> Function()? onReconnect;
   @override
   State<BotHome> createState() => _BotHomeState();
 }
@@ -32,8 +33,23 @@ class _BotHomeState extends State<BotHome> {
   /// create request and the refresh that follows it. The entry is disabled
   /// while it runs, and the method refuses a second flow on its own.
   bool _creating = false;
+  int _reconnecting = 0;
   bool _uploading = false;
   final _attachments = <String, List<Map<String, Object?>>>{};
+
+  Future<void> _reconnect() async {
+    setState(() => _reconnecting++);
+    try {
+      await (widget.onReconnect?.call() ?? bot.start());
+    } finally {
+      if (mounted) setState(() => _reconnecting--);
+    }
+  }
+
+  Future<void> _settings() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => BotSettingsHub(botApi: bot.api)));
+    if (mounted) await _reconnect();
+  }
 
   @override
   void initState() {
@@ -54,7 +70,7 @@ class _BotHomeState extends State<BotHome> {
   Future<void> _create({bool group = false}) async {
     // The entry is disabled while a flow runs; the guard here is what keeps
     // a second flow from starting even if the entry is reached anyway.
-    if (_creating) return;
+    if (_creating || _reconnecting > 0) return;
     setState(() => _creating = true);
     final name = TextEditingController();
     final role = TextEditingController();
@@ -246,9 +262,7 @@ class _BotHomeState extends State<BotHome> {
             children: [
               IconButton.outlined(
                 tooltip: context.l10n.mobileBotSettings,
-                onPressed: () =>
-                    Navigator.of(context)
-                        .push(MaterialPageRoute<void>(builder: (_) => BotSettingsHub(botApi: bot.api))),
+                onPressed: _settings,
                 icon: const Icon(Icons.settings_outlined),
               ),
               Text(
@@ -263,7 +277,7 @@ class _BotHomeState extends State<BotHome> {
                 ),
                 child: PopupMenuButton<bool>(
                   icon: const Icon(Icons.add),
-                  enabled: !_creating,
+                  enabled: !_creating && _reconnecting == 0,
                   onSelected: (group) => _create(group: group),
                   itemBuilder: (context) => [
                     PopupMenuItem(value: false, child: Text(context.l10n.mobileBotNew)),
@@ -354,6 +368,7 @@ class _BotHomeState extends State<BotHome> {
   }
 
   Future<void> _send() async {
+    if (_reconnecting > 0) return;
     final text = _composer.text;
     final chat = bot.selectedChat;
     final attachments = List<Map<String, Object?>>.of(_attachments[chat] ?? const []);
@@ -368,7 +383,7 @@ class _BotHomeState extends State<BotHome> {
 
   Future<void> _attach() async {
     final chat = bot.selectedChat;
-    if (chat == null || _uploading || bot.sending) return;
+    if (chat == null || _uploading || bot.sending || _reconnecting > 0) return;
     setState(() => _uploading = true);
     try {
       final selected = await widget.pickAttachments();
@@ -542,7 +557,7 @@ class _BotHomeState extends State<BotHome> {
               IconButton(
                 key: const Key('mbot.chat.attach'),
                 tooltip: context.l10n.mobileBotAttachment,
-                onPressed: _uploading || bot.sending ? null : _attach,
+                onPressed: _uploading || bot.sending || _reconnecting > 0 ? null : _attach,
                 icon: const Icon(Icons.add_circle_outline),
               ),
               Expanded(
@@ -559,7 +574,7 @@ class _BotHomeState extends State<BotHome> {
               ),
               IconButton(
                 tooltip: context.l10n.mobileBotSend,
-                onPressed: bot.sending || _uploading ? null : _send,
+                onPressed: bot.sending || _uploading || _reconnecting > 0 ? null : _send,
                 icon: bot.sending
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.arrow_upward),
@@ -579,17 +594,18 @@ class _BotHomeState extends State<BotHome> {
       body: SafeArea(
         child: Column(
           children: [
+            if (_reconnecting > 0) const LinearProgressIndicator(),
             if (bot.error != null)
               MaterialBanner(
                 content: Text(context.l10n.mobileBotLoadFailed),
-                actions: [TextButton(onPressed: bot.start, child: Text(context.l10n.mobileBotRetry))],
+                actions: [TextButton(onPressed: _reconnect, child: Text(context.l10n.mobileBotRetry))],
               ),
             if (!bot.connected && !bot.loading && bot.error == null)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Flexible(child: Text(context.l10n.mobileBotOffline)),
-                  TextButton(onPressed: bot.start, child: Text(context.l10n.mobileBotRetry)),
+                  TextButton(onPressed: _reconnect, child: Text(context.l10n.mobileBotRetry)),
                 ],
               ),
             Expanded(

@@ -143,7 +143,8 @@ class _BotEntryState extends State<BotEntry> {
       return;
     }
     final controller = _controller;
-    if (controller == null) {
+    if (controller == null || _api?.sameServiceAs(api) != true) {
+      _release();
       _api = api;
       _controller = BotController(api);
       setState(() {});
@@ -151,18 +152,28 @@ class _BotEntryState extends State<BotEntry> {
     }
     // The phone published a service. The one this page holds is the same run
     // unless it stopped answering: a restarted run publishes a new endpoint.
-    await controller.refresh();
+    if (!controller.connected) {
+      await controller.start();
+    } else {
+      await controller.refresh();
+    }
     if (!mounted || read != _read) {
-      api.close();
+      if (!identical(api, _api)) api.close();
       return;
     }
     if (controller.error != null) {
+      if (identical(api, _api)) {
+        // No new native run was published. Keep the failed but still owned
+        // client available for settings and a later explicit reconnect.
+        setState(() {});
+        return;
+      }
       _release();
       _api = api;
       _controller = BotController(api);
     } else {
       // The same service: this page keeps the client it already has.
-      api.close();
+      if (!identical(api, _api)) api.close();
     }
     setState(() {});
   }
@@ -183,7 +194,7 @@ class _BotEntryState extends State<BotEntry> {
     final controller = _controller;
     if (controller != null) {
       // A new controller is a new page: the old one is gone with its service.
-      return BotHome(key: ValueKey(controller), controller: controller);
+      return BotHome(key: ValueKey(controller), controller: controller, onReconnect: _connect);
     }
     return _entry(context);
   }

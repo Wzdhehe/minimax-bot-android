@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dsh_app/bot/bot_runtime_endpoint.dart';
+import 'package:dsh_client/dsh_client.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,13 +14,27 @@ void main() {
   const channel = MethodChannel('minimax/bot-runtime');
 
   void mock(Object? Function(MethodCall call) handler) {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async => handler(call));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async => handler(call),
+    );
   }
 
   tearDown(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+  });
+
+  test('service identity includes the published token as well as its loopback address', () {
+    MiniMaxBotApi client(String address, String token) {
+      final value = MiniMaxBotApi(Uri.parse(address), headers: {'Authorization': 'Bearer $token'});
+      addTearDown(value.close);
+      return value;
+    }
+
+    final old = client('http://127.0.0.1:8788', 'fixture-old-run');
+    expect(old.sameServiceAs(client('http://127.0.0.1:8788', 'fixture-old-run')), isTrue);
+    expect(old.sameServiceAs(client('http://127.0.0.1:8788', 'fixture-new-run')), isFalse);
+    expect(old.sameServiceAs(client('http://127.0.0.1:8789', 'fixture-old-run')), isFalse);
   });
 
   test('no running runtime means no service and no invented url', () async {

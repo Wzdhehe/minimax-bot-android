@@ -15,7 +15,7 @@
 
 import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
-import { findCatalogViolation } from './runtime-catalog-policy.mjs';
+import { findCatalogViolation, validatedModelSettings } from './runtime-catalog-policy.mjs';
 
 export const RUNTIME_DESCRIPTOR_FILENAME = 'runtime-descriptor.json';
 
@@ -282,12 +282,14 @@ function assertTransferredDescriptorShape(raw) {
   if (!only(catalog, ['providers', 'defaultProviderId', 'defaultModelId']) ||
       (catalog.providers !== undefined && !Array.isArray(catalog.providers))) throw descriptorFailure('descriptor_invalid');
   for (const row of catalog.providers ?? []) {
-    if (!only(row, ['providerId', 'name', 'apiFormat', 'enabled', 'models', 'hasApiKey']) ||
+    if (!only(row, ['providerId', 'name', 'apiFormat', 'enabled', 'models', 'modelSettings', 'hasApiKey']) ||
         (row.models !== undefined && (!Array.isArray(row.models) || row.models.some((value) => typeof value !== 'string'))) ||
         ['providerId', 'name', 'apiFormat'].some((key) => row[key] !== undefined && typeof row[key] !== 'string') ||
         ['enabled', 'hasApiKey'].some((key) => row[key] !== undefined && typeof row[key] !== 'boolean')) {
       throw descriptorFailure('descriptor_invalid');
     }
+    try { validatedModelSettings(row); }
+    catch { throw descriptorFailure('descriptor_invalid'); }
   }
   for (const key of ['defaultProviderId', 'defaultModelId']) {
     if (catalog[key] != null && typeof catalog[key] !== 'string') throw descriptorFailure('descriptor_invalid');
