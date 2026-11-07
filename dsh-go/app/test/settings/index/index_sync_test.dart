@@ -222,8 +222,8 @@ void main() {
       tester,
       SettingsPageId.pets,
       () => _app(tester, const PetSettingsPage(), _running()),
-      // Once 「App 外显示」 is on.
-      absent: {'pet-display-when'},
+      // No built-in pets remain; the default none selection hides their controls.
+      absent: {'pet-size', 'pet-quiet', 'pet-outside-app', 'pet-display-when'},
     );
   });
 

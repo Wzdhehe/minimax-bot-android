@@ -5,7 +5,6 @@
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:dsh_app/pets/pet_mood.dart';

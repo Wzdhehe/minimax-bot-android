@@ -30,6 +30,7 @@ import 'package:dsh_app/ui/settings/about_page.dart';
 import 'package:dsh_app/ui/settings/settings_widgets.dart';
 import 'package:dsh_app/ui/shell/root_gate.dart';
 import 'package:dsh_app/ui/star/star_prompt_dialog.dart';
+import 'package:dsh_app/ui/theme/app_icons.dart';
 import 'package:dsh_app/ui/star/star_prompt_host.dart';
 import 'package:dsh_app/ui/theme/theme.dart';
 import 'package:flutter/material.dart';
@@ -262,11 +263,11 @@ Future<_Bench> _pumpDialog(
     ),
   );
   await tester.pump();
-  // Decoded for real (FakeAsync never finishes a decode), as the host does before it opens.
-  expect(find.byIcon(Icons.star_rounded), findsOneWidget);
-  expect(find.byType(Image), findsNothing);
   await tester.tap(find.text('打开'));
   await tester.pump();
+  // The dialog uses a built-in icon, not a decoded image asset.
+  expect(find.byIcon(AppIcons.favoriteActive), findsOneWidget);
+  expect(find.byType(Image), findsNothing);
   return bench;
 }
 

@@ -26,7 +26,7 @@ class BrandAssetsTest(unittest.TestCase):
     def test_no_excluded_art_in_app_bundle_or_loaders(self):
         for path in [APP / "pubspec.yaml", *(APP / "lib").rglob("*.dart")]:
             for forbidden in ["assets/brand/", "assets/whale/", "assets/star/", "brand_glyph.g.dart",
-                              "assets/pets/deepy-whale", "assets/pets/whale-girl"]:
+                              "assets/pets/deepy-whale", "assets/pets/whale-girl", "StarPromptDialog.asset"]:
                 with self.subTest(file=str(path.relative_to(APP)), token=forbidden):
                     self.assertNotIn(forbidden, path.read_text())
 

@@ -1,4 +1,4 @@
-// Star prompt with a neutral Material star (no mascot artwork).
+// Star prompt with a neutral app icon (no mascot artwork).
 
 import 'dart:async';
 
@@ -230,7 +230,7 @@ class StarPicture extends StatelessWidget {
               gradient: RadialGradient(colors: [glow, glow.withValues(alpha: 0)], stops: const [0.3, 1]),
             ),
           ),
-          Icon(Icons.star_rounded, size: side * 0.65, color: scheme.primary),
+          Icon(AppIcons.favoriteActive, size: side * 0.65, color: scheme.primary),
         ],
       ),
     );

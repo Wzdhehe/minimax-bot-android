@@ -71,8 +71,6 @@ class _StarPromptHostState extends ConsumerState<StarPromptHost> {
       return;
     }
     if (_settle != null) return;
-    // Decoded by the time it comes up.
-    unawaited(precacheImage(const AssetImage(StarPromptDialog.asset), context));
     _settle = Timer(StarPromptRules.settle, _maybeShow);
   }
 
