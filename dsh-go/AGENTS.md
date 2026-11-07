@@ -1,5 +1,7 @@
 # AGENTS.md
 
+> 本目录来自DSH Go，下文布局/命令保留其来源背景。**当前mbot产品以根目录[HANDOFF](../docs/HANDOFF.md)、[NEXT-AGENT](../docs/handoff/NEXT-AGENT.md)和[开发命令](../docs/DEVELOPMENT.md)为准。** 正式入口、独立UID运行时与x64真实模型已接通；不恢复旧DSH/PRoot安装引导、同UID shell或useLegacyPackaging=true。提交/推送遵循用户及根AGENTS的阶段性授权，旧默认“不commit/push”不覆盖该授权。
+
 dsh-Go 是 DeepSeek Harness 的 Android 手机应用：Flutter 原生界面 + 纯 Dart 客户端 + 打过补丁的 DSH 引擎运行时（在 PRoot 里运行 `dsh web`）。改动前先读 [CONTRIBUTING.md](CONTRIBUTING.md)（贡献与验证契约）与 [docs/architecture.md](docs/architecture.md)。
 
 ## 仓库布局

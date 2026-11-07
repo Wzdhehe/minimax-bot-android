@@ -1,5 +1,9 @@
 # Android 上的 Agent 隔离设计
 
+> **2026-11-07现状覆盖说明**：本页前半部保留早期原型和设计记录，不能当作最新产品状态。当前dsh-go/app已在API35/x86_64产品包验证Main/独立UID Node分离、native-only Key的真实模型通路，详见[HANDOFF](HANDOFF.md)与[下一位合同](handoff/NEXT-AGENT.md)。下面“没有独立Agent沙箱”“拟实施”“当前App原型”等句子描述当时版本，不表示应重建这些组件。ARM64/其它设备与未做的死亡/持久化场景仍未验证。
+>
+> 权限体验以当前可信内置Bot的自动allowOnce为准，不增加通用agent的“完全允许”档位；原问题提问仍要用户回答。此体验不允许绕过native broker、UID、目录/FD能力、外部副作用边界，不授予同Main UID shell或宽存储权限。原设计中的“写入一律用户确认”不能据此重新覆盖用户已选定的Bot体验；真实模型工具回合仍需单独验收。
+
 > 考前落地与验收命令见 [architecture.md](architecture.md) **T-Sandbox**（含删除 `dsh_file_paths.xml` 的 `external-path`、升 `targetSdk`、`dataExtractionRules` 排除 `minimax_bot_provider`）。下文为设计背景，不代替任务卡。
 
 ## 现状

@@ -101,3 +101,28 @@
 - 本机agent负责接口明确的UI/打包/指定设备验收；强agent负责native/ABI/来源/生命周期等核心。派活前给精确基线、允许路径、验收和禁止项；同分支推送前fetch，自有未推提交如需rebase先确认不覆盖他人，不force。
 - 报告格式：精确HEAD及tracked状态；实际命令/退出码和范围；设备/API/ABI/UID；若构建则APK大小/SHA；已通过/失败/未验证；下一最小步骤。不要dump完整env、descriptor、prefs、模型请求或原始异常。
 - 阶段结束更新HANDOFF与相关专题，正常push后用远端实查确认SHA及保护分支；仓库只放源码/必要文档/合法素材，不放APK、Node归档、node_modules、Key或本机私有报告。
+
+## 可直接发给接手模型的启动提示词
+
+> 接手私有仓Wzdhehe/minimax-bot-android的feat/t-plugins，不新开分支。先git status，保留任何他人改动，再fetch并只允许merge --ff-only。读AGENTS.md、dsh-go/AGENTS.md、docs/HANDOFF.md、docs/handoff/NEXT-AGENT.md、docs/DEVELOPMENT.md和docs/handoff/ARM64-RUNBOOK.md。旧DSH背景不覆盖这些当前合同。x64产品在e9d0beb已通过真实MiniMax文本/取消/恢复，别重新造launcher、换芯或连通性测试。ARM64尚无实际full-ICU候选；07c5a34/01941e0/faa531c分别完成独立CI/来源、CI表达式修正、SQLite双ABI隔离，均不代表手机已可用。最新ARM64 CI受账户计费限制未启动。你先报告当前HEAD与实际工具/资源，按ARM64手册选择确实能执行的一张小卡：Ubuntu只编候选；已有可信候选才补Node消费者；消费者与反例齐全后另接产品。不要一口气改所有层、放宽验证或把mock打印当编译。Key不需要交给你。每一小阶段跑相关测试、记下真实结果和未验证项，明确暂存自己的文件，commit并正常push。main/dev/integration不动，不force、不PR、不发布二进制。文档已写明的日常选择直接执行，只有缺少来源/授权等无法从代码与文档决定的信息才提问。
+
+不要让“模型较弱”变成越过准入的理由。任务太大就依现有边界拆开，交付一个完整、可审阅的小阶段；没有真实候选时可以审查/完善消费者反例，但结论必须仍写“真实候选未验证”，不能宣布阶段B通过。
+
+## 最后一次代码增量与检查，防止误读状态
+
+| 提交 | 内容 | 实际检查 | 没做什么 |
+|---|---|---|---|
+| 9a7cffe | 整理当前状态、开发命令与接手顺序 | 文档链接57份0问题 | 不改已验产品代码 |
+| 07c5a34 | ARM64独立workflow与来源核验器 | ARM64源码/来源20项，原x64来源5项 | 未编ARM64；workflow初版后由01941e0修正 |
+| 01941e0 | CCACHE_DIR移入可用runner上下文的step | actionlint1.7.7退出0，ARM6420项；新run42380251554的计费阻塞已实查 | 没有编译步骤执行，不存在成功artifact |
+| faa531c | prepare-sqlite固定双ABI目标、独立目录、headers/ELF防混装 | SQLite26项、backup宿主11项、原Node宿主6项全部OK；原x64五个权威输入逐路径diff为空 | 无NDK，未真编任一ABI，未构建新产品APK，未解除产品ARM64拒绝 |
+
+复现上述准备器测试，从repo根运行：
+
+```bash
+python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_sqlite*.py' -v
+python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_backup_hosts.py' -v
+python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_prepare_hosts.py' -v
+```
+
+本轮对应终态分别为`Ran 26 tests ... OK`、`Ran 11 tests ... OK`、`Ran 6 tests ... OK`。正例mock编译器会打印Prepared，这不是NDK执行证据。文档后续提交不会自动使已装e9d0beb APK失效，也不会使它覆盖后续新native改动。先检查具体改动层再决定是否重建，不派本机agent反复全量重跑。

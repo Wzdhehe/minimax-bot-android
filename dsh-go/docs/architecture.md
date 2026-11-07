@@ -1,5 +1,7 @@
 # dsh-app 架构
 
+> 当前mbot产品已与本文的上游DSH设计分离。最新实际拓扑/验证边界见[HANDOFF](../../docs/HANDOFF.md)，构建命令见[DEVELOPMENT](../../docs/DEVELOPMENT.md)。下文PRoot、Key经env、targetSdk28、useLegacyPackaging=true、安装引导和远程功能属于原DSH背景，**不是当前产品的接线要求，不可按本文恢复**。当前产品独立UID库直接映射APK，useLegacyPackaging=false，Key只留native broker。
+
 > 2026-10-23 定稿的实现约定。之后代码有扩展（插件、远程、手机操控等），细节以当前源码为准。
 
 ## 技术栈

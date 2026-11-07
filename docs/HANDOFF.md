@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 当前开发状态与验收基线
 
-更新：2026-11-07。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。最新后续阶段补ARM64候选编译/来源链，尚未改变已验x64产品代码或放开ARM64产品准入。
+更新：2026-11-07。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。最新后续阶段补ARM64候选编译/来源链及SQLite双ABI准备隔离，尚未改变已验x64产品代码或放开ARM64产品准入。[接手启动提示词与最后增量](handoff/NEXT-AGENT.md)可直接转发；[ARM64手册](handoff/ARM64-RUNBOOK.md)含Ubuntu长编译任务、精确目录和下一张消费者小卡。
 
 ## 当前结论
 
