@@ -13,3 +13,9 @@
 报告与APK只留本机，回报精确HEAD/工作树状态/各步退出码/APK摘要/连接探针和文字回合结果/少量截图路径。ARM64、图像理解、五档推理是否被供应商实际接受、工具权限、插件、群聊、通知仍不属于本卡。
 
 云端已用完整产品bundle、实际host FD SQLite、原版factory/Bot/Anthropic SDK和模拟native FD供应商，走过真实HTTP连接探针→消息→模型请求→回复落库。此为宿主组合证据，未使用真实Key，不能称Android或真实MiniMax对话通过。
+
+## 2026-11-07 结项：本机产品通过
+
+用户转述：精确 e9d0bebd5fc2487b87d3b5a77b32c2107a0fe54e，tracked干净，零本机源码改动/提交，重建JS→prepare→产品APK各步退出0。APK 290,642,875字节，SHA256 `0686e6b46d779c0af056605089f3dce8e5f73dccaf3c0d18f25b1798b078bf53`。API35/x86_64/emulator-5554，install -r保留原Bot/加密凭据，未清数据/force-stop；Main u0_a152、guest u0_i9036，一次ready，三回合未重启，无FATAL/SIGSEGV。
+
+同一设置页一次连接测试成功；Chief真实回复TEST PASS（done，1次modelCalls，6979ms），长回合约5秒后停止（aborted，无文字输出，busyChats清空），随后SECOND OK（done，1次modelCalls，5947ms）。不是欢迎语或空done。**逐字增量未逐帧取证，也没有证明首token后停止。** effort、图像/附件入模、工具/自动批准、ARM64/真机/插件/群聊/通知/平板仍未验证。报告留本机 flash-real-provider-turn.md，云端未直接读取原始产物，未接触真实Key。本卡结项，不重派；后续只按NEXT-AGENT的新任务推进。

@@ -1,5 +1,7 @@
 # M Bot Android 架构基线（MiniMax Code 工作计划）
 
+> 当前实施状态（2026-11-07）：e9d0beb官方Bot产品已在API35/x86_64通过真实MiniMax文本、生成中取消及再次对话；ARM64产品仍缺准入。先读[HANDOFF](HANDOFF.md)与[NEXT-AGENT](handoff/NEXT-AGENT.md)。本文保留架构决定与早期任务卡；旧“尚未接入/一张卡一PR/考前暂停”不再是当前安排，不能据此重做已完成核心。当前仅feat/t-plugins阶段提交推送，不PR，不动main/dev/integration。
+
 - **基线**：`origin/main` 含 `e32fbd7`（Keystore Key）；本文档分支自 `326a921` 起叠文档
 - **日期**：2026-11-02（Asia/Shanghai）
 - **用法**：外部用 MiniMax Code 按下方**考前任务卡**开发；本团队只做验收。对照 `/workspace/minimax-bot-android-review.md`
@@ -14,7 +16,7 @@
 
 | 决定 | 后果 |
 |---|---|
-| 考前小步开发 | 每卡一 PR；考前关入口，考后再删模块 |
+| 阶段开发与协作 | 当前仅feat/t-plugins可审阅阶段commit/push；不PR/force，不动main/dev/integration；按NEXT-AGENT拆分核心与本机任务 |
 | AGPL-3.0 开源 + **留壳换芯** | 留 DSH Flutter/Android/通知/设置/平板/插件市场交互；换 DSH 引擎、plugin-kit、手机内 Ubuntu+pnpm → MiniMax runtime + 插件协议。新文件加 AGPL 头；发布须能提供源码；品牌素材受 `dsh-go/ASSETS.md` 限制 |
 | Runtime | **跟** `mcode-webui/minimax-code`（MIT，`97818b2`）；复用其插件管理。官方 `MiniMax-AI/minimax-code` 更新自行合并 |
 

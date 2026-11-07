@@ -1,5 +1,17 @@
 # 功能目标和验收
 
+当前进度（2026-11-07）：[HANDOFF](HANDOFF.md)为最新证据，[NEXT-AGENT](handoff/NEXT-AGENT.md)为开发顺序。下面完整功能项未勾选，表示**该项全部验收尚未完成**，不表示已有代码/子链路不存在；不据此重新实现launcher、Bot服务或UI。
+
+| 产品级子链路 | 现状 |
+|---|---|
+| 独立UID/原版runtime/正式Flutter入口 | e9d0beb，API35/x86_64产品真实启动并显示Bot；不含DSH rootfs |
+| Key与真实模型 | 原生加密存储、连接测试、真实MiniMax文本回复已通过，Key不进guest；其它provider仍需各自验证 |
+| 停止与恢复 | 生成中取消及下一条真实回复已通过；首token后停止、逐字增量尚未取证 |
+| Bot/模型/附件界面 | 多主Bot、原版美术、创建/编辑、模型独立开关和参数、文件选择/上传已有；五档effort/附件入模未真实验证 |
+| ARM64手机 | 有producer候选，尚无已准入full-ICU/产品包/手机执行，是当前主线 |
+| 插件/工具/任务/群聊/后台 | 有上游业务或部分UI/协议，不算端到端完成；详见下一位合同 |
+
+
 用户目标：Android 本机多 Bot，参照官方 MiniMax Bot；runtime 跟 mcode-webui/minimax-code fork（官方 MiniMax Code 为上游）；产品基于 DSH Go（AGPL-3.0）外壳。模型调用使用用户在设置中填写的 Key、Base URL 和模型 ID。无需远程电脑或手机操控；不做传统 Agent 工作台或通用 Mini App 容器。
 
 **落点与许可证（已拍板）：** 接受 AGPL 开源；保留 DSH Go 外壳、只换核心；新代码可直接改 `dsh-go/`，根下 `packages/` 已有模块可继续用；分发 APK 须提供 AGPL 源码。Runtime **跟** [mcode-webui/minimax-code](https://github.com/mcode-webui/minimax-code) fork（MIT，`97818b2`），插件管理复用其插件市场、plugin-management 与 plugin-system；官方 MiniMax-AI/minimax-code 为上游，更新自行合并。考前实现与验收以 [architecture.md](architecture.md) 任务卡为准（T-Runtime → T-Sandbox → T-Settings → **T-Providers** → T-Usage → T-Schedule → T-Plugins）；本清单为产品全量目标，不代替任务卡。插件 Android 安装策略与定时 F.7 档位**仍未定**。
@@ -7,11 +19,11 @@
 参考钉死点：MiniMax Bot 插件 [`0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8`](https://github.com/MiniMax-AI/MiniMax-Code-MiniApps/tree/0f2183f14dd8b8ebffcd08ba42ad719a53a5f5b8/plugins/minimax-ai/minimax-bot)；DSH Go 外壳 [`c1c0abb00907efdf48dcb443581686b67597c5a2`](https://github.com/ccch1mneyyy/dsh-Go/tree/c1c0abb00907efdf48dcb443581686b67597c5a2)；runtime（WebUI fork）[`97818b2`](https://github.com/mcode-webui/minimax-code/tree/97818b2)。**runtime 钉点的权威记录是 [UPSTREAM-RUNTIME.md](UPSTREAM-RUNTIME.md)**（含 commit、日期、tree、进入 bundle 的文件指纹与升钉流程），机器可读真值源在 `dsh-go/runtime/minimax-bot-host/upstream-runtime-pin.mjs`。官方上游合并点在合并时记录。所有条目在针对本项目完成实现和验证前保持未完成，不能因 DSH Go 或上游有功能就视为已接入。
 
 - [x] 上游runtime钉点与升钉流程：钉点文件、文档、干净checkout的commit/tree、实际bundle输入四方校验；6个必需契约文件核SHA256，其余输入逐一对比钉住树的blob，23项pin测试及契约smoke通过。
-- [x] 完整fork宿主**构建图检查**：真实createWebuiRuntimeHost/session-ports及官方Bot服务编入partial bundle，2,124上游输入逐blob验证、3项集成测试通过；CI已接入。第三方/动态加载与资源尚未打包，未启动runtime，不证明插件市场或Android可用，见[构建范围](UPSTREAM-RUNTIME.md)。
+- [x] 完整fork宿主**构建图检查**：真实createWebuiRuntimeHost/session-ports及官方Bot服务编入partial bundle，2,124上游输入逐blob验证、3项集成测试通过；CI已接入。该项仅记录早期partial构建图；后续完整产品/资源与启动证据见上表，不证明插件市场可用，见[构建范围](UPSTREAM-RUNTIME.md)。
 - [x] canonical资源与真实Linux宿主验收（组件）：780个原资源逐blob/inventory校验，完整图/资源4项通过；真实fork factory/gateway/session/SQLite及原Bot JSON服务冷启动/重开、鉴权/创建/持久化读回1项通过，无session桩。**没有模型turn或Android证明**，见[T-RuntimeHost](handoff/T-RuntimeHost.md)。
 - [ ] 本机安装、校验、启动、停止与升级 MiniMax Code 运行时（mcode-webui/minimax-code fork）；处理异常中断和进程清理。
-- [x] better-sqlite3 12.11.1 Android x86_64验收：内存数据库、四普通FD VFS的WAL/并行只读/两次新PID读回已API26/35通过。Main固定文件owner已验证；完整数据lease/FS/online backup、ARM64/真机仍缺，见[T-Persistence](handoff/T-Persistence.md)。
-- [x] SDK→模型FD流式适配（组件）：四类真实pi-ai provider（含Google async scope）、工具事件、背压、取消及错误不重试宿主验证通过；动态JNI/Binder路由已API26/35通过。正式model resolver/启动器与完整runtime仍未装配，见T-RuntimeBroker。
+- [x] better-sqlite3 12.11.1 Android x86_64验收：内存数据库、四普通FD VFS的WAL/并行只读/两次新PID读回已API26/35通过。Main固定文件owner已验证；后续完整FS/online backup已有API35/x86_64产品与组件证据；ARM64/真机仍缺，见[T-Persistence](handoff/T-Persistence.md)。
+- [x] SDK→模型FD流式适配（组件）：四类真实pi-ai provider（含Google async scope）、工具事件、背压、取消及错误不重试宿主验证通过；动态JNI/Binder路由已API26/35通过。后续正式产品Anthropic通路已有真实文本验收，其他协议及流式设备范围仍须区分，见T-RuntimeBroker。
 - [x] Main原子发布/替换组件与隔离Node文件commit：a49d79b在API26/35各25项通过，含不覆盖/并发/提交未知、Node快照/两PID及Key/数据库回归；不是完整runtime FS，见[T-RuntimeFS](handoff/T-RuntimeFS.md)。
 - [x] Main显式授权的有界读取/大小及Node JNI：585f082在API26/35各30项通过，含实际Node读回、openat目录cap、父目录替换与输出close/deadline。stage创建/清理FD改造已编译，31项设备待CI；仍缺完整FS/原模块/launcher，见[T-RuntimeFiles](handoff/T-RuntimeFiles.md)。
 - [x] native Key broker 的四协议文本流与取消、Key边界测试；API26/35各十项Keystore/隔离UID/Unix FD/IPC仪器用例通过。仅组件基线，不证明真实模型或完整runtime；见 [T-RuntimeBroker](handoff/T-RuntimeBroker.md)。
@@ -32,7 +44,7 @@
 - [ ] 通知：App 内总开关与分类开关（至少含定时任务、Bot 消息/完成、出错或打断等可裁剪类别）+ 对应 Android 通知渠道；可深链到系统渠道设置。
 - [ ] 后台运行：检测通知权限、电池优化是否忽略等状态，展示说明，并提供跳转系统设置入口（含可选厂商文案）；**只做检测 + 跳转引导，不做保活黑科技**（不隐蔽多进程拉活、不超范围保活）。
 - [ ] 插件市场：浏览、搜索、来源、版本和权限说明；本机安装、更新、启停、卸载、出错恢复，以及与 MiniMax Code 插件协议的兼容性验证；不将 Mini App 作为插件列出或安装。**官方插件包格式的 `deliveryTargets` 仅允许 `desktop` / `cloud`，没有 `android`**——产品 UI 与验收须明示此限制；**Android 安装策略仍未定**，不能假定市场包默认可在 Android 分发。
-- [ ] Key / Base URL 配置、模型切换和失败处理；密钥不应由可执行任意代码的 Agent 直接读取。
+- [ ] Key / Base URL 配置、模型切换和失败处理的完整多协议验收；native存储和Anthropic产品真实文本已过，密钥不应由Agent直接读取。
 - [ ] 独立执行边界、受控文件和网络、逐次审批、停止与资源限制；PRoot 仅用于兼容，不视作安全隔离。
   - T-Sandbox：严格工作区守卫已接入宿主文件接口和媒体路由；Android 存储/备份源码已收紧。完整 Android 构建与 `/sdcard` 仪器验收未运行；隔离Node/Key/模型FD/受限SQLite已在API26/35验证，完整runtime、工具审批和授权撤销仍缺，详见 [handoff](handoff/T-Sandbox.md)，本条保持未完成。
 - [ ] 仅本机：无远程连接、无手机操控及其权限；无第三方品牌和不允许复用的美术素材；**分发 APK 满足 AGPL-3.0 源码提供义务**。

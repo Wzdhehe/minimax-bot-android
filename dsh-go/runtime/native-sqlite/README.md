@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Native SQLite backup kernel
 
+> Current status (2026-11-07): this kernel/JNI/private worker, Main snapshot owner and guest snapshot ports are now connected to the product. API35/x86_64 component evidence at 31d5864/5962d4b and the actual product at e9d0beb are recorded in [HANDOFF](../../../docs/HANDOFF.md). Earlier “not yet connected/implemented” completion statements below are historical; the FD ownership, one-shot process retirement and UNKNOWN publication constraints remain mandatory. ARM64 execution, power-loss recovery and all cancellation/death races are not established by those results.
+
 `backup.cpp` is a trusted native copy/validation component. JNI and private Android worker/Binder candidates now exist, but they are **not yet packaged/connected to a product launcher, the runtime backup port, publication or a usable product APK**. It accepts dedicated SQLite connections, never paths, SQL strings, descriptors from an Agent, provider metadata or credentials. Do not expose it as an Agent tool.
 
 The source connection must be read-only and both connections must be outside any caller transaction. The destination must be a fresh private empty database that an Agent has **never held a writable descriptor to**. The kernel pins a read transaction before checking the source page budget, then uses the real `sqlite3_backup` API. A concurrent WAL writer may commit/grow the source while the chosen snapshot stays consistent.

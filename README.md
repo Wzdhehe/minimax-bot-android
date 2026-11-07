@@ -1,8 +1,12 @@
 # MiniMax Bot for Android
 
-> **产品方向（已拍板）：** 接受 AGPL 开源：产品基于 [DSH Go](https://github.com/ccch1mneyyy/dsh-Go)（AGPL-3.0，导入为 `dsh-go/`，钉 `c1c0abb00907efdf48dcb443581686b67597c5a2`）外壳，核心换为官方 MiniMax Bot + mcode-webui/minimax-code runtime；新代码可直接在 `dsh-go/` 内改，根下 `packages/` 已有独立模块可继续使用；分发 APK 须遵守 AGPL-3.0 源码提供义务。工作计划与考前任务卡见 [docs/architecture.md](docs/architecture.md)（供 MiniMax Code 开发；本团队验收）。**Runtime 跟 [mcode-webui/minimax-code](https://github.com/mcode-webui/minimax-code) fork**（MIT，钉 `97818b2`），插件管理复用其现成插件市场（`packages/webui`）、plugin-management 与 `local-runtime-v2` 的 plugin-system；官方 [MiniMax-AI/minimax-code](https://github.com/MiniMax-AI/minimax-code) 作上游，更新由我们自行合并进 fork。尚未接入本项目、未在 Android 上验证。插件在 Android 上的安装策略、以及定时任务「进程死后」验收档位（报告 F.7）**仍未定**。
+基于 [DSH Go](https://github.com/ccch1mneyyy/dsh-Go) 的 Flutter/Android 外壳（AGPL-3.0），内置官方 MiniMax Bot，并使用钉住的 mcode-webui/minimax-code runtime。目标是本机多Bot，参考Grok Bot布局，不需要远程电脑或自建云，不做手机操控或通用MiniApp容器。插件市场仍是独立的未完成目标。
 
-目标产品是手机本机多 Bot 应用（布局与能力参考 Grok Bot 产品文档与官方 MiniMax Bot），模型调用走用户配置的 API，不需要远程电脑或自建云。**当前还没有可发布的 M Bot APK**：产品工程是 `dsh-go/`（DSH Go 外壳，核心替换尚未完成）；`dsh-go/runtime/vendor/minimax-bot/` 是官方 MIT Bot 源码快照。开发现状见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)；功能目标与验收见 [docs/feature-parity.md](docs/feature-parity.md)。
+**2026-11-07：已有 API35/x86_64 模拟器上的基本可聊天调试产品包。** `feat/t-plugins@e9d0beb`已完成真实MiniMax连接测试、文本回复、生成中取消及继续对话；独立UID运行，Key只归native。**ARM64手机包、逐字流式设备证据、完整插件/工具/多模态等尚未完成，APK未发布。** 证据来源与确切APK摘要见[当前状态](docs/HANDOFF.md)。
+
+接手开发先读 [AGENTS.md](AGENTS.md) → [HANDOFF](docs/HANDOFF.md) → [下一位任务合同](docs/handoff/NEXT-AGENT.md) → [开发命令](docs/DEVELOPMENT.md)。继续feat/t-plugins，阶段性快进推送，不动main/dev/integration，不force、不开PR、不发布二进制。旧专题卡中的“未启动/下一步接launcher”是历史，不应重复实现。
+
+Runtime上游[权威钉点](docs/UPSTREAM-RUNTIME.md)与许可证不能随手改；官方MiniMax Code为上游，fork是当前绑定源。产品分发须满足AGPL对应源码提供义务，原Bot/MIT美术许可保留。功能目标见[验收清单](docs/feature-parity.md)。
 
 ## 仓库里现在有什么
 
@@ -14,16 +18,11 @@
 
 调研与差距见 [docs/research.md](docs/research.md)，隔离设计见 [docs/sandbox.md](docs/sandbox.md)。正式成品须处理上游许可证与受限素材；分发 APK 须按 AGPL-3.0 提供对应源码。
 
-## 构建（如实说明现状）
+## 构建
 
-**当前仓库里可尝试构建的仍是 `dsh-go/` 下的 Flutter/Android 工程**（产品主工程）。需要 Flutter、Android SDK 和 JDK；步骤与已知构建障碍见 `dsh-go/README.md`、`dsh-go/CONTRIBUTING.md`、`dsh-go/AGENTS.md` 与 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)「开发验证」。完整 Android 调试构建在分析时仍未通过（依赖解析/Gradle 环境问题）；**未验证**已产出可用的 M Bot APK。
+产品工程是 `dsh-go/app`，不是仓库根目录Java原型。需先准备已授权的full-ICU Android Node、FD SQLite、backup库及完整JS/资源，再构建 `flutter build apk --debug --target-platform android-x64 --flavor x64`；仅Flutter源码不能凭空生成引擎。详细顺序、版本、产物闸门和Windows环境见[DEVELOPMENT](docs/DEVELOPMENT.md)。
 
-宿主机上针对 `dsh-go/` 内宿主的协议测试示例（不等于产品已接入）：
-
-```bash
-cd dsh-go
-node --test runtime/minimax-bot-host/service.test.mjs runtime/minimax-bot-host/agent-port.test.mjs
-```
+当前ARM64装配仍明确拒绝未准入输入，不能以同一命令替换flavor就称手机引擎可用。不要引入旧DSH/PRoot rootfs、恢复同UID任意shell或跳摘要检查来产包。
 
 ## 废弃原型（根目录 `app/`）
 
