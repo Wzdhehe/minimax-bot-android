@@ -38,7 +38,7 @@
 
 主要修改面：`tooling/android-node-probe/{prepare-probe.py,prepare-sqlite.py,对应测试}`、`tooling/mobile-runtime-bundle/prepare-product.py`及必要的明确ABI来源记录/Gradle装配。这里的tooling前缀均是dsh-go/tooling。
 
-1. `prepare-probe.py`和`prepare-sqlite.py`当前实质固定x86_64；后者NDK选择器不接受任意target。扩展时使用明确的ABI→Android26 triple允许表，独立输出/头清单/输入摘要，Windows仍用clang.exe而不是.cmd/shell=True，不改变全局PATH。保留x86_64回归。
+1. `prepare-sqlite.py`已支持明确的x86_64/arm64-v8a→Android26 triple允许表，并检查headers的Android/target_arch与输入、输出ELF；Windows仍用clang.exe而不是.cmd/shell=True。x64原路径不变，ARM64独立放`android-node-probe/build/abi/arm64-v8a/`，26项SQLite宿主/输入用例通过。**这是mock编译命令与拒绝用例，不是已编出ARM64 addon。** `prepare-probe.py`仍固定x64，ARM64的Node来源核验/headers与基础资产准备入口尚缺，不得复制x64目录假装补齐。
 2. Node24.22.2 full-ICU产物、对应headers/config.gypi、ABI、NDK、source recipe和实际归档摘要必须互相匹配；ARM64的mbotArm64Producer不能冒充x64的mbotSourceBuild。当前verify-source-run.py只授权旧x64工作流，ARM64来源验证需要独立设计/实查，不能传x64 SHA凑通过。
 3. SQLite仍用12.11.1钉住归档和全部36条defines.gypi定义，fd_vfs/fd_vfs_node用目标ABI重编；backup准备已支持两ABI，但其输入变动仍须重编。**Linux ARM64/glibc的npm预编译addon不能当Android/Bionic库使用**，Node ABI相同也不够。
 4. `prepare-product.py --abi arm64-v8a`当前故意报“ARM64 full-ICU product inputs are not yet admitted”。只有完整来源、头、配置、ABI及native输入闸门有正反例后才接通ARM64分支；不直接删if、不降低验证。
@@ -97,7 +97,7 @@
 ## 环境、证据、协作与交付
 
 - 云端/workspace及/tmp工具不持久保证；Windows D盘也不是云端目录。先探测，不能抄旧路径后声称运行。具体已用位置与命令见DEVELOPMENT。
-- GitHub Actions此前有计费限制导致零步骤启动，当前未新查询。看实际job/annotation，不能把push、排队或组件绿灯当新产品验收；也不必等CI才继续本地可做的开发。
+- GitHub Actions最新实查：01941e0的ARM64 run42380251554确有build job，但check128426174992的annotation为账户付款/支出限制、job未启动。此前07c5a34的同类workflow初版是另一处表达式上下文错误，已用actionlint修正，不能混称计费。看实际job/annotation，不能把push、排队或组件绿灯当新产品验收；也不必等CI才继续本地可做的开发。
 - 本机agent负责接口明确的UI/打包/指定设备验收；强agent负责native/ABI/来源/生命周期等核心。派活前给精确基线、允许路径、验收和禁止项；同分支推送前fetch，自有未推提交如需rebase先确认不覆盖他人，不force。
 - 报告格式：精确HEAD及tracked状态；实际命令/退出码和范围；设备/API/ABI/UID；若构建则APK大小/SHA；已通过/失败/未验证；下一最小步骤。不要dump完整env、descriptor、prefs、模型请求或原始异常。
 - 阶段结束更新HANDOFF与相关专题，正常push后用远端实查确认SHA及保护分支；仓库只放源码/必要文档/合法素材，不放APK、Node归档、node_modules、Key或本机私有报告。

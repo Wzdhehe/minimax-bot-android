@@ -64,7 +64,7 @@ flowchart LR
 
 | 优先级 | 工作 | 明确缺口 |
 |---|---|---|
-| P0 | ARM64手机产品链 | producer候选脚本已有，现新增独立CI及Actions来源验证；20项ARM64源码/来源、5项原x64来源测试通过。仍无实际ARM64编译/已准入产物/产品包/设备执行；prepare-product继续拒绝。逐步命令见[ARM64手册](handoff/ARM64-RUNBOOK.md) |
+| P0 | ARM64手机产品链 | 独立producer/CI/Actions来源检查已有，20项ARM64、5项原x64来源测试通过。SQLite新增固定双ABI目标、独立目录与headers/ELF拒绝，26项通过；backup宿主11项、原Node宿主6项回归通过。均非真实ARM64编译证据。Node输入消费者/产品准入仍缺，prepare-product继续拒绝；最新ARM64 CI因计费未启动。逐步命令见[ARM64手册](handoff/ARM64-RUNBOOK.md) |
 | P0并行小项 | 逐字流式/停止观察 | 可用本机已安装的e9d0beb，不必先重编；记录真实增量及首token后停止。不要把完整suite重跑当进展 |
 | P1 | effort与多模态 | 五档effort、1M上下文、模态只是可配置；真实provider是否收到/接受尚未验证。附件上传不等于附件入模 |
 | P1 | Bot工具/协作/定时 | 每Bot设置与同源任务界面已有；真实模型工具回合、Bot可信MCP caller、自建任务/到点执行、群聊/helper联动未端到端验收 |

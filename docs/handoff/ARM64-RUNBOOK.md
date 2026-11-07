@@ -14,6 +14,8 @@
 
 CI配置复核：初版07c5a34的run42379715185为failure且无build job；actionlint 1.7.7实际指出job级env不能引用runner.temp。已将CCACHE_DIR移入编译step的env，同一actionlint检查退出0，ARM64源码/来源20项通过。**这个初版失败不能归因于计费或Node编译**；修正版是否能分配runner，须另查新run的job/annotation。前述9a7cffe的计费阻塞是另一条已实查记录。
 
+修正版01941e0已实查：run **42380251554**含build job，check **128426174992** 的annotation明确为账户付款/支出限制、job未启动；因此没有ARM64候选artifact或编译结果。不要重复rerun消耗排队，把这条事实交账户所有者或使用下方Ubuntu路径。
+
 ## 给Ubuntu agent的可转发任务
 
 下面这段可以原样转发；它只负责长编译，不设计ABI消费代码。
@@ -151,7 +153,37 @@ Windows CRLF会触发精确字节拒绝，按DEVELOPMENT已有git cat-file原始
 
 ## 消费者代码任务C：交强agent，不与A混改
 
-A/B成功以后按[NEXT-AGENT阶段B/C](NEXT-AGENT.md)做：固定ABI→Android26 triple、每ABI独立headers/输出、对应SQLite addon、独立来源记录/精确清单与反例、产品Gradle装配，最后才设备验收。
+A/B成功以后按[NEXT-AGENT阶段B/C](NEXT-AGENT.md)做。**SQLite固定ABI选择与输出隔离已经有代码，不要再造一份**；先补Node来源消费与对应基础输入，再做产品Gradle装配，最后才设备验收。
+
+### C0：SQLite已经落地的准确接口
+
+| 项目 | x86_64（默认，保持兼容） | arm64-v8a |
+|---|---|---|
+| prepare-sqlite参数 | 不传--abi，或--abi x86_64 | --abi arm64-v8a |
+| Android26 triple | x86_64-linux-android26 | aarch64-linux-android26 |
+| Node config target_arch / OS | x64 / android | arm64 / android |
+| 准备根（相对android-node-probe） | build/ | build/abi/arm64-v8a/ |
+| 必需输入 | 该准备根的node-headers/、node-headers.json、verified-jni/x86_64/libnode.so、verified-assets/基础probe | 对应ARM64准备根及verified-jni/arm64-v8a/libnode.so，不能引用左列 |
+| 输出 | 准备根/sqlite-probe/、verified-jni/x86_64/libmbot_sqlite_probe.so及verified-assets内许可/记录 | 对应ARM64准备根，完全不写左列 |
+
+脚本保持钉住归档、安全解包、Node24.22.2头清单/摘要、V8 ABI布局、原defines与esbuild版本检查；另核headers的OS/target_arch和libnode/新addon的ELF64小端共享对象/machine。Windows用真实clang.exe加唯一固定target，Linux用NDK的目标wrapper；缺目标libc++_shared则拒绝。ELF头检查只是架构防混装，**不能单独证明Android来源、full-ICU或合法producer**。
+
+现有26项SQLite宿主/输入测试使用小型假库和mock编译器，验证两个宿主的argv、ABI目录隔离及篡改拒绝；11项backup宿主和6项原Node宿主回归通过。当前云机无NDK，**本轮未实际重编x64/ARM64 addon**；不得把单测打印的Prepared当原生库编译证据。x64 Windows之前编译的产物仍是此前版本，旧设备结果不自动覆盖新准备脚本。
+
+### C1：下一位只补Node消费者，不能直接开产品开关
+
+允许优先动：android-node-probe下新ARM64候选消费者及其测试；如确需复用prepare-probe.py的纯bundle函数，先读调用方，保持其默认x64路径/来源行为。**不改**旧x64五个权威producer输入、vendor、UI、Key/broker、UID/备份状态机或prepare-product的ARM64拒绝。
+
+必须先完成：
+
+1. 选择真实成功的ARM64 producer/私有产物来源。Actions必须由现有verify-arm64-source-run校验，手工产物则先独立审阅并记录准确来源；没有成功产物就停在这里，不用夹具库冒充。
+2. 区分外层artifact ZIP、内层node-full-icu-arm64.zip及libnode三个摘要。读取前验证可信来源绑定的真实字节，不接受用户随便填一个source-build-sha就授权。不默认信任归档内自己声称的producer字段。
+3. 限定安全解包与预算：拒绝重复/别名路径、越界、反斜杠、链接、非普通成员及畸形/超量zip；只向全新ARM64目录写允许清单。失败不能覆盖或污染x64已验输入。
+4. 对照当前ARM64 pin与真实producer：mbotArm64Producer精确commit/四输入、mbotSourceBuild配方、唯一arm64 slice、Node ABI137、full-ICU实际版本、headers/config/library摘要和AArch64/Android/API26；保留许可。不能把x64的mbotSourceBuild直接改abi字段。
+5. 正确建立上表ARM64 Node头/manifest/native库/基础probe资产，再调用现有prepare-sqlite --abi arm64-v8a。此阶段不需要新增通用Agent执行器，不需要真实模型Key。
+6. 添加正反例：来源/commit/recipe/headers/config/ABI/库/zip中任一篡改都拒绝；缺Intl/ICU/FD基础资产不接产品；失败不改x64。补Linux/Windows路径与CRLF输入说明。确认旧来源5项、原Node宿主6项、SQLite26项、backup11项仍通过。
+
+**本小阶段停止点**：可信ARM64 Node输入和真正NDK编译的addon各自可核验；尚未授权prepare-product。下一张卡再接产品来源/资产/Gradle闸门，逐项反例齐全后才移除拒绝。不要在同一弱模型任务里同时改consumer、原安全边界和UI。
 
 允许路径要在具体卡里列明。不得顺手改x64的旧五个权威输入、vendor快照、Key边界、UID/Binder/backup/文件保护或UI；不把候选库接进产品后就称手机通过。arm64 flavor已经存在只表示构建配置，不表示引擎输入可用。原有x64产品与20项ARM64源码/来源测试、5项x64来源测试应继续通过。
 
