@@ -84,6 +84,8 @@ python3 dsh-go/tooling/mobile-runtime-bundle/prepare-product.py --abi x86_64 \
 - Windows已成功的PowerShell示例见 [原构建小卡](handoff/T-Flash-ProviderStartupRecovery.md)，用全新stage后缀；语法按本机shell改，不把POSIX变量写成PowerShell变量。
 - 产品Gradle实际Kotlin增量缓存出错时可按本机已用方式禁用kotlin.incremental，记录精确错误；不是降低源码target、删缓存遍历整盘的理由。
 
+ARM64独立编译、来源收据和给Ubuntu agent的零源码改动任务见[ARM64执行手册](handoff/ARM64-RUNBOOK.md)。新增verify-arm64-source-run.py仅授权同仓同分支的ARM64候选，outerArtifactSha256是GitHub外层ZIP摘要，不能当内层Node归档SHA。
+
 **ARM64目前不能直接套以上命令**：prepare-product明确拒绝，prepare-probe/sqlite仍固定x64。按NEXT-AGENT先真实producer与来源/ABI准入，不删除拒绝来凑手机APK。Linux/ARM64的npm预编译addon不是Android/Bionic库。
 
 ## 按修改面验证，不重复全仓

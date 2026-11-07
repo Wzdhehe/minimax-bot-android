@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 当前开发状态与验收基线
 
-更新：2026-11-07。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。本轮仅整理交接，不改产品源码。
+更新：2026-11-07。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。最新后续阶段补ARM64候选编译/来源链，尚未改变已验x64产品代码或放开ARM64产品准入。
 
 ## 当前结论
 
@@ -64,7 +64,7 @@ flowchart LR
 
 | 优先级 | 工作 | 明确缺口 |
 |---|---|---|
-| P0 | ARM64手机产品链 | prepare-product.py明确拒绝ARM64；full-ICU ARM64 producer仅有候选脚本/输入测试，尚无已准入产物、ARM64产品包或手机执行 |
+| P0 | ARM64手机产品链 | producer候选脚本已有，现新增独立CI及Actions来源验证；20项ARM64源码/来源、5项原x64来源测试通过。仍无实际ARM64编译/已准入产物/产品包/设备执行；prepare-product继续拒绝。逐步命令见[ARM64手册](handoff/ARM64-RUNBOOK.md) |
 | P0并行小项 | 逐字流式/停止观察 | 可用本机已安装的e9d0beb，不必先重编；记录真实增量及首token后停止。不要把完整suite重跑当进展 |
 | P1 | effort与多模态 | 五档effort、1M上下文、模态只是可配置；真实provider是否收到/接受尚未验证。附件上传不等于附件入模 |
 | P1 | Bot工具/协作/定时 | 每Bot设置与同源任务界面已有；真实模型工具回合、Bot可信MCP caller、自建任务/到点执行、群聊/helper联动未端到端验收 |

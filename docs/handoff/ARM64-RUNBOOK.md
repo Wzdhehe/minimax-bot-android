@@ -1,0 +1,156 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+# ARM64执行手册：把编译、来源核验、产品准入分开
+
+适用：feat/t-plugins，2026-11-07。先读[当前状态](../HANDOFF.md)和[下一位合同](NEXT-AGENT.md)。本手册刻意给出停止点；**遇错不要自行取消安全检查或扩大写入范围。**
+
+## 当前到底有什么
+
+- 已用产品基线e9d0beb：API35/x86_64真实MiniMax文字、生成中取消、继续对话通过。不是ARM64。
+- ARM64 producer：[build-arm64-source.py](../../dsh-go/tooling/android-node-probe/build-arm64-source.py)，其pin为[node-arm64-source-build.json](../../dsh-go/tooling/android-node-probe/node-arm64-source-build.json)。它产出**候选**，不自动准入产品。
+- 独立编译作业：[android-node-arm64-source.yml](../../.github/workflows/android-node-arm64-source.yml)，只在本仓feat/t-plugins执行，使用自己的ARM64缓存和候选artifact名，不改x64的五个权威输入。
+- 独立Actions来源检查：[verify-arm64-source-run.py](../../dsh-go/tooling/android-node-probe/verify-arm64-source-run.py)。检查成功也仅得到source-candidate-only收据，不是Android通过或准入开关。
+- 当前云机没有可用NDK/clang/ninja/ccache，根盘剩余不足0.2GiB，/tmp剩余约3.6GiB；不应在这里硬塞完整Node源编译。2026-11-07实查9a7cffe最新CI作业annotation仍是计费/支出限制导致未启动，不是源码编译失败。环境会变，以新实查为准。
+- prepare-product.py的ARM64拒绝仍在。不能把“新编译作业已写”说成“手机包完成”。
+
+## 给Ubuntu agent的可转发任务
+
+下面这段可以原样转发；它只负责长编译，不设计ABI消费代码。
+
+> 仓库Wzdhehe/minimax-bot-android，继续feat/t-plugins，不另开分支。先读AGENTS.md、dsh-go/AGENTS.md、docs/HANDOFF.md和docs/handoff/ARM64-RUNBOOK.md。执行本手册“Ubuntu手工编译A”，仅准备官方工具/钉住的外部源码并运行现有ARM64 producer。**零仓库源码改动、零提交、不得删或改任何pin/校验，不做APK/安装/Release。** 不需要任何模型Key。先报告实际磁盘/CPU/内存与工具，资源不足就给出缺项，不盲清系统目录。编译期间冻结本地HEAD，不能为追远端而merge/rebase；他人可继续往远端推不相干改动。完成后按本手册格式给源码HEAD、工具、退出码、产物路径/大小/SHA和build-info核验结果。失败给第一个真实错误及有限日志路径，不反复重试或改脚本过关。手工产物只算候选，不编造Actions run ID。
+
+## Ubuntu手工编译A
+
+### A0：确认机器，不先下载几GB
+
+从仓库根执行；不要打印完整env或认证信息：
+
+```bash
+git status --short
+git branch --show-current
+git rev-parse HEAD
+uname -s
+uname -m
+nproc
+free -h
+df -h . /tmp
+command -v python3
+command -v git
+command -v clang
+command -v clang++
+command -v ninja
+command -v ccache
+```
+
+要求Linux x86_64；不是Windows、不是Ubuntu ARM64宿主。NDK脚本固定linux-x86_64 host片，不要移除平台拒绝。建议有约30GiB可用磁盘、8GiB内存，以实际源码/对象/3GiB缓存空间评估；这是资源建议，不是“有这些就必定成功”的承诺。若只有几GiB，先停止报告。不得删除用户工程、上游golden、系统SDK或其它agent数据凑空间。
+
+原repo tracked干净才fetch和merge --ff-only到最新feat/t-plugins，保留未跟踪报告。不能快进就停止，不reset/stash。若缺工具，可用该机器允许的官方apt/Android SDK安装流程准备clang-18、ninja、ccache、**NDK27.3.13750724**，记录版本；无权限则报告，不改项目target/依赖来绕过。
+
+### A1：准备路径与原始源码
+
+路径为示例，须由机器上的实际位置替换。不要设置HOME/CODEX_HOME等系统变量。所有临时/源码/产物目录须属于本次任务且有充足空间。
+
+```bash
+MBOT_REPO="$PWD"
+MBOT_MOBILE=/path/to/new/nodejs-mobile-arm64
+MBOT_NDK=/path/to/android-sdk/ndk/27.3.13750724
+MBOT_ARM64_ARCHIVE=/path/to/new-output/node-full-icu-arm64.zip
+```
+
+MBOT_MOBILE必须是外部、全新目录，不在repo源码里；MBOT_ARM64_ARCHIVE必须不存在。NDK目录应有source.properties和toolchains/llvm/prebuilt/linux-x86_64。**不要复制Windows NDK到Linux，也不要用Linux/glibc Node库冒充Android库。**
+
+若无原始checkout，先读pin：
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+p=json.loads(Path('dsh-go/tooling/android-node-probe/node-arm64-source-build.json').read_text())
+for k in ('mobileRepository','mobileCommit','nodeCommit','upstreamTree','nodeTree','version','ndkRevision','abi','intl'):
+    print(k, p[k])
+PY
+```
+
+按该仓库/commit检出公共RockinChaos/nodejs-mobile及其node子模块，不按“最新tag”猜。可使用：
+
+```bash
+git clone --filter=blob:none --no-checkout https://github.com/RockinChaos/nodejs-mobile "$MBOT_MOBILE"
+MBOT_MOBILE_COMMIT=$(python3 -c 'import json; print(json.load(open("dsh-go/tooling/android-node-probe/node-arm64-source-build.json"))["mobileCommit"])')
+git -C "$MBOT_MOBILE" checkout --detach "$MBOT_MOBILE_COMMIT"
+git -C "$MBOT_MOBILE" submodule update --init --depth 1 -- node
+```
+
+若远端拒绝深度子模块检出旧commit，报告具体错误，按Git正常获取该钉点对象；不能改nodeCommit或切最新Node。检出后node commit/upstreamTree、scripts/build.py和versions.py摘要都由现有producer再次检查。
+
+### A2：只读preflight
+
+```bash
+python3 dsh-go/tooling/android-node-probe/build-arm64-source.py \
+  --mobile-source "$MBOT_MOBILE" --ndk "$MBOT_NDK" \
+  --output "$MBOT_ARM64_ARCHIVE" --check-only
+```
+
+唯一成功含义：打印`ARM64 source and toolchain preflight passed; no binary built`且退出0。它**没有编译库**。非0就停，按下面错误表处理，不进入A3。
+
+### A3：真实编译
+
+先记住`git rev-parse HEAD`与tracked状态。此后直到完成不得merge/rebase/改producer的四个输入；编译器会在末尾复查来源，改变HEAD会拒绝产物。远端有新提交不需要立刻合入本地编译工作树。
+
+```bash
+python3 dsh-go/tooling/android-node-probe/build-arm64-source.py \
+  --mobile-source "$MBOT_MOBILE" --ndk "$MBOT_NDK" \
+  --output "$MBOT_ARM64_ARCHIVE" --jobs 2
+```
+
+不要用`|| true`、删报错或管道吞掉退出码。若需要重定向日志，用本机安全路径并单独记录真实退出码；不要把完整编译env写日志。构建可能持续数小时，观察有限进度并报告，不能仅因没有新日志就杀掉再重开。ccache是编译缓存，不是已授权二进制；不因命中缓存跳源码/ELF/配置校验。
+
+成功必须是进程退出0，末尾`Built unadmitted full-ICU ARM64 candidate`，新归档存在且算出SHA256。producer已核对源/index树、Android ARM64共享配置、full-ICU、Node ABI137、真实ICU/Unicode版本、目标ELF及库/配置摘要。**不要重置.build里的staged mobile patches来让git看起来干净**：原始checkout须干净，预备Node工作树的已暂存补丁树却正是验证对象，HEAD本来仍可能指向未打补丁的上游。
+
+### A4：只读报告，不提交产物
+
+只给：
+
+- repo精确HEAD与tracked是否改动，source目录commit/tree，NDK/clang等实际版本；
+- preflight和真实build的退出码、起止时间；
+- 归档本地路径/大小/SHA256；build-info中version、target、source commit/tree、modules/ICU/Unicode、full-ICU配置和producer commit/inputs是否匹配；
+- ELF AArch64/Android目标、动态依赖与LOAD对齐的实际核验结果；未做的写未验证；
+- 首个失败、有限日志位置、下一最小动作。
+
+不上传APK/Release，不提交ZIP/.so/.node/日志/env/Key；产物如需转移由主agent安排私有渠道，不能发带签名下载URL到文档。手工build没有Actions run ID，只能作为候选交主agent核验，不冒充下节成功收据。
+
+## GitHub Actions路径B
+
+只有计费/runner实际可用才尝试，不重复排无从启动的队列。新workflow会在自身或ARM64相关producer输入变化的feat/t-plugins推送时触发，也支持该分支workflow_dispatch；受仓库/分支双重限制，不跑main。
+
+成功记录须是：正确workflow、正确分支/commit、唯一build job completed/success、对应唯一未过期candidate artifact。进度状态artifact不是候选库；cache保存成功不是Node编译成功。
+
+```bash
+GITHUB_REPOSITORY=Wzdhehe/minimax-bot-android GITHUB_REF_NAME=feat/t-plugins \
+  python3 dsh-go/tooling/android-node-probe/verify-arm64-source-run.py "$MBOT_ARM64_RUN_ID"
+```
+
+只有真实ARM64 run ID可用，不能套x64成功run41826964330。验证器会对比本地与producer的七个权威输入（workflow、两份pin、两份build脚本、两份配方测试），校验run/job/artifact来源、完整分页、过期/重复/大小及GitHub摘要。成功输出候选收据，不下载库、不改产品准入。
+
+**outerArtifactSha256是GitHub外层artifact ZIP的摘要**；gh run download会自动解外层，得到的node-full-icu-arm64.zip是内层，libnode.so又是内层成员，三者SHA不能混用。之后的消费者仍须核验内层归档、build-info、producer精确输入、headers/config和目标库。任何人自行传一个--source-build-sha不构成授权。
+
+Windows CRLF会触发精确字节拒绝，按DEVELOPMENT已有git cat-file原始字节临时导出流程处理；不要改验证器或把生产摘要改成工作树值。若权威输入真正变化，应重新生产，不套旧产物。
+
+## 常见失败：必须保持什么
+
+| 报错/现象 | 正确动作 | 禁止动作 |
+|---|---|---|
+| GitHub job未启动、计费限制 | 记录run/job/annotation；换有资源的Ubuntu手工路径或等账户修复 | 写成编译失败/通过；反复排队或调整源码“修CI” |
+| Missing tool / NDK错误 | 准备真实指定宿主/版本，或报缺项 | symlink别的编译器冒充、改NDK pin、Windows.cmd经shell执行 |
+| source commit/tree/recipe不符 | 核查checkout、下载/字节、pin原始值 | 重算pin来迎合当前下载、删校验、git reset掉staged补丁 |
+| producer输入尚未提交或HEAD漂移 | 保留现场；重新选冻结提交/独立工作树做新attempt | 在长编译中继续merge，让收据指向别的输入 |
+| 输出目录已存在 | 保留旧attempt，明确改名/换全新目录后另试 | rmtree覆盖未知产物、把半包当成功 |
+| 无空间/OOM/超时 | 记录真实资源/进度；保存缓存，交主agent处理 | 以旧lib/无Intl发行版补齐、伪造成功退出 |
+| 只有x64库或Linux arm64库 | 拒绝ARM64 Android候选 | 仅改目录名/ABI标签、把glibc addon打进APK |
+| prepare-product仍拒ARM64 | 正常：进入下节代码任务 | 直接删拒绝或把验证标志手改true |
+
+## 消费者代码任务C：交强agent，不与A混改
+
+A/B成功以后按[NEXT-AGENT阶段B/C](NEXT-AGENT.md)做：固定ABI→Android26 triple、每ABI独立headers/输出、对应SQLite addon、独立来源记录/精确清单与反例、产品Gradle装配，最后才设备验收。
+
+允许路径要在具体卡里列明。不得顺手改x64的旧五个权威输入、vendor快照、Key边界、UID/Binder/backup/文件保护或UI；不把候选库接进产品后就称手机通过。arm64 flavor已经存在只表示构建配置，不表示引擎输入可用。原有x64产品与20项ARM64源码/来源测试、5项x64来源测试应继续通过。
+
+最终要分别报告：**候选编译、来源授权、消费者准备、APK构建、设备启动、真实模型**。缺哪一步就留在哪一步，不按“做了很多代码”推算完成百分比。

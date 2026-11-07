@@ -1,0 +1,122 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+name: Android ARM64 Node full ICU candidate
+on:
+  push:
+    branches: [feat/t-plugins]
+    paths:
+      - '.github/workflows/android-node-arm64-source.yml'
+      - 'dsh-go/tooling/android-node-probe/build-arm64-source.py'
+      - 'dsh-go/tooling/android-node-probe/node-arm64-source-build.json'
+      - 'dsh-go/tooling/android-node-probe/build-source.py'
+      - 'dsh-go/tooling/android-node-probe/node-source-build.json'
+      - 'dsh-go/tooling/android-node-probe/test_arm64_source.py'
+      - 'dsh-go/tooling/android-node-probe/test_source_recipe.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: node-full-icu-arm64-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.repository == 'Wzdhehe/minimax-bot-android' && github.ref == 'refs/heads/feat/t-plugins'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      CCACHE_BASEDIR: ${{ github.workspace }}/upstream-node-mobile
+      CCACHE_COMPILERCHECK: content
+      CCACHE_MAXSIZE: 3G
+      CCACHE_DIR: ${{ runner.temp }}/mbot-node-arm64-ccache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read the independent ARM64 source pin
+        id: pin
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          pin = json.loads(Path('dsh-go/tooling/android-node-probe/node-arm64-source-build.json').read_text())
+          assert pin['abi'] == 'arm64-v8a' and pin['intl'] == 'full-icu'
+          print('repository=' + pin['mobileRepository'])
+          print('commit=' + pin['mobileCommit'])
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pin.outputs.repository }}
+          ref: ${{ steps.pin.outputs.commit }}
+          submodules: true
+          path: upstream-node-mobile
+          persist-credentials: false
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: false
+      - name: Install pinned target and host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 ninja-build ccache
+          sdkmanager 'ndk;27.3.13750724'
+          echo '/usr/lib/llvm-18/bin' >> "$GITHUB_PATH"
+          df -h "$GITHUB_WORKSPACE"
+      - name: Check the ARM64 and shared source recipes
+        run: |
+          python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_source_recipe.py' -v
+          python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_arm64_source.py' -v
+          python3 dsh-go/tooling/android-node-probe/build-arm64-source.py \
+            --mobile-source "$GITHUB_WORKSPACE/upstream-node-mobile" \
+            --ndk "$ANDROID_HOME/ndk/27.3.13750724" \
+            --output "$RUNNER_TEMP/node-full-icu-arm64.zip" --check-only
+      - name: Restore only the ARM64 compiler cache
+        id: compiler_cache
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/mbot-node-arm64-ccache
+          key: node-arm64-icu-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dsh-go/tooling/android-node-probe/node-arm64-source-build.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            node-arm64-icu-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dsh-go/tooling/android-node-probe/node-arm64-source-build.json') }}-
+      - name: Compile the ARM64 candidate, leaving budget for cache preservation
+        id: build
+        timeout-minutes: 330
+        run: |
+          ccache --zero-stats
+          source_status=0
+          timeout --signal=TERM --kill-after=30s 300m python3 dsh-go/tooling/android-node-probe/build-arm64-source.py \
+            --mobile-source "$GITHUB_WORKSPACE/upstream-node-mobile" \
+            --ndk "$ANDROID_HOME/ndk/27.3.13750724" \
+            --output "$RUNNER_TEMP/node-full-icu-arm64.zip" --jobs 2 || source_status=$?
+          case "$source_status" in
+            0) source_state=success ;;
+            124) source_state=budget_exhausted ;;
+            137) source_state=terminated ;;
+            *) source_state=failed ;;
+          esac
+          printf '%s\n' "$source_state" > "$RUNNER_TEMP/node-arm64-source-state.txt"
+          ccache --show-stats
+          exit "$source_status"
+      - name: Preserve completed ARM64 compiler results after failure or timeout
+        if: always() && steps.compiler_cache.outputs.cache-primary-key != ''
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/mbot-node-arm64-ccache
+          key: ${{ steps.compiler_cache.outputs.cache-primary-key }}
+      - name: Keep only finite progress status
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-full-icu-arm64-progress
+          path: ${{ runner.temp }}/node-arm64-source-state.txt
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Keep the private ARM64 candidate, not a product or release
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-full-icu-arm64-candidate
+          path: ${{ runner.temp }}/node-full-icu-arm64.zip
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 下一位 agent 的开发合同
 
-更新：2026-11-07。这是当前接手顺序，旧专题卡的“下一步”不覆盖本文件。历史详见[整理前版本](https://github.com/Wzdhehe/minimax-bot-android/blob/e9d0bebd5fc2487b87d3b5a77b32c2107a0fe54e/docs/handoff/NEXT-AGENT.md)。本轮用户因GPT即将到期要求完善接手文档，不应再让用户重新讲一遍架构。
+更新：2026-11-07。这是当前接手顺序，旧专题卡的“下一步”不覆盖本文件。历史详见[整理前版本](https://github.com/Wzdhehe/minimax-bot-android/blob/e9d0bebd5fc2487b87d3b5a77b32c2107a0fe54e/docs/handoff/NEXT-AGENT.md)。用户因GPT即将到期要求详细交接，不应再让用户重新讲一遍架构。可直接转发给Ubuntu agent的编译卡、逐步命令与失败处理见[ARM64执行手册](ARM64-RUNBOOK.md)。
 
 ## 先做什么
 
@@ -24,7 +24,7 @@
 
 ### A. 独立 full-ICU ARM64 producer
 
-**现状**：`build-arm64-source.py`与`node-arm64-source-build.json`在库，candidateOnly=true；只验过配方/输入/结果形状，**没有已记录的实际ARM64 full-ICU编译成功**。不要先删prepare-product里的拒绝。
+**现状**：producer与candidateOnly=true的pin已在库；新增android-node-arm64-source.yml独立编译任务、verify-arm64-source-run.py独立来源核验。20项ARM64源码/来源、原x64来源5项通过；**仍没有实际ARM64 full-ICU编译成功证据**。新的CI代码不等于已编译。当前GitHub实查仍计费阻塞，Ubuntu手工编译按ARM64手册执行，不先删prepare-product里的拒绝。
 
 - 先读 [producer](../../dsh-go/tooling/android-node-probe/build-arm64-source.py)、[ARM64 pin](../../dsh-go/tooling/android-node-probe/node-arm64-source-build.json)、共享[原producer](../../dsh-go/tooling/android-node-probe/build-source.py)及其宿主测试。
 - 编译宿主须Linux x86_64 + NDK27.3.13750724；Windows本机无WSL，不能替它声称已编。可用用户另一个Ubuntu云端agent承担长编译，先明确同分支/文件分工；不能假定它已经拿到产物。
