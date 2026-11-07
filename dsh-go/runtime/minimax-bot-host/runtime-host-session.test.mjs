@@ -29,7 +29,8 @@ test('trusted runtime session lifecycle through the actual pinned gateway', {
   }));
   const built = await esbuild.build({ absWorkingDir: here, entryPoints: [join(here, 'runtime-host-session-cases.mjs')],
     outfile: file, bundle: true, format: 'esm', platform: 'node', target: 'node24', metafile: true,
-    alias: { ...contractAliases, ...runtimeBuildWiring(source).alias }, logLevel: 'silent' });
+    alias: { ...contractAliases, ...runtimeBuildWiring(source).alias,
+      '@mcode-test/review-options': join(source, 'packages/local-runtime-v2/src/service/turn-system/agent-host/execution/turn-execution-policy.ts') }, logLevel: 'silent' });
   const metafile = join(root, 'metafile.json');
   // The checker resolves against its caller cwd, while esbuild used `here`.
   built.metafile.inputs = Object.fromEntries(Object.entries(built.metafile.inputs).map(([path, input]) => [resolve(here, path), input]));

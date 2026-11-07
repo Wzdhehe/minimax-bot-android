@@ -65,7 +65,7 @@ export function createNativeModelBinding({ byForkProviderId, routeFactory, scope
     return { providerId: modelKey.slice(0, slash), modelId: modelKey.slice(slash + 1) };
   }
 
-  function routeFor(modelKey) {
+  function routeFor(modelKey, onFailure) {
     const { providerId, modelId } = parseModelKey(modelKey);
     const entry = Object.prototype.hasOwnProperty.call(byForkProviderId, providerId)
       ? byForkProviderId[providerId]
@@ -74,7 +74,7 @@ export function createNativeModelBinding({ byForkProviderId, routeFactory, scope
     if (!Array.isArray(entry.models) || !entry.models.includes(modelId)) {
       throw new NativeBindingError('model_not_available');
     }
-    return factory({ providerId: entry.nativeProviderId, modelId, apiFormat: entry.apiFormat });
+    return factory({ providerId: entry.nativeProviderId, modelId, apiFormat: entry.apiFormat, ...(onFailure ? { onFailure } : {}) });
   }
 
   return Object.freeze({
@@ -102,10 +102,10 @@ export function createNativeModelBinding({ byForkProviderId, routeFactory, scope
     },
     routeFor,
     /** Run one turn inside the route of its own model. The key is resolved once, before the turn. */
-    runForModelKey(modelKey, operation) {
+    runForModelKey(modelKey, operation, { onFailure } = {}) {
       if (!installed || installedTarget.fetch !== scope.fetch) throw new NativeBindingError('binding_not_installed');
       if (typeof operation !== 'function') throw new TypeError('An operation is required');
-      const route = routeFor(modelKey);
+      const route = routeFor(modelKey, onFailure);
       activeTurns++;
       const finish = () => { activeTurns--; releaseInstallation(); };
       let result;

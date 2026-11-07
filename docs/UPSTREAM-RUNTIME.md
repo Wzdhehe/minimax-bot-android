@@ -169,3 +169,5 @@ ESBUILD_MODULE=/path/to/esbuild/lib/main.js \
 - 钉点树本身**尚未**打包进 APK；`dsh-go/` 内当前仍是 DSH runtime。
 - WebUI 的完整构建与 Android 移植可行性另见 `docs/architecture.md` 的 T-Runtime 卡与 `docs/research.md`。
 - Node 版本：上游 WebUI 仓库要求 `>=22.19 <23 || >=24.2 <27`；本仓库的宿主测试与 CI 用 Node 24。
+
+移动端native-BYOK产品另有精确 `packages/local-runtime-v2/src/runtime.ts` → `./services.js` 接缝，manifest的hostAdaptations记录 `runtime-services.mjs`。它复用原服务构造，只在可信宿主构造作用域选择原有CLI review策略；保留webui owner、其它policy与wiring，custom模型不依赖未提供的第一方审核服务，managed模型仍由原策略要求审核且不在native模型准入表内。不修改上游字节或pin、不伪造审核结果、不开放guest网络。说明及设备边界见[当前交接](HANDOFF.md)。

@@ -9,9 +9,9 @@ import { randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-const [bundleInput, addonInput, wrapperInput, directoryInput, scenario = 'empty', connectionFdInput] = process.argv.slice(2);
+const [bundleInput, addonInput, wrapperInput, directoryInput, scenario = 'empty', connectionFdInput, modelFdInput] = process.argv.slice(2);
 if (!directoryInput) throw Error('Expected <mobile-bundle> <host-FD-addon> <sqlite-wrapper> <private-fixture-dir>');
-if (!['empty', 'basic', 'advanced', 'disabled', 'no-default'].includes(scenario)) throw Error('Unknown catalog smoke case');
+if (!['empty', 'basic', 'advanced', 'disabled', 'no-default', 'anthropic', 'anthropic-fail'].includes(scenario)) throw Error('Unknown catalog smoke case');
 if (process.versions.node !== '24.22.2' || typeof process.getuid !== 'function') throw Error('This host composition smoke requires POSIX Node 24.22.2 matching the Android addon headers');
 const bundle = resolve(bundleInput), directory = resolve(directoryInput);
 const require = createRequire(import.meta.url);
@@ -32,10 +32,14 @@ const providerId = '4a931f3d-8b37-4c71-a000-111111111111';
 const modelSettings = { modelId: 'fixture-model', enabled: true, effortOptions: [], modalities: { input: ['text'], output: ['text'] } };
 if (['advanced', 'no-default'].includes(scenario)) Object.assign(modelSettings, { limit: { context: 1000000, output: 128000 },
   effortOptions: ['high', 'medium'], modalities: { input: ['text', 'image', 'pdf', 'video', 'audio'], output: ['text'] } });
-const catalog = { providers: scenario === 'empty' ? [] : [{ providerId, name: 'Fixture', apiFormat: 'openai-completions',
+const anthropic = scenario.startsWith('anthropic');
+const modelFds = modelFdInput === undefined ? [] : modelFdInput.split(',').map(Number);
+if (modelFds.some((fd) => !Number.isSafeInteger(fd) || fd < 3)) throw Error('Invalid inherited model fixture FD');
+const modelRequests = [];
+const catalog = { providers: scenario === 'empty' ? [] : [{ providerId, name: 'Fixture', apiFormat: anthropic ? 'anthropic-messages' : 'openai-completions',
   enabled: scenario !== 'disabled', models: ['fixture-model'], modelSettings: [modelSettings] }],
-  defaultProviderId: ['basic', 'advanced'].includes(scenario) ? providerId : null,
-  defaultModelId: ['basic', 'advanced'].includes(scenario) ? 'fixture-model' : null };
+  defaultProviderId: ['basic', 'advanced', 'anthropic', 'anthropic-fail'].includes(scenario) ? providerId : null,
+  defaultModelId: ['basic', 'advanced', 'anthropic', 'anthropic-fail'].includes(scenario) ? 'fixture-model' : null };
 fs.writeFileSync(descriptor, JSON.stringify({ entryPath: '/mbot-code/runtime.mjs', pinCommit: '97818b2890b4acae1c6bd1200a226ff506680628',
   port: 32181, token: randomBytes(32).toString('hex'), catalog }), { mode: 0o600 });
 const descriptorFd = fs.openSync(descriptor, 'r');
@@ -88,13 +92,21 @@ if (connectionFd !== null && (!Number.isSafeInteger(connectionFd) || connectionF
 let offered = false;
 let take;
 const waiting = new Promise((resolve) => { take = resolve; });
-const timeout = setTimeout(() => { console.error('FAIL: exact product startup timed out; host only'); process.exit(1); }, 45_000);
+const timeout = setTimeout(() => { console.error('FAIL: exact product startup timed out; host only'); process.exit(1); }, scenario === 'anthropic-fail' ? 120_000 : 45_000);
 try {
   const { startMobileBotRuntime } = await import(url);
   let ready = false;
   const handle = await startMobileBotRuntime({ descriptorFd, ownerUid: process.getuid(), Database: wrapper.exports,
     addon: addon.exports, dataFds: fds, files, filesystem: lease,
-    models: { open() { throw Error('no_model_requested'); }, cancel() {} },
+    models: { open(id, payload) {
+      if (!anthropic) throw Error('no_model_requested');
+      modelRequests.push(JSON.parse(payload));
+      rawWrite(join(directory, 'model-requests.json'), JSON.stringify(modelRequests), { mode: 0o600 });
+      if (!modelFds.length) throw Error('fixture_native_admission_refused');
+      const fd = modelFds.shift();
+      if (scenario === 'anthropic-fail') { fs.closeSync(fd); throw Error('fixture_native_admission_refused'); }
+      return fd;
+    }, cancel() {} },
     snapshots: snapshotFixture,
     connections: { next() {
       if (!offered && connectionFd !== null) { offered = true; return Promise.resolve(connectionFd); }

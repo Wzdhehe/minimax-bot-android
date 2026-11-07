@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { closeSync } from 'node:fs';
 import { BrokerError } from './model-broker.mjs';
-import { streamNativeModelFd } from './model-fd-client.mjs';
+import { streamNativeModelFd, acquireModelFd } from './model-fd-client.mjs';
 
 const FORMATS = new Set(['openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai']);
 const MAX_BODY = 1024 * 1024;
@@ -14,7 +14,7 @@ const safeClose = (fd) => { try { closeSync(fd); } catch {} };
  * Google pi-ai currently does not call its options.fetch; this alone cannot
  * route that provider. Caller HTTP headers are intentionally never forwarded.
  */
-export function createNativeModelFetch({ providerId, modelId, apiFormat, requestUrl, openChannel, timeoutMs = 10 * 60_000 }) {
+export function createNativeModelFetch({ providerId, modelId, apiFormat, requestUrl, openChannel, onFailure, timeoutMs = 10 * 60_000 }) {
   let endpoint;
   try { endpoint = new URL(requestUrl); } catch {}
   if (!FORMATS.has(apiFormat) || typeof openChannel !== 'function' ||
@@ -25,6 +25,7 @@ export function createNativeModelFetch({ providerId, modelId, apiFormat, request
     throw new BrokerError('broker_request_invalid');
   }
   const boundUrl = endpoint.href;
+  const failed = (code) => { if (code !== 'broker_cancelled') { try { onFailure?.(code); } catch {} } };
   return async function nativeModelFetch(input, init) {
     const cancellation = new AbortController();
     let request;
@@ -53,7 +54,7 @@ export function createNativeModelFetch({ providerId, modelId, apiFormat, request
       // The body cannot override the binding even before the native recheck.
       if ((payload.model !== undefined && payload.model !== modelId) ||
           (payload.stream !== undefined && payload.stream !== true)) throw new BrokerError('broker_request_invalid');
-      fd = await ownedChannel(openChannel, { providerId, modelId, request: payload }, cancellation.signal);
+      fd = await acquireModelFd(openChannel, { providerId, modelId, request: payload }, cancellation.signal);
       if (cancellation.signal.aborted) throw new BrokerError(code());
       const ownedFd = fd;
       fd = undefined;
@@ -82,6 +83,7 @@ export function createNativeModelFetch({ providerId, modelId, apiFormat, request
               controller.close();
             }
           }, (error) => {
+            if (!cancellation.signal.aborted) failed(error instanceof BrokerError ? error.code : 'broker_stream_failed');
             try { controller.error(new BrokerError(cancellation.signal.aborted ? code() :
               error instanceof BrokerError ? error.code : 'broker_stream_failed')); } catch {}
           }).finally(finish);
@@ -98,6 +100,7 @@ export function createNativeModelFetch({ providerId, modelId, apiFormat, request
       // operation whose upstream outcome is unknown. Never return diagnostics.
       const failure = cancellation.signal.aborted ? code() :
         error instanceof BrokerError && error.code === 'broker_request_invalid' ? error.code : 'broker_unavailable';
+      failed(failure);
       return Response.json({ type: 'error', error: { type: 'invalid_request_error', message: failure, code: failure } }, { status: 400 });
     }
   };
@@ -131,36 +134,5 @@ async function readBody(request, signal) {
     // Revoke reads without making our deadline depend on that promise.
     void reader.cancel().catch(() => {});
     reader.releaseLock();
-  }
-}
-
-async function ownedChannel(openChannel, payload, signal) {
-  let abort;
-  let received;
-  let transferred = false;
-  let abandoned = false;
-  const cancelled = new Promise((_, reject) => {
-    abort = () => reject(new BrokerError('broker_cancelled'));
-    signal.addEventListener('abort', abort, { once: true });
-    if (signal.aborted) abort();
-  });
-  // A bridge may finish after cancellation. Its late FD still belongs to us.
-  const opening = Promise.resolve().then(() => {
-    if (signal.aborted) throw new BrokerError('broker_cancelled');
-    return openChannel(payload, { signal });
-  }).then((fd) => {
-    if (!Number.isSafeInteger(fd) || fd < 3) throw new BrokerError('broker_request_invalid');
-    if (abandoned || signal.aborted) { safeClose(fd); throw new BrokerError('broker_cancelled'); }
-    received = fd;
-    return fd;
-  });
-  try {
-    const fd = await Promise.race([opening, cancelled]);
-    transferred = true;
-    return fd;
-  } finally {
-    abandoned = true;
-    signal.removeEventListener('abort', abort);
-    if (!transferred && received !== undefined) safeClose(received);
   }
 }

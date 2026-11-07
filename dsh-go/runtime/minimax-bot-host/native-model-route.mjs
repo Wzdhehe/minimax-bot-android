@@ -18,7 +18,7 @@ export function nativeVirtualBaseUrl(apiFormat) {
 /** SDK routing uses a virtual HTTPS origin, never the configured upstream URL.
  * Native resolves the real endpoint/auth from IDs and rechecks authorization.
  * The nonsecret placeholder merely satisfies SDK constructors. */
-export function createNativeModelRoute({ providerId, modelId, apiFormat, binding, timeoutMs }) {
+export function createNativeModelRoute({ providerId, modelId, apiFormat, binding, timeoutMs, onFailure }) {
   if (!binding || typeof binding.open !== 'function' || typeof binding.cancel !== 'function' ||
       typeof modelId !== 'string' || !modelId.trim() || modelId.length > 256) throw new BrokerError('broker_request_invalid');
   const baseUrl = nativeVirtualBaseUrl(apiFormat);
@@ -29,7 +29,7 @@ export function createNativeModelRoute({ providerId, modelId, apiFormat, binding
   }[apiFormat];
   if (!suffix) throw new BrokerError('broker_request_invalid');
   const requestUrl = baseUrl + suffix;
-  const fetchImpl = createNativeModelFetch({ providerId, modelId, apiFormat, requestUrl, timeoutMs,
+  const fetchImpl = createNativeModelFetch({ providerId, modelId, apiFormat, requestUrl, timeoutMs, onFailure,
     async openChannel(payload, { signal }) {
       if (signal.aborted) throw new BrokerError('broker_cancelled');
       const id = randomUUID();

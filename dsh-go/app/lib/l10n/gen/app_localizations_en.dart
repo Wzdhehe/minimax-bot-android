@@ -9004,6 +9004,13 @@ class L10nEn extends L10n {
       'No default model is set. Choose a model here, or set a default in Accounts and models.';
 
   @override
+  String get mobileBotReplyFailed =>
+      'The reply did not complete. Check the provider settings and connection before trying again.';
+
+  @override
+  String get mobileBotReplyWorking => 'Replying…';
+
+  @override
   String get nearbyThisChat => 'This chat';
 
   @override

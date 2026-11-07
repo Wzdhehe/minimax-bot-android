@@ -5,7 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { createMiniAppAgentGateway as createUpstreamGateway } from '@mcode-runtime/agent-gateway';
 import { createBotAgentPort } from './agent-port.mjs';
-import { NativeBindingError } from './native-model-binding.mjs';
+import { createNativeModelBinding, NativeBindingError } from './native-model-binding.mjs';
+import { withNativeByokHost } from './runtime-native-review.mjs';
 import { createNativeModelRuntime } from './native-model-runtime.mjs';
 
 // A colon cannot occur in an installed plugin name in either pinned manifest
@@ -51,7 +52,7 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal, cata
   let closeRuntime;
   let closed = false;
   let closePromise;
-  let modelBinding = null;
+  let modelBinding = null, constructionBinding = null;
   const onAbort = () => { void close().catch(() => {}); };
   function close() {
     if (closePromise) return closePromise;
@@ -64,13 +65,24 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal, cata
       try { release?.(); } catch (error) { errors.push(error); }
       try { await closeRuntime?.(); } catch (error) { errors.push(error); }
       try { modelBinding?.close(); } catch (error) { errors.push(error); }
+      try { constructionBinding?.close(); } catch (error) { errors.push(error); }
       if (errors.length === 1) throw errors[0];
       if (errors.length > 1) throw new AggregateError(errors, 'runtime_close_failed');
     });
     return closePromise;
   }
   try {
-    try { assembled = await construction.run(scope, () => startHost({ dataDir: scope.dataDir })); }
+    // The pinned host captures fetch while constructing its model/session
+    // ports. Install the fail-closed dispatcher BEFORE that capture; binding
+    // only after construction leaves those clients holding the old fetch.
+    // No models are admitted during construction. The real binding below
+    // acquires the same shared dispatcher before this temporary lease closes.
+    if (catalog && nativeBinding) {
+      constructionBinding = createNativeModelBinding({ byForkProviderId: {}, binding: nativeBinding });
+      constructionBinding.install(globalThis);
+    }
+    try { assembled = await construction.run(scope, () => catalog && nativeBinding
+      ? withNativeByokHost(() => startHost({ dataDir: scope.dataDir })) : startHost({ dataDir: scope.dataDir })); }
     finally { scope.active = false; }
     const apiHost = assembled?.host?.apiHost;
     if (typeof apiHost?.close === 'function') closeRuntime = apiHost.close.bind(apiHost);
@@ -91,6 +103,8 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal, cata
     });
     const providerBinding = nativeRuntime.providerBinding;
     modelBinding = nativeRuntime.binding;
+    constructionBinding?.close();
+    constructionBinding = null;
     const bot = createBotAgentPort({
       agent: application.miniAppAgent,
       caller,

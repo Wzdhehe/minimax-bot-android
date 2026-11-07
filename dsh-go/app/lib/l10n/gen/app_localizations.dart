@@ -15716,6 +15716,18 @@ abstract class L10n {
   /// **'尚未设置默认模型。可在这里选择专用模型，或在账号与模型中设置默认模型。'**
   String get mobileBotNoDefaultModel;
 
+  /// No description provided for @mobileBotReplyFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'回复未完成，请检查供应商设置与连接后再试。'**
+  String get mobileBotReplyFailed;
+
+  /// No description provided for @mobileBotReplyWorking.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在回复…'**
+  String get mobileBotReplyWorking;
+
   /// No description provided for @nearbyThisChat.
   ///
   /// In zh, this message translates to:

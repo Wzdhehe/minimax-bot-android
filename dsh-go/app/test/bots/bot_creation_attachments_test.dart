@@ -13,6 +13,7 @@ class _Api extends MiniMaxBotApi {
   Map<String, Object?>? created;
   final sent = <List<String>>[];
   int uploads = 0;
+  List<Map<String, Object?>> messageRows = [];
   bool refuseSend = false, noDefault = false;
   Completer<Map<String, Object?>>? uploadGate;
   @override
@@ -42,7 +43,9 @@ class _Api extends MiniMaxBotApi {
     if (!noDefault) 'default': {'providerId': 'custom_provider:p', 'modelId': 'm1'},
   };
   @override
-  Future<Map<String, Object?>> messages(String chat, {int limit = 200, String? before}) async => {'messages': []};
+  Future<Map<String, Object?>> messages(String chat, {int limit = 200, String? before}) async => {
+    'messages': messageRows,
+  };
   @override
   Future<Map<String, Object?>> createBot(Map<String, Object?> properties) async {
     created = properties;
@@ -172,6 +175,18 @@ void main() {
       'thinking': {'effort': 'high'},
     });
     expect(api.noDefault, true);
+  });
+
+  testWidgets('an empty failed Bot reply displays safe feedback without raw provider diagnostics', (tester) async {
+    final api = _Api()
+      ..messageRows = [
+        {'id': 'msg_1', 'role': 'bot', 'text': '', 'status': 'error', 'error': 'fixture-private-provider-error'},
+      ];
+    final controller = await mount(tester, api, () async => []);
+    await controller.select('bot:bot_a');
+    await tester.pumpAndSettle();
+    expect(find.text('回复未完成，请检查供应商设置与连接后再试。'), findsOneWidget);
+    expect(find.text('fixture-private-provider-error'), findsNothing);
   });
 
   testWidgets('attachment-only sending uses upload ids and keeps the draft after a single uncertain send', (

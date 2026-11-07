@@ -106,3 +106,14 @@ test('SDK response cancellation, unconsumed timeout, truncated stream and invali
   assert.equal((await runSdkFdProbe({ events: [{ delta: 'partial' }], truncated: true })).code, 'broker_stream_failed');
   assert.equal((await runSdkFdProbe({ format: 'anthropic-messages', events: [{ type: 'bad\nevent' }] })).code, 'broker_invalid_response');
 });
+
+test('native admission errors notify the owned turn with stable codes only; user cancellation does not', async () => {
+  const failures = [];
+  const fetchImpl = createNativeModelFetch({ ...config, onFailure: (code) => failures.push(code),
+    openChannel() { throw Error('private-native-failure'); } });
+  assert.equal((await fetchImpl(url, init)).status, 400);
+  assert.deepEqual(failures, ['broker_unavailable']);
+  const abort = new AbortController(); abort.abort();
+  await assert.rejects(fetchImpl(url, { ...init, signal: abort.signal }), { code: 'broker_cancelled' });
+  assert.deepEqual(failures, ['broker_unavailable']);
+});

@@ -38,11 +38,11 @@ export function createBotAgentPort({ agent, caller, binding = null, resolveModel
   }
 
   /** Run one turn inside the native route of its own model. */
-  function boundTurn(input, call) {
+  function boundTurn(input, call, onFailure) {
     // An absent broker must never turn a model request into an upstream
     // network request, including when the runtime has old provider config.
     if (!binding) return Promise.reject(new NativeBindingError('native_binding_unavailable'));
-    return (async () => binding.runForModelKey(await modelKeyFor(input), call))();
+    return (async () => binding.runForModelKey(await modelKeyFor(input), call, { onFailure }))();
   }
 
   // Trusted product policy, never a Bot/HTTP input. Native capabilities and
@@ -52,9 +52,16 @@ export function createBotAgentPort({ agent, caller, binding = null, resolveModel
     if (!autoApprove) return boundTurn(input, () => invoke(options.signal, options.onEvent));
     const abort = new AbortController(), replies = new Map();
     const signal = options.signal ? AbortSignal.any([options.signal, abort.signal]) : abort.signal;
-    let active = true, failed = false;
+    let active = true, failed = false, sawText = false, nativeFailed = false;
+    let sessionId = input.sessionId, turnId;
+    const failureResult = (value = {}) => ({ ...value, ...(sessionId ? { sessionId } : {}), ...(turnId ? { turnId } : {}),
+      status: 'error', error: { code: 'NATIVE_MODEL_FAILED', reason: 'invalid_request',
+        message: 'The native model request did not complete.', retryable: false } });
+    const nativeFailure = () => { nativeFailed = true; abort.abort(); };
     const onEvent = (event) => {
       if (!active) return;
+      if (event.type === 'turn.started') { sessionId = event.sessionId; turnId = event.turnId; }
+      if (event.type === 'text.delta' && typeof event.text === 'string' && event.text.trim()) sawText = true;
       if (event.type !== 'permission.requested') { options.onEvent?.(event); return; }
       if (typeof event.sessionId !== 'string' || !event.sessionId || typeof event.requestId !== 'string' || !event.requestId) {
         failed = true; abort.abort(); return;
@@ -66,11 +73,19 @@ export function createBotAgentPort({ agent, caller, binding = null, resolveModel
         requestId: event.requestId, decision: 'allowOnce' })).catch(() => { failed = true; abort.abort(); });
       replies.set(key, reply);
     };
-    return boundTurn(input, () => invoke(signal, onEvent)).then(async (value) => {
+    return boundTurn(input, () => invoke(signal, onEvent), nativeFailure).then(async (value) => {
       await Promise.all(replies.values());
+      if (nativeFailed) return failureResult(value);
       if (failed) throw new Error('bot_permission_reply_failed');
+      // Some upstream provider failures finish with no text or error result.
+      // Do not silently persist that as a successful invisible Bot reply.
+      if (value?.status === 'finished' && !value.pendingQuestion && !sawText && !value.text?.trim()) {
+        return { ...value, status: 'error', error: { code: 'MODEL_OUTPUT_EMPTY', reason: 'empty_response',
+          message: 'The model returned no reply.', retryable: false } };
+      }
       return value;
-    }).finally(() => { active = false; abort.abort(); });
+    }).catch((error) => { if (nativeFailed) return failureResult(); throw error; })
+      .finally(() => { active = false; abort.abort(); });
   }
 
   return Object.freeze({

@@ -496,7 +496,14 @@ class _BotHomeState extends State<BotHome> {
                             bot.bots.where((b) => b['id'] == message['botId']).firstOrNull?['name']?.toString() ?? '',
                             style: const TextStyle(color: Color(0xff81c7b7)),
                           ),
-                        SelectableText(message['text']?.toString() ?? ''),
+                        if ((message['text'] as String? ?? '').isNotEmpty) SelectableText(message['text'] as String),
+                        if (message['status'] == 'error' || message['status'] == 'interrupted')
+                          Text(
+                            context.l10n.mobileBotReplyFailed,
+                            style: TextStyle(color: Theme.of(context).colorScheme.error),
+                          ),
+                        if (message['status'] == 'streaming' && (message['text'] as String? ?? '').isEmpty)
+                          Text(context.l10n.mobileBotReplyWorking),
                         if (message['attachments'] is List)
                           for (final attachment in (message['attachments'] as List).whereType<Map>())
                             Padding(

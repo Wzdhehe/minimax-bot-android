@@ -2,6 +2,8 @@
 // Real pinned gateway/facade, explicitly stubbed model and session execution.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { contentReviewOptions } from '@mcode-test/review-options';
+import { nativeReviewOptions, withNativeByokHost } from './runtime-native-review.mjs';
 import { createProcessLocalMiniAppAgentApplication } from '@mcode-test/process-local';
 import { createBotRuntimeSession, createMiniAppAgentGateway } from './runtime-host-session.mjs';
 
@@ -359,4 +361,42 @@ test('catalog read scope cannot suppress concurrent turn resolution', async (t) 
   assert.ok(resolutions > 0);
   finish.resolve();
   assert.deepEqual(await reading, { models: [selection] });
+});
+
+test('the factory captures the native dispatcher before any model session is constructed', async () => {
+  const original = globalThis.fetch;
+  let bypassed = 0, nativeCalls = 0, captured;
+  globalThis.fetch = () => { bypassed++; throw new Error('fixture network fallback forbidden'); };
+  const setup = boundFixture();
+  setup.nativeBinding = { open() { nativeCalls++; throw Error('fixture native refusal'); }, cancel() {} };
+  let session;
+  try {
+    session = await createBotRuntimeSession({ dataDir: '/fixture/captured-fetch', ...setup,
+      startHost: async ({ dataDir }) => {
+        captured = globalThis.fetch;
+        return fixture(dataDir, { async runTurn() {
+          const response = await captured('https://models.mbot.invalid/v1/chat/completions', {
+            method: 'POST', body: JSON.stringify({ model: 'fixture-model', stream: true, messages: [{ role: 'user', content: 'hello' }] }),
+          });
+          assert.equal(response.status, 400);
+          return { status: 'finished', text: 'native route invoked' };
+        } }).assembled;
+      },
+    });
+    assert.equal((await session.agent.run({ text: 'hello' })).text, 'native route invoked');
+    assert.equal(nativeCalls, 1);
+    assert.equal(bypassed, 0);
+    await session.close();
+    assert.notEqual(globalThis.fetch, captured, 'construction lease must retire with the runtime');
+  } finally { await session?.close(); globalThis.fetch = original; }
+});
+
+
+test('the real pinned CLI policy excludes BYOK from first-party review but still requires it for managed models', () => {
+  const options = withNativeByokHost(() => nativeReviewOptions({ ownerPolicy: {
+    kind: 'webui', execution: { reviewPolicy: 'neither' },
+  } }));
+  const flags = { cliProductPolicy: options.ownerPolicy.execution.reviewPolicy === 'cli' };
+  assert.deepEqual(contentReviewOptions({ preparation: { llm: { managedProvider: false } } }, flags), { contentReviewRequired: false });
+  assert.deepEqual(contentReviewOptions({ preparation: { llm: { managedProvider: true } } }, flags), { contentReviewRequired: true });
 });

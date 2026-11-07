@@ -228,3 +228,43 @@ test('failed automatic approval aborts the run and never reports successful comp
   await assert.rejects(port.run({ text: 'work' }), /bot_permission_reply_failed/);
   assert.equal(signal.aborted, true);
 });
+
+test('an empty upstream finish becomes a visible nonretryable failure, not a successful blank reply', async () => {
+  const agent = { async run() { return { status: 'finished', text: '', sessionId: 'session-1' }; },
+    async models() {}, async reply() {}, async answer() {} };
+  const port = createBotAgentPort({ agent, caller: { pluginId: 'builtin-bot', runId: 'generation' }, ...stubRoute, autoApprove: true });
+  const result = await port.run({ text: 'hello' });
+  assert.equal(result.status, 'error');
+  assert.equal(result.error.code, 'MODEL_OUTPUT_EMPTY');
+  assert.equal(result.error.retryable, false);
+  assert.equal(result.sessionId, 'session-1');
+  agent.run = async () => ({ status: 'finished', text: '', pendingQuestion: { requestId: 'q' } });
+  assert.equal((await port.run({ text: 'a question' })).status, 'finished');
+  agent.run = async (input) => { input.onEvent({ type: 'text.delta', text: 'streamed reply' }); return { status: 'finished', text: '' }; };
+  assert.equal((await port.run({ text: 'streamed' })).status, 'finished');
+});
+
+test('a native model failure aborts the owned gateway turn and reports error without replaying it', async () => {
+  let calls = 0;
+  const binding = { async runForModelKey(_key, operation, { onFailure }) {
+    const running = operation();
+    onFailure('broker_unavailable');
+    return running;
+  } };
+  const agent = { async run(input) {
+    calls++;
+    input.onEvent({ type: 'turn.started', sessionId: 'owned-session', turnId: 'owned-turn' });
+    await new Promise((done) => input.signal.addEventListener('abort', done, { once: true }));
+    throw Object.assign(new Error('gateway cancellation details'), { code: 'REQUEST_CANCELLED' });
+  }, async models() {}, async reply() {}, async answer() {} };
+  const port = createBotAgentPort({ agent, caller: { pluginId: 'builtin-bot', runId: 'generation' },
+    binding, resolveModelKey: async () => 'p/m', autoApprove: true });
+  const result = await port.run({ text: 'hello' });
+  assert.equal(calls, 1);
+  assert.equal(result.status, 'error');
+  assert.equal(result.sessionId, 'owned-session');
+  assert.equal(result.turnId, 'owned-turn');
+  assert.equal(result.error.code, 'NATIVE_MODEL_FAILED');
+  assert.equal(result.error.retryable, false);
+  assert.equal(JSON.stringify(result).includes('gateway cancellation details'), false);
+});

@@ -105,3 +105,38 @@ async function readResponse(source) {
     if (!transferred) { await reader.cancel().catch(() => {}); reader.releaseLock(); }
   }
 }
+
+// Ownership handoff shared by SDK requests and native provider probes.
+
+export async function acquireModelFd(openChannel, payload, signal) {
+  let abort;
+  let received;
+  let transferred = false;
+  let abandoned = false;
+  const cancelled = new Promise((_, reject) => {
+    abort = () => reject(new BrokerError('broker_cancelled'));
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) abort();
+  });
+  // A bridge may finish after cancellation. Its late FD still belongs to us.
+  const opening = Promise.resolve().then(() => {
+    if (signal.aborted) throw new BrokerError('broker_cancelled');
+    return openChannel(payload, { signal });
+  }).then((fd) => {
+    if (!Number.isSafeInteger(fd) || fd < 3) throw new BrokerError('broker_request_invalid');
+    if (abandoned || signal.aborted) { closeOwned(fd); throw new BrokerError('broker_cancelled'); }
+    received = fd;
+    return fd;
+  });
+  try {
+    const fd = await Promise.race([opening, cancelled]);
+    transferred = true;
+    return fd;
+  } finally {
+    abandoned = true;
+    signal.removeEventListener('abort', abort);
+    if (!transferred && received !== undefined) closeOwned(received);
+  }
+}
+
+function closeOwned(fd) { try { closeSync(fd); } catch {} }

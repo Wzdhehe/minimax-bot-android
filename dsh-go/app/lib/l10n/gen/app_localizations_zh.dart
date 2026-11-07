@@ -8545,6 +8545,12 @@ class L10nZh extends L10n {
   String get mobileBotNoDefaultModel => '尚未设置默认模型。可在这里选择专用模型，或在账号与模型中设置默认模型。';
 
   @override
+  String get mobileBotReplyFailed => '回复未完成，请检查供应商设置与连接后再试。';
+
+  @override
+  String get mobileBotReplyWorking => '正在回复…';
+
+  @override
   String get nearbyThisChat => '本对话';
 
   @override

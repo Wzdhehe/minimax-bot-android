@@ -27,9 +27,12 @@ export function runtimeBuildWiring(source) {
   }));
   const snapshotAdaptation = Object.freeze({ importer: 'packages/local-runtime-v2/src/infra/db/backup.ts',
     specifier: 'node:fs/promises', adapter: 'runtime-sqlite-snapshot-fs.mjs' });
+  const servicesAdaptation = Object.freeze({ importer: 'packages/local-runtime-v2/src/runtime.ts',
+    specifier: './services.js', adapter: 'runtime-services.mjs' });
   return {
-    adaptations: [adaptation, sqliteAdaptation, legacySqliteAdaptation, ...sqliteFsAdaptations, snapshotAdaptation],
+    adaptations: [adaptation, sqliteAdaptation, legacySqliteAdaptation, ...sqliteFsAdaptations, snapshotAdaptation, servicesAdaptation],
     alias: {
+      '@mcode-runtime/services': join(source, 'packages/local-runtime-v2/src/services.ts'),
       '@mcode-runtime/assembly': join(source, 'packages/webui/src/runtime/assembly.ts'),
       '@mcode-runtime/agent-gateway': join(source, 'packages/local-runtime-v2/src/service/miniapp/agent/gateway.ts'),
       '@mcode-runtime/miniapp-index': join(source, 'packages/local-runtime-v2/src/service/miniapp/index.ts'),
@@ -40,6 +43,10 @@ export function runtimeBuildWiring(source) {
         build.onResolve({ filter: /^\.\/service\/miniapp\/index\.js$/ }, (input) => {
           if (input.importer !== join(source, adaptation.importer)) return undefined;
           return { path: join(here, adaptation.adapter) };
+        });
+        build.onResolve({ filter: /^\.\/services\.js$/ }, (input) => {
+          if (input.importer !== join(source, servicesAdaptation.importer)) return undefined;
+          return { path: join(here, servicesAdaptation.adapter) };
         });
         build.onResolve({ filter: /^node:module$/ }, (input) => {
           if (![sqliteAdaptation, legacySqliteAdaptation].some((entry) => input.importer === join(source, entry.importer))) return undefined;

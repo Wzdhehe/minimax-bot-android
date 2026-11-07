@@ -5,6 +5,7 @@ import { createBotPersistence } from './bot-persistence.mjs';
 import { createBotFdTransport } from './bot-fd-transport.mjs';
 import { startBotFdIngress } from './bot-fd-ingress.mjs';
 import { startBotService } from './service.mjs';
+import { createNativeProbeClient } from './native-probe-client.mjs';
 
 const failure = (code) => Object.assign(new Error(code), { code });
 
@@ -89,6 +90,7 @@ export async function startBotRuntimeFromFd({ descriptorFd, expectedOwnerUid, ru
     ensureLive();
     service = await startBotService({ port: descriptor.port, authToken: descriptor.token,
       dataDir: botDataDir, fileMode: mobileFiles ? 'mobile' : 'unavailable', mobileFiles, ...persistence, agent: runtime.agent,
+      modelBroker: createNativeProbeClient(nativeBinding),
       signal: controller.signal, logger, fdTransport: transport });
     ensureLive();
     ingress = startBotFdIngress({ transport, next: () => connections.next(), signal: controller.signal });

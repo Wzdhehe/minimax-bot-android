@@ -6,6 +6,7 @@ import 'package:dsh_client/dsh_client.dart';
 
 import '../l10n/l10n.dart';
 import 'bot_providers.dart';
+import 'bot_runtime_endpoint.dart';
 import 'bot_usage.dart';
 import 'bot_plugins.dart';
 
@@ -16,12 +17,14 @@ class BotSettingsHub extends StatefulWidget {
     this.platform = const BotSettingsPlatform(),
     this.store,
     this.botApi,
+    this.endpoint = const BotRuntimeEndpoint(),
     this.plugins = const BotPluginsPort(),
   });
   final MbotPluginPort plugins;
   final MbotPlatform platform;
   final PrefsStore? store;
   final MiniMaxBotApi? botApi;
+  final BotRuntimeEndpoint endpoint;
   @override
   State<BotSettingsHub> createState() => _BotSettingsHubState();
 }
@@ -46,6 +49,19 @@ class _BotSettingsHubState extends State<BotSettingsHub> {
     }
   }
 
+  Future<Map<String, Object?>> _testProvider(String providerId, String modelId) async {
+    // A provider save restarts the guest. Never retain the settings page's
+    // original client for a later probe and never retry this model mutation.
+    final current = await widget.endpoint.liveService();
+    if (current == null) return {'ok': false, 'code': 'provider_unavailable'};
+    try {
+      if (!mounted) return {'ok': false, 'code': 'provider_unavailable'};
+      return await current.testProvider(providerId, modelId);
+    } finally {
+      if (!identical(current, widget.botApi)) current.close();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final prefs = _prefs;
@@ -57,7 +73,7 @@ class _BotSettingsHubState extends State<BotSettingsHub> {
           MbotSettingsGroupId.plugins: (_) => MbotPluginSettingsPage(port: widget.plugins),
           MbotSettingsGroupId.accountAndModel: (_) => MbotProviderSettingsPage(
             port: const NativeBotProviders(),
-            testProvider: widget.botApi?.testProvider,
+            testProvider: _testProvider,
             usagePage: (_) => MbotUsageQuotaPage(port: BotUsageQuotaPort(api: widget.botApi)),
           ),
         },
