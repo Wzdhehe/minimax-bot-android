@@ -1,0 +1,275 @@
+{
+  "test/chat/activity_strip_golden_test.dart": [
+    "goldens (dark) speed levels",
+    "goldens (dark) states",
+    "goldens (light) speed levels",
+    "goldens (light) states"
+  ],
+  "test/chat/chat_features_test.dart": [
+    "goldens (dark) model sheet",
+    "goldens (dark) model sheet without a key",
+    "goldens (light) model sheet",
+    "goldens (light) model sheet without a key"
+  ],
+  "test/chat/chat_golden_test.dart": [
+    "auto-approve mode (dark)",
+    "auto-approve mode (light)",
+    "conversation with approval (dark)",
+    "conversation with approval (en)",
+    "conversation with approval (light)",
+    "conversation, full transcript (dark)",
+    "conversation, full transcript (light)",
+    "empty new chat (dark)",
+    "empty new chat (en)",
+    "empty new chat (light)",
+    "streaming answer (dark)",
+    "streaming answer (light)"
+  ],
+  "test/chat/chat_shell_test.dart": [
+    "send options sheet (dark)",
+    "send options sheet (light)"
+  ],
+  "test/chat/dock/dock_golden_test.dart": [
+    "goldens (dark) deck: todo, goal, strip folded into one row, then spread",
+    "goldens (dark) stack, checklist open",
+    "goldens (dark) stack: todo, goal, strip, composer over the chat",
+    "goldens (light) deck: todo, goal, strip folded into one row, then spread",
+    "goldens (light) stack, checklist open",
+    "goldens (light) stack: todo, goal, strip, composer over the chat"
+  ],
+  "test/chat/empty_actions_test.dart": [
+    "goldens (dark) 360dp, large text",
+    "goldens (dark) connected, in a workspace",
+    "goldens (dark) engine unreachable",
+    "goldens (light) 360dp, large text",
+    "goldens (light) connected, in a workspace",
+    "goldens (light) engine unreachable"
+  ],
+  "test/chat/model_sheet_test.dart": [
+    "goldens (dark) crowded channels",
+    "goldens (light) crowded channels"
+  ],
+  "test/chat/run_info_golden_test.dart": [
+    "goldens (dark) running turn",
+    "goldens (dark) trajectory sheet, running",
+    "goldens (light) running turn",
+    "goldens (light) trajectory sheet, running"
+  ],
+  "test/community/community_page_test.dart": [
+    "group sheet golden (dark)",
+    "group sheet golden (light)"
+  ],
+  "test/drawer/drawer_golden_test.dart": [
+    "drawer_archive_undo (dark)",
+    "drawer_archive_undo (light)",
+    "drawer_archive_undo_bulk (dark)",
+    "drawer_archive_undo_bulk (light)",
+    "drawer_g9_empty (dark)",
+    "drawer_g9_empty (light)",
+    "drawer_g9_filter (dark)",
+    "drawer_g9_filter (light)",
+    "drawer_g9_folders (dark)",
+    "drawer_g9_folders (en)",
+    "drawer_g9_folders (light)",
+    "drawer_g9_folder_editor (dark)",
+    "drawer_g9_folder_editor (light)"
+  ],
+  "test/integration/wiring_test.dart": [
+    "goldens drawer_ds_bot (dark)",
+    "goldens drawer_ds_bot (light)",
+    "goldens new chat in a workspace (dark)",
+    "goldens new chat in a workspace (light)"
+  ],
+  "test/landscape/landscape_golden_test.dart": [
+    "phone_chat (dark)",
+    "phone_chat (light)",
+    "phone_drawer (light)",
+    "w600_chat (light)",
+    "w840_chat (dark)",
+    "w840_chat (light)"
+  ],
+  "test/launch/launch_golden_test.dart": [
+    "at rest (dark)",
+    "at rest (light)",
+    "hand-over frame (dark)",
+    "hand-over frame (light)",
+    "light across the icon (dark)",
+    "light across the icon (light)"
+  ],
+  "test/launch/launch_icon_test.dart": [
+    "golden: frost at the hand-over (13+, its own splash theme)",
+    "golden: ink at the hand-over (13+, its own splash theme)",
+    "golden: mist at the hand-over (13+, its own splash theme)",
+    "golden: night at the hand-over (13+, its own splash theme)",
+    "golden: night, no system icon, coming in (dark)",
+    "golden: night, no system icon, coming in (light)"
+  ],
+  "test/onboarding/local_chat_golden_test.dart": [
+    "no runtime on this phone (dark)",
+    "no runtime on this phone (en)",
+    "no runtime on this phone (light)",
+    "stopped, auto start off (light)"
+  ],
+  "test/onboarding/local_optional_golden_test.dart": [
+    "drawer_missing (dark)",
+    "drawer_missing (light)"
+  ],
+  "test/pets/pet_golden_test.dart": [
+    "a bubble for another conversation, dark",
+    "a bubble for another conversation, light",
+    "deepy held up high, the lifted pose whole, dark",
+    "deepy held up high, the lifted pose whole, light",
+    "deepy on the composer, large, dark",
+    "deepy on the composer, large, light",
+    "deepy on the composer, medium, dark",
+    "deepy on the composer, medium, light",
+    "deepy on the composer, small, dark",
+    "deepy on the composer, small, light",
+    "girl held up high, the lifted pose whole, dark",
+    "girl held up high, the lifted pose whole, light",
+    "girl on the composer, large, dark",
+    "girl on the composer, large, light",
+    "girl on the composer, medium, dark",
+    "girl on the composer, medium, light",
+    "girl on the composer, small, dark",
+    "girl on the composer, small, light",
+    "on the run strip, the whale tail aside, dark",
+    "on the run strip, the whale tail aside, light"
+  ],
+  "test/pets/pet_parts_test.dart": [
+    "宠物设置 golden (dark)",
+    "宠物设置 golden (en)",
+    "宠物设置 golden (light)"
+  ],
+  "test/plugins/seats/seats_pages_test.dart": [
+    "goldens settings hub: the plugins' sections under 插件 (dark)",
+    "goldens settings hub: the plugins' sections under 插件 (light)"
+  ],
+  "test/remote/remote_golden_test.dart": [
+    "drawer_ssh (dark)",
+    "drawer_ssh (light)",
+    "drawer_ssh_reconnecting (dark)",
+    "drawer_ssh_reconnecting (light)"
+  ],
+  "test/settings/app_icon_picker_test.dart": [
+    "app_icon_picker (dark)",
+    "app_icon_picker (light)"
+  ],
+  "test/settings/appearance_page_test.dart": [
+    "golden appearance (dark)",
+    "golden appearance (en)",
+    "golden appearance (light)",
+    "golden appearance_custom (dark)",
+    "golden appearance_custom (light)"
+  ],
+  "test/settings/launch_screen_section_test.dart": [
+    "golden: custom center (dark)",
+    "golden: custom center (light)",
+    "golden: custom fill (dark)",
+    "golden: custom fill (light)",
+    "golden: default (dark)",
+    "golden: default (light)"
+  ],
+  "test/settings/settings_ia_golden_test.dart": [
+    "about (dark)",
+    "about (light)",
+    "settings_hub_full (dark)",
+    "settings_hub_full (light)"
+  ],
+  "test/settings/wallpaper_section_test.dart": [
+    "goldens default (dark)",
+    "goldens default (light)"
+  ],
+  "test/share/share_card_golden_test.dart": [
+    "file card with its first lines",
+    "follows the accent colour (card, dusk)",
+    "follows the accent colour (glass, turquoise)",
+    "long reply is cut with an ellipsis",
+    "pictures that cannot be had are quiet tiles, no words",
+    "pictures: more than four leave 「+N」 on the fourth (dark)",
+    "pictures: the prompt's above its bubble, the reply's where they stand",
+    "plugin card",
+    "plugin card with its own landing link: too long to scan, no QR code (card)",
+    "plugin card with its own landing link: too long to scan, no QR code (light)",
+    "reply card (card)",
+    "reply card (dark)",
+    "reply card (glass)",
+    "reply card (light)",
+    "reply card (paper)",
+    "several exchanges make a chat-style long image"
+  ],
+  "test/shell/adaptive/adaptive_home_test.dart": [
+    "goldens (dark) wide_panel",
+    "goldens (dark) wide_sidebar",
+    "goldens (light) wide_panel",
+    "goldens (light) wide_sidebar"
+  ],
+  "test/shell/brand_mark_test.dart": [
+    "sheet (dark)",
+    "sheet (light)"
+  ],
+  "test/shell/quick_panel_golden_test.dart": [
+    "en_quick_panel_320, every destination (dark)",
+    "en_quick_panel_320, every destination (light)",
+    "en_quick_panel_items_320 (dark)",
+    "en_quick_panel_items_320 (light)",
+    "quick_panel (dark)",
+    "quick_panel (light)",
+    "quick_panel_320 (dark)",
+    "quick_panel_320 (light)",
+    "quick_panel_items_320 (dark)",
+    "quick_panel_items_320 (light)"
+  ],
+  "test/shell/shell_golden_test.dart": [
+    "drawer (dark)",
+    "drawer (light)",
+    "drawer_stopped (dark)",
+    "drawer_stopped (light)",
+    "settings_appearance (dark)",
+    "settings_appearance (light)",
+    "welcome (dark)",
+    "welcome (light)",
+    "settings_appearance_large_text (dark)",
+    "settings_appearance_large_text (light)"
+  ],
+  "test/system_entry/share_landed_golden_test.dart": [
+    "share landed in the new-chat composer (dark)",
+    "share landed in the new-chat composer (light)"
+  ],
+  "test/update/update_golden_test.dart": [
+    "update_sheet (dark)",
+    "update_sheet (light)",
+    "update_sheet_downloading (dark)",
+    "update_sheet_downloading (light)",
+    "update_sheet_signature (dark)",
+    "update_sheet_signature (light)",
+    "update_sheet_star (dark)",
+    "update_sheet_star (light)"
+  ],
+  "test/usage/usage_ui_test.dart": [
+    "welcome, in English (light)"
+  ],
+  "test/wallpaper/wallpaper_screens_test.dart": [
+    "golden: conversation on the bright picture (dark)",
+    "golden: conversation on the bright picture (light)",
+    "golden: conversation on the dark picture (dark)",
+    "golden: conversation on the dark picture (light)",
+    "golden: the drawer over the wallpaper (dark)",
+    "golden: the drawer over the wallpaper (light)",
+    "golden: 首页 (a new chat) on the bright picture (light)",
+    "golden: 首页 (a new chat) on the dark picture (dark)"
+  ],
+  "test/web/web_mode_test.dart": [
+    "the conversation follows across modes the handle sheet (en)"
+  ],
+  "test/workspace/workspace_golden_test.dart": [
+    "drawer_workspace (dark)",
+    "drawer_workspace (light)",
+    "workspace_sheet (dark)",
+    "workspace_sheet (light)"
+  ],
+  "test/star/star_prompt_test.dart": [
+    "goldens the dialog (dark)",
+    "goldens the dialog (light)"
+  ]
+}
