@@ -1,7 +1,6 @@
 // The brand mark and its lockup.
 //
-// - The generated glyph data (brand_glyph.g.dart) agrees with its own paths:
-//   the ink box and the visual centre, re-measured on the drawn outlines.
+// - The original geometric M stays within its declared bounds.
 // - The widget's sizes.
 // - Lockups at the drawer's and the share card's sizes and at a larger text
 //   scale, measured (brand_support.dart); the share card's tagline hangs under
@@ -11,7 +10,7 @@
 //   flutter test test/shell/brand_mark_test.dart
 
 import 'package:dsh_app/ui/share/share_card.dart';
-import 'package:dsh_app/ui/shell/brand_glyph.g.dart';
+import 'package:dsh_app/ui/shell/neutral_mark.dart';
 import 'package:dsh_app/ui/shell/brand_mark.dart';
 import 'package:dsh_app/ui/theme/theme.dart';
 import 'package:flutter/material.dart';
@@ -23,55 +22,11 @@ import '../share/support.dart';
 import 'brand_support.dart';
 import 'golden_harness.dart';
 
-/// Points every [step] grid units along every contour of [path].
-List<List<Offset>> _outline(Path path, {double step = 0.02}) => [
-  for (final metric in path.computeMetrics())
-    [for (var d = 0.0; d < metric.length; d += step) metric.getTangentForOffset(d)!.position],
-];
-
 void main() {
-  test('generated glyph data matches its paths', () {
-    var area = 0.0;
-    var cx = 0.0;
-    var cy = 0.0;
-    var box = Rect.zero;
-    var first = true;
-    for (final path in [BrandGlyph.body, BrandGlyph.bubble]) {
-      for (final poly in _outline(path)) {
-        for (var i = 0; i < poly.length; i++) {
-          final a = poly[i];
-          final b = poly[(i + 1) % poly.length];
-          final k = a.dx * b.dy - b.dx * a.dy;
-          area += k;
-          cx += (a.dx + b.dx) * k;
-          cy += (a.dy + b.dy) * k;
-          final r = Rect.fromPoints(a, a);
-          box = first ? r : box.expandToInclude(r);
-          first = false;
-        }
-      }
-    }
-    area /= 2;
-    final centroid = Offset(cx / (6 * area), cy / (6 * area));
-    expect((centroid - BrandGlyph.centroid).distance, lessThan(0.02));
-    expect(box.left, closeTo(BrandGlyph.box.left, 0.01));
-    expect(box.top, closeTo(BrandGlyph.box.top, 0.01));
-    expect(box.right, closeTo(BrandGlyph.box.right, 0.01));
-    expect(box.bottom, closeTo(BrandGlyph.box.bottom, 0.01));
-    expect(BrandGlyph.aspect, closeTo(BrandGlyph.box.width / BrandGlyph.box.height, 1e-5));
-    // The fin and the belly lie on the silhouette.
-    final body = BrandGlyph.body.getBounds();
-    for (final layer in [BrandGlyph.fin, BrandGlyph.belly]) {
-      final b = layer.getBounds();
-      expect(b.left >= body.left - 1e-3 && b.right <= body.right + 1e-3, isTrue);
-      expect(b.top >= body.top - 1e-3 && b.bottom <= body.bottom + 1e-3, isTrue);
-    }
-    // The glyph sits in the tile's visible square like the launcher's glyph.
-    expect(BrandGlyph.tileBox.contains(BrandGlyph.box.topLeft), isTrue);
-    expect(BrandGlyph.tileBox.contains(BrandGlyph.box.bottomRight), isTrue);
-    // Visual centre: a little below the box's middle, near the middle across.
-    expect(BrandMark.visualCentre.dy, inInclusiveRange(0.5, 0.65));
-    expect((BrandMark.visualCentre.dx - 0.5).abs(), lessThan(0.05));
+  test('neutral geometric mark stays inside its declared box', () {
+    expect(NeutralMark.path.getBounds(), NeutralMark.box);
+    expect(BrandMark.aspect, NeutralMark.box.width / NeutralMark.box.height);
+    expect(BrandMark.visualCentre, const Offset(0.5, 0.5));
   });
 
   testWidgets('sizes: the glyph keeps its aspect, the tile is square', (tester) async {
@@ -92,7 +47,7 @@ void main() {
     expect(tester.getSize(find.byKey(const ValueKey('mono'))), Size(18 * BrandMark.aspect, 18));
     expect(tester.getSize(find.byKey(const ValueKey('tile'))), const Size(52, 52));
     final shift = BrandMark.opticalShift(40);
-    expect(shift.dy, lessThan(0));
+    expect(shift, Offset.zero);
     expect(shift.dx.abs(), lessThan(40 * BrandMark.aspect * 0.05));
   });
 

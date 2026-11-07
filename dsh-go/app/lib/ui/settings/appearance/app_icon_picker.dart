@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../l10n/l10n.dart';
 import '../../../state/app_icon_state.dart';
 import '../../common/pressable.dart';
-import '../../shell/brand_glyph.g.dart';
+import '../../shell/neutral_mark.dart';
 import '../../theme/theme.dart';
 import '../../common/brief_notice.dart';
 
@@ -210,8 +210,7 @@ class AppIconArt {
   static const end = Offset(100.43, 113.87);
 
   static AppIconArt of(AppIcon icon) => switch (icon) {
-    // The default icon; on the phone its glyph is the original art, here the
-    // brand master's glass (the same fit).
+    // All variants use the same original geometric M.
     AppIcon.mist => const AppIconArt._(Color(0xFF9AB0E8), Color(0xFF405AAD), AppIconGlyph.glassDark),
     AppIcon.night => const AppIconArt._(Color(0xFF2C3D6C), Color(0xFF0C122D), AppIconGlyph.glassDark),
     AppIcon.frost => const AppIconArt._(Color(0xFFFCFDFF), Color(0xFFDDE5F8), AppIconGlyph.glassLight),
@@ -219,7 +218,7 @@ class AppIconArt {
   };
 }
 
-/// The brand glyph's three renderings (`assets/brand/glyph-*.svg`).
+/// Placeholder foreground colour variants; legacy enum names are kept for settings compatibility.
 enum AppIconGlyph { glassDark, glassLight, mono }
 
 /// [icon] as the launcher shows it: [size] square, cut to [mask] (an outline
@@ -261,20 +260,13 @@ class _IconPainter extends CustomPainter {
         const Rect.fromLTWH(0, 0, 108, 108),
         Paint()..shader = ui.Gradient.linear(AppIconArt.start, AppIconArt.end, [art.from, art.to]),
       );
-    switch (art.glyph) {
-      case AppIconGlyph.mono:
-        final paint = Paint()..color = art.mono!;
-        canvas
-          ..drawPath(BrandGlyph.body, paint)
-          ..drawPath(BrandGlyph.bubble, paint);
-      case AppIconGlyph.glassDark || AppIconGlyph.glassLight:
-        final dark = art.glyph == AppIconGlyph.glassDark;
-        canvas
-          ..drawPath(BrandGlyph.body, Paint()..shader = dark ? BrandGlyph.tailDark : BrandGlyph.tailLight)
-          ..drawPath(BrandGlyph.fin, Paint()..shader = dark ? BrandGlyph.finDark : BrandGlyph.finLight)
-          ..drawPath(BrandGlyph.belly, Paint()..shader = dark ? BrandGlyph.bellyDark : BrandGlyph.bellyLight)
-          ..drawPath(BrandGlyph.bubble, Paint()..shader = dark ? BrandGlyph.bubbleDark : BrandGlyph.bubbleLight);
-    }
+    canvas.drawPath(
+      NeutralMark.path,
+      Paint()
+        ..color = art.glyph == AppIconGlyph.glassLight
+            ? const Color(0xFF405AAD)
+            : (art.mono ?? const Color(0xFFFFFFFF)),
+    );
     canvas
       ..restore()
       // Half of it falls outside the clip: a 1 px line just inside the edge.
@@ -296,8 +288,9 @@ class _IconPainter extends CustomPainter {
 /// 0…1 from the system) or, without one, a rounded square.
 Path launcherMaskPath(List<double>? mask, double side) {
   if (mask == null || mask.length < 6) {
-    return RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(side * 0.32))
-        .getOuterPath(Rect.fromLTWH(0, 0, side, side));
+    return RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.circular(side * 0.32),
+    ).getOuterPath(Rect.fromLTWH(0, 0, side, side));
   }
   final path = Path()..moveTo(mask[0] * side, mask[1] * side);
   for (var i = 2; i + 1 < mask.length; i += 2) {
