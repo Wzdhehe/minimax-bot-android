@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'loading_surface.dart';
 import '../providers/provider_contract.dart';
+import 'provider_editor_page.dart';
+import 'provider_strings.dart';
 
 class MbotProviderSettingsPage extends StatefulWidget {
   const MbotProviderSettingsPage(
@@ -17,8 +19,7 @@ class MbotProviderSettingsPage extends StatefulWidget {
 
 class _MbotProviderSettingsPageState extends State<MbotProviderSettingsPage> {
   MbotProviderCatalog? _catalog;
-  bool _busy = false;
-  bool _failed = false;
+  bool _busy = false, _editing = false, _failed = false;
   @override
   void initState() {
     super.initState();
@@ -26,7 +27,7 @@ class _MbotProviderSettingsPageState extends State<MbotProviderSettingsPage> {
   }
 
   Future<void> _run(Future<MbotProviderCatalog> Function() operation) async {
-    if (_busy) return;
+    if (_busy || _editing) return;
     setState(() {
       _busy = true;
       _failed = false;
@@ -43,176 +44,72 @@ class _MbotProviderSettingsPageState extends State<MbotProviderSettingsPage> {
 
   Future<void> _refresh() => _run(widget.port.load);
 
-  Future<void> _probe(MbotProvider provider, String model) async {
-    final test = widget.testProvider;
-    if (test == null || _busy) return;
-    setState(() => _busy = true);
-    var message = '测试未完成，请检查本机模型服务';
-    try {
-      final result = await test(provider.id, model);
-      message = result['ok'] == true
-          ? '模型连接测试成功'
-          : result['code'] == 'provider_unavailable'
-              ? '本机模型服务尚未就绪'
-              : '模型连接测试失败';
-    } catch (_) {/* never show provider bodies or credentials */}
-    if (!mounted) return;
-    setState(() => _busy = false);
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
-  }
-
   Future<void> _edit([MbotProvider? provider]) async {
-    final name = TextEditingController(text: provider?.name ?? '');
-    final base = TextEditingController(
-        text: provider?.baseUrl ?? 'https://api.minimax.io/v1');
-    final models =
-        TextEditingController(text: provider?.models.join('\n') ?? '');
-    final key = TextEditingController();
-    var format = provider?.apiFormat ?? 'openai-completions';
-    var enabled = provider?.enabled ?? true;
-    var clearKey = false;
-    var invalid = false;
+    if (_busy || _editing) return;
+    setState(() => _editing = true);
     try {
-      final route = DialogRoute<bool>(
-          context: context,
-          builder: (context) => StatefulBuilder(
-              builder: (context, update) => AlertDialog(
-                    title: Text(provider == null ? '添加供应商' : '编辑供应商'),
-                    content: SizedBox(
-                        width: 480,
-                        child: SingleChildScrollView(
-                            child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                              if (invalid)
-                                const Text('请填写名称、HTTPS 地址和至少一个模型 ID'),
-                              TextField(
-                                  key: const Key('mbot.provider.name'),
-                                  controller: name,
-                                  decoration: const InputDecoration(
-                                      labelText: '供应商名称')),
-                              DropdownButtonFormField<String>(
-                                  initialValue: format,
-                                  isExpanded: true,
-                                  decoration: const InputDecoration(
-                                      labelText: 'API 协议'),
-                                  items: [
-                                    for (final value in mbotProviderApiFormats)
-                                      DropdownMenuItem(
-                                          value: value, child: Text(value))
-                                  ],
-                                  onChanged: (value) =>
-                                      update(() => format = value!)),
-                              TextField(
-                                  key: const Key('mbot.provider.baseUrl'),
-                                  controller: base,
-                                  autocorrect: false,
-                                  keyboardType: TextInputType.url,
-                                  decoration: const InputDecoration(
-                                      labelText: 'Base URL')),
-                              TextField(
-                                  key: const Key('mbot.provider.key'),
-                                  controller: key,
-                                  obscureText: true,
-                                  enableSuggestions: false,
-                                  autocorrect: false,
-                                  enabled: !clearKey,
-                                  decoration: InputDecoration(
-                                      labelText: 'API Key',
-                                      helperText: provider?.hasApiKey == true
-                                          ? '已保存；留空保留现有 Key'
-                                          : '请输入供应商的 Key')),
-                              TextField(
-                                  key: const Key('mbot.provider.models'),
-                                  controller: models,
-                                  minLines: 2,
-                                  maxLines: 6,
-                                  decoration: const InputDecoration(
-                                      labelText: '模型 ID，每行一个')),
-                              SwitchListTile(
-                                  title: const Text('启用供应商'),
-                                  value: enabled,
-                                  onChanged: (value) =>
-                                      update(() => enabled = value)),
-                              if (provider?.hasApiKey == true)
-                                CheckboxListTile(
-                                    title: const Text('删除已保存的 Key'),
-                                    value: clearKey,
-                                    onChanged: (value) =>
-                                        update(() => clearKey = value == true)),
-                            ]))),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('取消')),
-                      FilledButton(
-                          key: const Key('mbot.provider.save'),
-                          onPressed: () {
-                            final uri = Uri.tryParse(base.text.trim());
-                            final ids = models.text
-                                .split(RegExp(r'[\n,]'))
-                                .map((s) => s.trim())
-                                .where((s) => s.isNotEmpty)
-                                .toList();
-                            if (name.text.trim().isEmpty ||
-                                ids.isEmpty ||
-                                uri == null ||
-                                uri.scheme != 'https' ||
-                                uri.host.isEmpty ||
-                                uri.userInfo.isNotEmpty ||
-                                uri.hasQuery ||
-                                uri.hasFragment) {
-                              update(() => invalid = true);
-                              return;
-                            }
-                            Navigator.pop(context, true);
-                          },
-                          child: const Text('保存'))
-                    ],
-                  )));
-      final accepted = await Navigator.of(context).push(route);
-      await route.completed;
-      if (accepted != true || !mounted) return;
-      final draft = MbotProviderDraft(
-          id: provider?.id,
-          name: name.text.trim(),
-          apiFormat: format,
-          baseUrl: base.text.trim(),
-          models: models.text
-              .split(RegExp(r'[\n,]'))
-              .map((s) => s.trim())
-              .where((s) => s.isNotEmpty)
-              .toSet()
-              .toList(),
-          enabled: enabled);
-      final newKey =
-          clearKey || key.text.trim().isEmpty ? null : key.text.trim();
-      key.clear();
-      await _run(
-          () => widget.port.save(draft, newKey: newKey, clearKey: clearKey));
+      final result = await Navigator.of(context).push<MbotProviderCatalog>(
+          MaterialPageRoute(
+              builder: (_) => MbotProviderEditorPage(
+                  port: widget.port, provider: provider)));
+      if (mounted && result != null) {
+        setState(() {
+          _catalog = result;
+          _failed = false;
+        });
+      }
     } finally {
-      name.dispose();
-      base.dispose();
-      models.dispose();
-      key.clear();
-      key.dispose();
+      if (mounted) setState(() => _editing = false);
     }
   }
 
+  Future<void> _toggle(
+          MbotProvider provider, MbotModelSettings model, bool value) =>
+      _run(() => widget.port.save(MbotProviderDraft(
+              id: provider.id,
+              name: provider.name,
+              apiFormat: provider.apiFormat,
+              baseUrl: provider.baseUrl,
+              models: provider.models,
+              enabled: provider.enabled,
+              modelSettings: [
+                for (final row in provider.modelSettings)
+                  row.modelId == model.modelId ? row.withEnabled(value) : row,
+              ])));
+
+  Future<void> _probe(MbotProvider provider, String model) async {
+    final test = widget.testProvider;
+    if (test == null || _busy || _editing) return;
+    setState(() => _busy = true);
+    var key = 'pending';
+    try {
+      final result = await test(provider.id, model);
+      key = result['ok'] == true
+          ? 'testOk'
+          : result['code'] == 'provider_unavailable'
+              ? 'notReady'
+              : 'testFailed';
+    } catch (_) {/* Never display provider bodies or credentials. */}
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(providerText(context, key))));
+  }
+
   Future<void> _delete(MbotProvider provider) async {
+    if (_busy || _editing) return;
     final accepted = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-                title: const Text('删除供应商？'),
+                title: Text(providerText(context, 'deleteProvider')),
                 content: Text(provider.name),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(context, false),
-                      child: const Text('取消')),
+                      child: Text(providerText(context, 'cancel'))),
                   TextButton(
                       onPressed: () => Navigator.pop(context, true),
-                      child: const Text('删除'))
+                      child: Text(providerText(context, 'delete'))),
                 ]));
     if (accepted == true && mounted) {
       await _run(() => widget.port.delete(provider.id));
@@ -220,89 +117,133 @@ class _MbotProviderSettingsPageState extends State<MbotProviderSettingsPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('账号与模型'), actions: [
-          if (widget.usagePage != null)
-            IconButton(
-                tooltip: '账号用量',
-                onPressed: () => Navigator.of(context)
-                    .push(MaterialPageRoute<void>(builder: widget.usagePage!)),
-                icon: const Icon(Icons.data_usage)),
+  Widget build(BuildContext context) {
+    String t(String key) => providerText(context, key);
+    return Scaffold(
+      appBar: AppBar(title: Text(t('title')), actions: [
+        if (widget.usagePage != null)
           IconButton(
-              key: const Key('mbot.provider.add'),
-              tooltip: '添加供应商',
-              onPressed: _busy ? null : _edit,
-              icon: const Icon(Icons.add))
-        ]),
-        body: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: MbotLoadTransition(
-                    loading: _catalog == null && _busy,
-                    child: ListView.builder(
-                      itemCount: (_catalog?.providers.length ?? 0) + 1,
-                      itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return Column(children: [
-                            if (_busy) const LinearProgressIndicator(),
-                            if (_failed)
+              tooltip: t('usage'),
+              onPressed: () => Navigator.of(context)
+                  .push(MaterialPageRoute<void>(builder: widget.usagePage!)),
+              icon: const Icon(Icons.data_usage)),
+        IconButton(
+            key: const Key('mbot.provider.add'),
+            tooltip: t('addProvider'),
+            onPressed: _busy || _editing ? null : _edit,
+            icon: const Icon(Icons.add)),
+      ]),
+      body: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: MbotLoadTransition(
+                loading: _catalog == null && _busy,
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    if (_busy) const LinearProgressIndicator(),
+                    if (_failed)
+                      ListTile(
+                          title: Text(t('failed')),
+                          trailing: TextButton(
+                              onPressed: _busy ? null : _refresh,
+                              child: Text(t('retry')))),
+                    if (_catalog?.providers.isEmpty == true)
+                      Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(t('empty'))),
+                    for (final provider
+                        in _catalog?.providers ?? <MbotProvider>[])
+                      Card(
+                        key: Key('mbot.provider.${provider.id}'),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Column(children: [
                               ListTile(
-                                  title: const Text('供应商设置失败，请检查输入或重试'),
-                                  trailing: TextButton(
-                                      onPressed: _busy ? null : _refresh,
-                                      child: const Text('重试'))),
-                            if (_catalog?.providers.isEmpty == true)
-                              const Padding(
-                                  padding: EdgeInsets.all(24),
-                                  child: Text('添加供应商，配置 API 协议、地址、Key 和模型。')),
-                          ]);
-                        }
-                        final provider = _catalog!.providers[index - 1];
-                        return ListTile(
-                          key: Key('mbot.provider.${provider.id}'),
-                          title: Text(provider.name),
-                          subtitle: Text(
-                              '${provider.apiFormat}\n${provider.baseUrl}\n${provider.hasApiKey ? 'Key 已保存' : '未保存 Key'}${provider.enabled ? '' : ' · 已停用'}${_catalog?.defaultProviderId == provider.id ? '\n默认模型：${_catalog?.defaultModelId}' : ''}'),
-                          onTap: _busy ? null : () => _edit(provider),
-                          trailing: PopupMenuButton<int>(
-                              enabled: !_busy,
-                              onSelected: (value) {
-                                if (value == -1) {
-                                  _delete(provider);
-                                } else if (value >= provider.models.length) {
-                                  _probe(
-                                      provider,
-                                      provider.models[
-                                          value - provider.models.length]);
-                                } else {
-                                  _run(() => widget.port.selectDefault(
-                                      provider.id, provider.models[value]));
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                    for (var i = 0;
-                                        i < provider.models.length;
-                                        i++)
-                                      PopupMenuItem(
-                                          value: i,
-                                          enabled: provider.enabled,
-                                          child: Text(
-                                              '设为默认：${provider.models[i]}')),
-                                    if (widget.testProvider != null)
-                                      for (var i = 0;
-                                          i < provider.models.length;
-                                          i++)
-                                        PopupMenuItem(
-                                            value: provider.models.length + i,
-                                            enabled: provider.enabled,
-                                            child: Text(
-                                                '测试：${provider.models[i]}')),
-                                    const PopupMenuItem(
-                                        value: -1, child: Text('删除供应商')),
-                                  ]),
-                        );
-                      },
-                    )))),
-      );
+                                  title: Text(provider.name,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600)),
+                                  subtitle: Text(
+                                      '${provider.apiFormat}\n${t(provider.hasApiKey ? 'keySaved' : 'keyMissing')}${provider.enabled ? '' : ' · ${t('disabled')}'}'),
+                                  onTap: _busy || _editing
+                                      ? null
+                                      : () => _edit(provider),
+                                  trailing: PopupMenuButton<int>(
+                                      enabled: !_busy && !_editing,
+                                      onSelected: (value) {
+                                        if (value == -1) {
+                                          _delete(provider);
+                                        } else {
+                                          _edit(provider);
+                                        }
+                                      },
+                                      itemBuilder: (_) => [
+                                            PopupMenuItem(
+                                                value: 0,
+                                                child: Text(t('editProvider'))),
+                                            PopupMenuItem(
+                                                value: -1,
+                                                child: Text(t('delete'))),
+                                          ])),
+                              const Divider(indent: 16, endIndent: 16),
+                              for (final model in provider.modelSettings)
+                                ListTile(
+                                  key: ValueKey(
+                                      'mbot.model.row.${provider.id}.${model.modelId}'),
+                                  title: Text(model.modelId,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis),
+                                  subtitle: _catalog?.defaultProviderId ==
+                                              provider.id &&
+                                          _catalog?.defaultModelId ==
+                                              model.modelId
+                                      ? Text(t('currentDefault'))
+                                      : null,
+                                  trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        PopupMenuButton<String>(
+                                            enabled: !_busy &&
+                                                !_editing &&
+                                                provider.enabled &&
+                                                model.enabled,
+                                            onSelected: (value) {
+                                              if (value == 'default') {
+                                                _run(() => widget.port
+                                                    .selectDefault(provider.id,
+                                                        model.modelId));
+                                              } else {
+                                                _probe(provider, model.modelId);
+                                              }
+                                            },
+                                            itemBuilder: (_) => [
+                                                  PopupMenuItem(
+                                                      value: 'default',
+                                                      child:
+                                                          Text(t('default'))),
+                                                  if (widget.testProvider !=
+                                                      null)
+                                                    PopupMenuItem(
+                                                        value: 'test',
+                                                        child: Text(t('test'))),
+                                                ]),
+                                        Switch.adaptive(
+                                            key: ValueKey(
+                                                'mbot.model.toggle.${provider.id}.${model.modelId}'),
+                                            value: model.enabled,
+                                            onChanged: _busy || _editing
+                                                ? null
+                                                : (value) => _toggle(
+                                                    provider, model, value)),
+                                      ]),
+                                ),
+                            ])),
+                      ),
+                  ],
+                )),
+          )),
+    );
+  }
 }

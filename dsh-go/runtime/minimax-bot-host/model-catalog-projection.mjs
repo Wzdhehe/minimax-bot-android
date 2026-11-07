@@ -54,6 +54,53 @@ function displayNameFor(providerId) {
   return providerId.replace(/[^A-Za-z0-9 _-]/g, '-');
 }
 
+/** mcode UserModelInputView, restricted to non-secret per-model controls. */
+function modelSettingsFor(provider) {
+  if (provider.modelSettings === undefined) return null; // legacy ID-only catalogs
+  const fail = () => { throw new TypeError('native_model_settings_invalid'); };
+  if (!Array.isArray(provider.models) || !Array.isArray(provider.modelSettings) ||
+      provider.modelSettings.length > provider.models.length) fail();
+  const fields = new Set(['modelId', 'enabled', 'limit', 'effortOptions', 'modalities', 'reasoning']);
+  const entries = new Map();
+  for (const row of provider.modelSettings) {
+    if (!row || typeof row !== 'object' || Array.isArray(row) ||
+        Object.keys(row).some((key) => !fields.has(key)) ||
+        !provider.models.includes(row.modelId) || entries.has(row.modelId)) fail();
+    const next = { modelId: row.modelId };
+    for (const key of ['enabled', 'reasoning']) {
+      if (row[key] !== undefined) {
+        if (typeof row[key] !== 'boolean') fail();
+        next[key] = row[key];
+      }
+    }
+    if (row.limit !== undefined) {
+      if (!row.limit || typeof row.limit !== 'object' || Array.isArray(row.limit) ||
+          Object.entries(row.limit).some(([key, value]) => !['context', 'output'].includes(key) ||
+            !Number.isSafeInteger(value) || value <= 0)) fail();
+      next.limit = { ...row.limit };
+    }
+    if (row.effortOptions !== undefined) {
+      if (!Array.isArray(row.effortOptions) || row.effortOptions.length > 32 ||
+          row.effortOptions.some((level) => typeof level !== 'string' || !level.trim() || level.length > 64) ||
+          (row.reasoning === false && row.effortOptions.length)) fail();
+      next.effortOptions = [...new Set(row.effortOptions.map((level) => level.trim()))];
+    }
+    if (row.modalities !== undefined) {
+      if (!row.modalities || typeof row.modalities !== 'object' || Array.isArray(row.modalities)) fail();
+      next.modalities = {};
+      for (const [key, value] of Object.entries(row.modalities)) {
+        if (!['input', 'output'].includes(key) || !Array.isArray(value) || value.length > 5 ||
+            value.some((mode) => !['text', 'image', 'pdf', 'video', 'audio'].includes(mode)) ||
+            (key === 'output' && value.some((mode) => mode !== 'text'))) fail();
+        next.modalities[key] = [...new Set(['text', ...value])];
+      }
+      next.attachment = next.modalities.input?.some((mode) => mode !== 'text') ?? false;
+    }
+    entries.set(row.modelId, next);
+  }
+  return provider.models.map((modelId) => entries.get(modelId) ?? { modelId, enabled: true });
+}
+
 /**
  * Project the native non-secret catalog.
  *
@@ -78,8 +125,10 @@ export function projectNativeCatalog(catalog) {
       continue;
     }
     if (provider.enabled === false) continue;
+    const settings = modelSettingsFor(provider);
+    const disabled = new Set(settings?.filter((row) => row.enabled === false).map((row) => row.modelId));
     const models = [...new Set((Array.isArray(provider.models) ? provider.models : [])
-      .filter((model) => typeof model === 'string' && MODEL_ID.test(model)))];
+      .filter((model) => typeof model === 'string' && MODEL_ID.test(model) && !disabled.has(model)))];
     if (!models.length) continue;
     const displayName = displayNameFor(providerId);
     if (claimedNames.has(displayName)) {
@@ -87,7 +136,8 @@ export function projectNativeCatalog(catalog) {
       continue;
     }
     claimedNames.add(displayName);
-    upserts.push({ providerId, displayName, apiFormat: provider.apiFormat, models });
+    upserts.push({ providerId, displayName, apiFormat: provider.apiFormat, models,
+      ...(settings ? { modelSettings: settings } : {}) });
   }
   const defaultProviderId = typeof catalog?.defaultProviderId === 'string' ? catalog.defaultProviderId : null;
   const defaultModelId = typeof catalog?.defaultModelId === 'string' ? catalog.defaultModelId : null;
@@ -140,17 +190,27 @@ export async function applyNativeCatalog({ application, catalog, probe = null })
       name: upsert.displayName,
       baseUrl: nativeVirtualBaseUrl(upsert.apiFormat),
       apiFormat: upsert.apiFormat,
-      models: upsert.models.map((modelId) => ({ modelId })),
+      models: upsert.modelSettings ?? upsert.models.map((modelId) => ({ modelId })),
     };
     const match = Array.isArray(listed)
       ? listed.find((entry) => entry?.name === upsert.displayName)
       : undefined;
     let view;
     try {
+      // mcode's update merges omitted limits into the old model. Native is
+      // authoritative at boot: recreate our own projected provider through
+      // official APIs so clearing a limit/capability really restores defaults.
+      // Its deterministic ASCII name preserves the model's provider key.
+      const replace = match?.providerId && upsert.modelSettings;
+      if (replace) {
+        if (typeof providers.delete !== 'function') throw projectionFailure('runtime_provider_projection_failed');
+        await providers.delete({ providerId: match.providerId });
+      }
       // The upstream api key is tri-state: omitting it keeps the stored one.
-      view = match?.providerId
+      view = match?.providerId && !replace
         ? await providers.update({ providerId: match.providerId, ...request })
         : await providers.create({ ...request, apiKey: PLACEHOLDER_API_KEY });
+      if (replace && view?.providerId !== match.providerId) throw projectionFailure('runtime_provider_projection_failed');
     } catch (error) {
       throw projectionFailure('runtime_provider_projection_failed', error?.code);
     }

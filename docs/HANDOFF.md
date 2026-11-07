@@ -1,5 +1,7 @@
 # 开发接手入口（2026-11-07 产品设备结果）
 
+最新设置阶段：供应商改为独立页，每个模型独立编辑 `limit.context/output`、`effortOptions`、`modalities` 与 `enabled`，沿用钉点 mcode `UserModelInputView`。旧 ID 列表兼容；native 白名单存储/目录编码、broker 对停用模型拒绝、默认值清理已接入。参数清空时通过官方 provider delete/create 重建自身投影（确定性名称保持键稳定），避免上游 update 合并保留旧限制。宿主 Kotlin目录6项、Node投影/绑定/descriptor54项、设置widget6项通过；**新参数链未设备验证/未真实模型调用**。产品JS投影有改动，本机须重建 partial/mobile bundle 后重跑 prepare-product，不能绕过陈旧输入闸门；Node/ICU本体无需重编。此前171c6d7新UI已由用户转述的API35/x86_64设备报告验过（新UI APK SHA256 ccaa23ac241a10ffd85c3fe1b3882626e240134182fdfd35aa90e4c520c008e7），该结果不覆盖本次参数。
+
 **当前事实覆盖下文旧的“正式入口仍 DSH / 尚无产品 APK / runtime 未启动”等阶段描述。** `feat/t-plugins@94fb2d8e79018c209ce4c7e6683b0d8d6f3a8325` 已由本机 Windows agent 构建产品 APK，并在 API35 / x86_64 模拟器 `emulator-5554` 验收。证据来源是用户转述的本机报告，云端未直接读取截图、APK或设备日志；构建时 tracked 工作树干净，本轮设备方零源码改动。
 
 - 产品入口是官方 `BotHome`，实际显示官方服务的 `Chief`；APK 包含 full-ICU Node、FD SQLite、备份 JNI 和完整 JS/资源，未包含 DSH/PRoot rootfs。`useLegacyPackaging=false` 与清单 `extractNativeLibs=false` 配套。

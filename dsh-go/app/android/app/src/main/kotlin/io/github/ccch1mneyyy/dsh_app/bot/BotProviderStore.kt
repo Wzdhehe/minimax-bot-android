@@ -45,6 +45,11 @@ internal class BotProviderStore(private val context: Context) {
     }
     private fun rows(): JSONArray = JSONArray(prefs.getString("providers_v2", null) ?: "[]")
     private fun rowList(rows: JSONArray): List<JSONObject> = (0 until rows.length()).map { rows.getJSONObject(it) }
+    private fun modelIds(row: JSONObject): List<String> = row.getJSONArray("models").let { values ->
+        (0 until values.length()).map { values.getString(it) }
+    }
+    private fun modelSettings(row: JSONObject): List<GuestModelSettings> =
+        GuestModelSettings.fromJson(modelIds(row), row.optJSONArray("modelSettings"))
 
     /** Migrate once, wholly inside native. Remove the old ciphertext in the
      * same preference commit so deleting the migrated provider deletes its key. */
@@ -78,6 +83,7 @@ internal class BotProviderStore(private val context: Context) {
             mapOf("providerId" to id, "name" to row.getString("name"), "baseUrl" to row.getString("baseUrl"),
                 "apiFormat" to row.getString("apiFormat"), "enabled" to row.optBoolean("enabled", true),
                 "models" to (0 until models.length()).map { models.getString(it) },
+                "modelSettings" to modelSettings(row).map { it.toMap() },
                 "hasApiKey" to hasKey, "maskedApiKey" to if (hasKey) "••••••••" else null)
         }
         return mapOf("providers" to providers, "defaultProviderId" to prefs.getString("default_provider_v2", null), "defaultModelId" to prefs.getString("default_model_v2", null))
@@ -97,6 +103,7 @@ internal class BotProviderStore(private val context: Context) {
                 apiFormat = row.getString("apiFormat"),
                 enabled = row.optBoolean("enabled", true),
                 models = (0 until models.length()).map { models.getString(it) },
+                modelSettings = modelSettings(row),
             )
         }
         return GuestProviderCatalog.encode(
@@ -121,18 +128,25 @@ internal class BotProviderStore(private val context: Context) {
         require(name.isNotEmpty() && name.length <= 128 && format in formats)
         require(uri.scheme == "https" && !uri.host.isNullOrEmpty() && uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null)
         val models = (input["models"] as? List<*>)?.map { require(it is String); it.trim() }?.distinct() ?: emptyList()
-        require(models.isNotEmpty() && models.size <= 1000 && models.all { it.isNotEmpty() && it.length <= 256 })
+        require(models.isNotEmpty() && models.size <= 1000 && models.all { Regex("[A-Za-z0-9._:/-]{1,256}").matches(it) })
+        require(!input.containsKey("modelSettings") || input["modelSettings"] is List<*>)
+        val old = current.firstOrNull { it.getString("providerId") == id }
+        val settings = GuestModelSettings.parse(models, if (input.containsKey("modelSettings")) {
+            input["modelSettings"] as List<*>
+        } else old?.let { modelSettings(it).filter { it.modelId in models }.map { it.toMap() } })
         val enabled = input["enabled"] as? Boolean ?: true
         val rawKey = input["key"] as? String
         val clearKey = input["clearKey"] == true
         require(!(clearKey && rawKey != null))
         val row = JSONObject().put("providerId", id).put("name", name).put("baseUrl", base).put("apiFormat", format)
             .put("models", JSONArray(models)).put("enabled", enabled)
+            .put("modelSettings", JSONArray(settings.map { it.toJson() }))
         val next = JSONArray(current.filter { it.getString("providerId") != id } + row)
         val editor = prefs.edit().putString("providers_v2", next.toString())
         if (rawKey != null) encrypt(editor, id, rawKey)
         if (clearKey) editor.remove("provider_key_$id").remove("provider_iv_$id")
-        if (prefs.getString("default_provider_v2", null) == id && (!enabled || prefs.getString("default_model_v2", null) !in models)) {
+        if (prefs.getString("default_provider_v2", null) == id && (!enabled ||
+            settings.none { it.modelId == prefs.getString("default_model_v2", null) && it.enabled })) {
             editor.remove("default_provider_v2").remove("default_model_v2")
         }
         check(editor.commit())
@@ -155,8 +169,7 @@ internal class BotProviderStore(private val context: Context) {
         migrate()
         val provider = rowList(rows()).firstOrNull { it.getString("providerId") == id }
         require(provider != null && provider.optBoolean("enabled", true))
-        val models = provider.getJSONArray("models")
-        require((0 until models.length()).any { models.getString(it) == model })
+        require(modelSettings(provider).any { it.modelId == model && it.enabled })
         check(prefs.edit().putString("default_provider_v2", id).putString("default_model_v2", model).commit())
     }
 
@@ -170,8 +183,7 @@ internal class BotProviderStore(private val context: Context) {
         if (provider == null || !provider.optBoolean("enabled", true)) {
             throw ModelBrokerFailure(ModelBrokerCode.INVALID_PROVIDER)
         }
-        val models = provider.getJSONArray("models")
-        if ((0 until models.length()).none { models.getString(it) == model }) {
+        if (modelSettings(provider).none { it.modelId == model && it.enabled }) {
             throw ModelBrokerFailure(ModelBrokerCode.INVALID_PROVIDER)
         }
         val apiKey = readKeyForBroker(id) ?: throw ModelBrokerFailure(ModelBrokerCode.MISSING_KEY)

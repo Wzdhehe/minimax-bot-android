@@ -21,7 +21,7 @@ function catalog(overrides = {}) {
 
 /** A stand-in for the pinned upstream provider facade. */
 function facade() {
-  const calls = { listUser: 0, create: [], update: [], select: [], testProvider: [] };
+  const calls = { listUser: 0, create: [], update: [], delete: [], select: [], testProvider: [] };
   const providers = [];
   const application = {
     modelProviders: {
@@ -40,6 +40,11 @@ function facade() {
         const view = { providerId: input.providerId, name: input.name, models: input.models };
         providers.push(view);
         return view;
+      },
+      async delete(input) {
+        calls.delete.push(input);
+        const index = providers.findIndex((row) => row.providerId === input.providerId);
+        if (index >= 0) providers.splice(index, 1);
       },
       async testProvider(input) {
         calls.testProvider.push(input);
@@ -233,4 +238,61 @@ test('refuses to continue when the upstream provider API rejects a provider', as
     return true;
   });
   assert.deepEqual(calls.select, []);
+});
+
+test('per-model mcode parameters reach the facade; disabled models never bind', async () => {
+  const { application, calls } = facade();
+  const input = catalog();
+  input.providers[0].models = ['m1', 'm2'];
+  input.providers[0].modelSettings = [
+    { modelId: 'm1', enabled: true, limit: { context: 1000000, output: 128000 },
+      effortOptions: ['high', 'custom-level'], modalities: { input: ['text', 'image', 'pdf', 'audio', 'video'], output: ['text'] } },
+    { modelId: 'm2', enabled: false },
+  ];
+  input.defaultModelId = 'm2';
+  const result = await applyNativeCatalog({ application, catalog: input });
+  assert.deepEqual(calls.create[0].models, [
+    { ...input.providers[0].modelSettings[0], attachment: true }, { modelId: 'm2', enabled: false },
+  ]);
+  assert.deepEqual(result.providerBinding[0].models, ['m1']);
+  assert.equal(result.defaultSelection, null);
+  assert.deepEqual(calls.select, []);
+});
+
+test('all models can be disabled independently without creating a route', async () => {
+  const input = catalog();
+  input.providers[0].modelSettings = [{ modelId: input.defaultModelId, enabled: false }];
+  const { application, calls } = facade();
+  const result = await applyNativeCatalog({ application, catalog: input });
+  assert.deepEqual(result.providerBinding, []);
+  assert.equal(result.defaultSelection, null);
+  assert.deepEqual(calls.create, []);
+});
+
+test('model overrides reject malformed limits, unknown fields and hidden secrets', () => {
+  for (const patch of [
+    { limit: { context: 0 } }, { limit: { output: 1.5 } }, { limit: { context: Number.MAX_SAFE_INTEGER + 1 } },
+    { baseUrl: 'https://example.invalid' }, { apiKey: 'test-only-secret' },
+    { modalities: { input: ['executable'] } }, { enabled: 'false' }, { effortOptions: [''] },
+    { reasoning: false, effortOptions: ['high'] }, { options: { arbitrary: true } },
+  ]) {
+    const input = catalog();
+    input.providers[0].modelSettings = [{ modelId: input.defaultModelId, ...patch }];
+    assert.throws(() => projectNativeCatalog(input));
+  }
+  const input = catalog();
+  input.providers[0].modelSettings = [{ modelId: 'unknown' }];
+  assert.throws(() => projectNativeCatalog(input), /native_model_settings_invalid/);
+});
+
+test('clearing a configured limit replaces only the native-owned provider through official APIs', async () => {
+  const { application, calls } = facade();
+  const input = catalog();
+  input.providers[0].modelSettings = [{ modelId: input.defaultModelId, limit: { context: 8192 } }];
+  await applyNativeCatalog({ application, catalog: input });
+  input.providers[0].modelSettings = [{ modelId: input.defaultModelId, enabled: true }];
+  const result = await applyNativeCatalog({ application, catalog: input });
+  assert.deepEqual(calls.delete, [{ providerId: 'custom_provider:minimax' }]);
+  assert.deepEqual(calls.create[1].models, [{ modelId: input.defaultModelId, enabled: true }]);
+  assert.equal(result.providerBinding[0].forkProviderId, 'custom_provider:minimax');
 });
