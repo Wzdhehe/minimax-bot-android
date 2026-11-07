@@ -15311,7 +15311,7 @@ abstract class L10n {
   /// No description provided for @mobileBotTitle.
   ///
   /// In zh, this message translates to:
-  /// **'Bot'**
+  /// **'mbot'**
   String get mobileBotTitle;
 
   /// No description provided for @mobileBotSearch.
@@ -15547,6 +15547,96 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'手动设置与 Bot 创建的任务共用同一列表'**
   String get mobileBotScheduleSelfHint;
+
+  /// No description provided for @mobileBotMain.
+  ///
+  /// In zh, this message translates to:
+  /// **'主 Bot（管理员）'**
+  String get mobileBotMain;
+
+  /// No description provided for @mobileBotMainHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'主 Bot 可以管理团队，可以设置多个。'**
+  String get mobileBotMainHint;
+
+  /// No description provided for @mobileBotKeepMain.
+  ///
+  /// In zh, this message translates to:
+  /// **'至少保留一个主 Bot。'**
+  String get mobileBotKeepMain;
+
+  /// No description provided for @mobileBotAppearance.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像样式'**
+  String get mobileBotAppearance;
+
+  /// No description provided for @mobileBotSkinFuzzy.
+  ///
+  /// In zh, this message translates to:
+  /// **'蓝色毛绒'**
+  String get mobileBotSkinFuzzy;
+
+  /// No description provided for @mobileBotSkinBubble.
+  ///
+  /// In zh, this message translates to:
+  /// **'泡泡'**
+  String get mobileBotSkinBubble;
+
+  /// No description provided for @mobileBotSkinGlass.
+  ///
+  /// In zh, this message translates to:
+  /// **'粉色玻璃'**
+  String get mobileBotSkinGlass;
+
+  /// No description provided for @mobileBotSkinGold.
+  ///
+  /// In zh, this message translates to:
+  /// **'金色'**
+  String get mobileBotSkinGold;
+
+  /// No description provided for @mobileBotSkinJade.
+  ///
+  /// In zh, this message translates to:
+  /// **'翡翠'**
+  String get mobileBotSkinJade;
+
+  /// No description provided for @mobileBotSkinPlush.
+  ///
+  /// In zh, this message translates to:
+  /// **'毛绒'**
+  String get mobileBotSkinPlush;
+
+  /// No description provided for @mobileBotSkinWaffle.
+  ///
+  /// In zh, this message translates to:
+  /// **'华夫饼'**
+  String get mobileBotSkinWaffle;
+
+  /// No description provided for @mobileBotSkinPixel.
+  ///
+  /// In zh, this message translates to:
+  /// **'像素'**
+  String get mobileBotSkinPixel;
+
+  /// No description provided for @mobileBotSkinSmiley.
+  ///
+  /// In zh, this message translates to:
+  /// **'笑脸球'**
+  String get mobileBotSkinSmiley;
+
+  /// No description provided for @mobileBotSkinToys.
+  ///
+  /// In zh, this message translates to:
+  /// **'玩具'**
+  String get mobileBotSkinToys;
+
+  /// No description provided for @mobileBotSkinMoon.
+  ///
+  /// In zh, this message translates to:
+  /// **'月岩'**
+  String get mobileBotSkinMoon;
 
   /// No description provided for @nearbyThisChat.
   ///

@@ -8,6 +8,7 @@ import 'bot_controller.dart';
 import 'bot_settings_hub.dart';
 import 'bot_schedule_notifications.dart';
 import 'bot_profile.dart';
+import 'bot_avatar.dart';
 
 class BotHome extends StatefulWidget {
   const BotHome({super.key, required this.controller});
@@ -132,90 +133,203 @@ class _BotHomeState extends State<BotHome> {
     }
   }
 
-  Widget _avatar(String name, {bool group = false}) => CircleAvatar(
-    backgroundColor: group ? const Color(0xff6b4b8a) : const Color(0xff356c61),
-    child: group
-        ? const Icon(Icons.groups_outlined, color: Colors.white)
-        : Text(name.isEmpty ? 'B' : name.characters.first, style: const TextStyle(color: Colors.white)),
+  List<Map<String, Object?>> _members(Map<String, Object?> group) {
+    final ids = <Object?>{group['adminId'], if (group['memberIds'] is List) ...group['memberIds'] as List};
+    return bot.bots.where((row) => ids.contains(row['id'])).toList();
+  }
+
+  Widget _avatar(Map<String, Object?> row, {bool group = false, double size = 52}) =>
+      group ? MbotGroupAvatar(members: _members(row), size: size) : MbotAvatar(bot: row, size: size);
+
+  Object? _summary(String chat) => bot.snapshot['chats'] is Map ? (bot.snapshot['chats'] as Map)[chat] : null;
+
+  int _lastTime(Map<String, Object?> row) {
+    final summary = _summary(row['chat'] as String);
+    final value = summary is Map ? summary['lastTs'] ?? row['createdAt'] : row['createdAt'];
+    return value is num ? value.toInt() : DateTime.tryParse(value?.toString() ?? '')?.millisecondsSinceEpoch ?? 0;
+  }
+
+  String _timeLabel(Map<String, Object?> row) {
+    final value = _lastTime(row);
+    if (value <= 0) return '';
+    final date = DateTime.fromMillisecondsSinceEpoch(value), now = DateTime.now();
+    final local = MaterialLocalizations.of(context);
+    return date.year == now.year && date.month == now.month && date.day == now.day
+        ? local.formatTimeOfDay(
+            TimeOfDay.fromDateTime(date),
+            alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+          )
+        : local.formatShortDate(date);
+  }
+
+  Widget _mainBots(List<Map<String, Object?>> mains) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 22, 16, 28),
+    child: Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 24,
+      runSpacing: 20,
+      children: [
+        for (final row in mains)
+          SizedBox(
+            width: mains.length == 1 ? 176 : 120,
+            child: InkWell(
+              key: ValueKey('mbot.main.${row['id']}'),
+              borderRadius: BorderRadius.circular(28),
+              onTap: () {
+                _composer.clear();
+                unawaited(bot.select('bot:${row['id']}'));
+              },
+              onLongPress: () => _profile(row['id'] as String),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Column(
+                  children: [
+                    _avatar(row, size: mains.length == 1 ? 112 : 84),
+                    const SizedBox(height: 14),
+                    Text(
+                      row['name']?.toString() ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      context.l10n.mobileBotMain,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: const Color(0xffb78018)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
   );
 
   Widget _list() {
-    final query = _search.text.toLowerCase();
-    final rows = [
-      for (final b in bot.bots) {...b, 'chat': 'bot:${b['id']}'},
-      for (final g in bot.groups) {...g, 'chat': 'group:${g['id']}'},
-    ].where((row) => (row['name']?.toString() ?? '').toLowerCase().contains(query)).toList();
+    final query = _search.text.trim().toLowerCase();
+    final mains = query.isEmpty ? bot.bots.where((row) => row['isMain'] == true).toList() : <Map<String, Object?>>[];
+    final rows =
+        [
+              for (final b in bot.bots) {...b, 'chat': 'bot:${b['id']}'},
+              for (final g in bot.groups) {...g, 'chat': 'group:${g['id']}'},
+            ]
+            .where(
+              (row) =>
+                  (row['name']?.toString() ?? '').toLowerCase().contains(query) &&
+                  !(query.isEmpty && row['isMain'] == true && (row['chat'] as String).startsWith('bot:')),
+            )
+            .toList()
+          ..sort((a, b) => _lastTime(b).compareTo(_lastTime(a)));
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(context.l10n.mobileBotTitle, style: Theme.of(context).textTheme.headlineSmall),
-              const Spacer(),
-              IconButton(
+              IconButton.outlined(
                 tooltip: context.l10n.mobileBotSettings,
                 onPressed: () =>
                     Navigator.of(context)
                         .push(MaterialPageRoute<void>(builder: (_) => BotSettingsHub(botApi: bot.api))),
                 icon: const Icon(Icons.settings_outlined),
               ),
-              PopupMenuButton<bool>(
-                icon: const Icon(Icons.add),
-                enabled: !_creating,
-                onSelected: (group) => _create(group: group),
-                itemBuilder: (context) => [
-                  PopupMenuItem(value: false, child: Text(context.l10n.mobileBotNew)),
-                  PopupMenuItem(value: true, child: Text(context.l10n.mobileBotGroup)),
-                ],
+              Text(
+                context.l10n.mobileBotTitle,
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.6),
+              ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                ),
+                child: PopupMenuButton<bool>(
+                  icon: const Icon(Icons.add),
+                  enabled: !_creating,
+                  onSelected: (group) => _create(group: group),
+                  itemBuilder: (context) => [
+                    PopupMenuItem(value: false, child: Text(context.l10n.mobileBotNew)),
+                    PopupMenuItem(value: true, child: Text(context.l10n.mobileBotGroup)),
+                  ],
+                ),
               ),
             ],
           ),
         ),
+        Expanded(
+          child: MbotLoadTransition(
+            loading: bot.loading && rows.isEmpty && mains.isEmpty,
+            child: CustomScrollView(
+              slivers: [
+                if (mains.isNotEmpty) SliverToBoxAdapter(child: _mainBots(mains)),
+                if (rows.isEmpty && mains.isEmpty && !bot.loading && bot.error == null)
+                  SliverToBoxAdapter(
+                    child: Padding(padding: const EdgeInsets.all(24), child: Text(context.l10n.mobileBotEmpty)),
+                  ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
+                  sliver: SliverList.builder(
+                    itemCount: rows.length,
+                    itemBuilder: (context, index) {
+                      final row = rows[index];
+                      final chat = row['chat'] as String;
+                      final name = row['name']?.toString() ?? '';
+                      final summary = _summary(chat);
+                      return ListTile(
+                        key: ValueKey('mbot.row.$chat'),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        minLeadingWidth: 58,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                        selected: bot.selectedChat == chat,
+                        leading: _avatar(row, group: chat.startsWith('group:')),
+                        title: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                        ),
+                        trailing: Text(
+                          _timeLabel(row),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
+                        subtitle: Text(
+                          summary is Map
+                              ? (summary['preview'] ?? row['role'] ?? '').toString()
+                              : (row['role'] ?? '').toString(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.5,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        onTap: () {
+                          _composer.clear();
+                          unawaited(bot.select(chat));
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 18),
           child: TextField(
             controller: _search,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: context.l10n.mobileBotSearch,
               prefixIcon: const Icon(Icons.search),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
               filled: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (rows.isEmpty && !bot.loading && bot.error == null)
-          Padding(padding: const EdgeInsets.all(24), child: Text(context.l10n.mobileBotEmpty)),
-        Expanded(
-          child: MbotLoadTransition(
-            loading: bot.loading && rows.isEmpty,
-            child: ListView.builder(
-              itemCount: rows.length,
-              itemBuilder: (context, index) {
-                final row = rows[index];
-                final chat = row['chat'] as String;
-                final name = row['name']?.toString() ?? '';
-                final chats = bot.snapshot['chats'];
-                final summary = chats is Map ? chats[chat] : null;
-                return ListTile(
-                  selected: bot.selectedChat == chat,
-                  leading: _avatar(name, group: chat.startsWith('group:')),
-                  title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(
-                    summary is Map
-                        ? (summary['preview'] ?? row['role'] ?? '').toString()
-                        : (row['role'] ?? '').toString(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onTap: () {
-                    _composer.clear();
-                    unawaited(bot.select(chat));
-                  },
-                );
-              },
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(32), borderSide: BorderSide.none),
             ),
           ),
         ),
@@ -254,7 +368,7 @@ class _BotHomeState extends State<BotHome> {
           child: Row(
             children: [
               if (!expanded) IconButton(onPressed: () => bot.select(null), icon: const Icon(Icons.arrow_back)),
-              _avatar(name, group: isGroup),
+              _avatar(selected ?? const {}, group: isGroup, size: 40),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(name, style: Theme.of(context).textTheme.titleLarge, overflow: TextOverflow.ellipsis),

@@ -126,6 +126,9 @@ flutter:
           weight: 700
 
   assets:
+    # Original MIT MiniMax Bot materials and permission notice.
+    - assets/mbot/
+    - assets/mbot/skins/
     # Full upstream WebRTC Android release notices, shown by LicenseRegistry.
     - assets/licenses/webrtc-150.7871.04.md
     # Phone layout for the embedded DSH Web (see lib/ui/web/web_view_page.dart).

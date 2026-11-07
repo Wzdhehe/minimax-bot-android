@@ -9,6 +9,11 @@ import 'package:flutter/services.dart';
 /// a copy, so the one-line source headers are not enough. Copyright holders and licences match
 /// THIRD_PARTY_NOTICES.md at the repository root; each package appears in exactly one entry.
 void registerThirdPartyLicenses() {
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(<String>[
+      'MiniMax Bot artwork',
+    ], await rootBundle.loadString('assets/mbot/LICENSE.minimax-bot'));
+  });
   LicenseRegistry.addLicense(
     () => Stream<LicenseEntry>.fromIterable(const [
       // Code copied or adapted into the source.

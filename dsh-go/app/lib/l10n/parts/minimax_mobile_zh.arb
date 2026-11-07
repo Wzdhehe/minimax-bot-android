@@ -1,5 +1,5 @@
 {
-  "mobileBotTitle": "Bot",
+  "mobileBotTitle": "mbot",
   "mobileBotSearch": "搜索 Bot 和群聊",
   "mobileBotNew": "创建 Bot",
   "mobileBotGroup": "创建群聊",
@@ -45,5 +45,20 @@
         "type": "int"
       }
     }
-  }
+  },
+  "mobileBotMain": "主 Bot（管理员）",
+  "mobileBotMainHint": "主 Bot 可以管理团队，可以设置多个。",
+  "mobileBotKeepMain": "至少保留一个主 Bot。",
+  "mobileBotAppearance": "头像样式",
+  "mobileBotSkinFuzzy": "蓝色毛绒",
+  "mobileBotSkinBubble": "泡泡",
+  "mobileBotSkinGlass": "粉色玻璃",
+  "mobileBotSkinGold": "金色",
+  "mobileBotSkinJade": "翡翠",
+  "mobileBotSkinPlush": "毛绒",
+  "mobileBotSkinWaffle": "华夫饼",
+  "mobileBotSkinPixel": "像素",
+  "mobileBotSkinSmiley": "笑脸球",
+  "mobileBotSkinToys": "玩具",
+  "mobileBotSkinMoon": "月岩"
 }

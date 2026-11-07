@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'l10n/l10n.dart';
+import 'bot/bot_theme.dart';
 import 'performance/performance_state.dart';
 import 'performance/refresh_rate.dart';
 import 'state/app_info.dart';
@@ -21,10 +22,11 @@ import 'ui_config/ui_config_state.dart';
 import 'usage/usage_stats.dart';
 
 class DshApp extends ConsumerStatefulWidget {
-  const DshApp({super.key, this.home});
+  const DshApp({super.key, this.home, this.botAppearance = false});
 
   /// Replaces the root gate (widget tests).
   final Widget? home;
+  final bool botAppearance;
 
   @override
   ConsumerState<DshApp> createState() => _DshAppState();
@@ -133,10 +135,10 @@ class _DshAppState extends ConsumerState<DshApp> with WidgetsBindingObserver {
     final reduced =
         performance.reduceMotion || WidgetsBinding.instance.platformDispatcher.accessibilityFeatures.disableAnimations;
     return MaterialApp(
-      title: AppInfo.name,
+      title: widget.botAppearance ? 'mbot' : AppInfo.name,
       debugShowCheckedModeBanner: false,
-      theme: _light,
-      darkTheme: _dark,
+      theme: widget.botAppearance ? mbotTheme(_light) : _light,
+      darkTheme: widget.botAppearance ? mbotTheme(_dark) : _dark,
       themeMode: themeMode,
       // Palette and light / dark changes cross-fade the whole app (AppMotion).
       themeAnimationStyle: _settled && !reduced

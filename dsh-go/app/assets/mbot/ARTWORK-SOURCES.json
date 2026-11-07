@@ -1,0 +1,18 @@
+{
+  "_license": "SPDX-License-Identifier: AGPL-3.0-only; original artwork retains MIT",
+  "source": "dsh-go/runtime/vendor/minimax-bot",
+  "octopusSha256": "ebf49bba26196d7285847817d1ad1d56d83de95d399af3fc54642ffd97f1fd20",
+  "skins": {
+    "bubble.png": "738e66c4e31990bd5bf54207472d7a577d5533fd5bf5b169c368c9e9cd007f81",
+    "fuzzy.png": "24641093284ee9aba2ee9dfe43b586f9ee21b37fe443684f9e246269fe74ebc1",
+    "glass.png": "4f11a2c9602f5d7bbb67ba08a595d609c82613758064e03a8a0745412f69d436",
+    "gold.png": "3226e08921a62cf442be8d2cb47437d866d0e406d9c23252997d2beb857c109c",
+    "jade.png": "2cd8b1c94788d17612aa012cc93a581365b85fe4d8e506fe445dc4950d9edbe1",
+    "moon.png": "c5f0dc02695b21a1f74ff6a7302493b16ef4be975fc080dcf58ce2d2049b776f",
+    "pixel.png": "6730f0567d8d40749bf1ea2fc12da4d8d41f27d20ef4d2c1910eecaaee24906e",
+    "plush.png": "0bbe274dba7cea579f21909e7d5bb4ece6e06686f36c46a9cbeb2bfb1488db55",
+    "smiley.png": "59c0b94008a27bd2a2a4d0cc10b89a29f634c4ac3e378a2fc14549e8d72de34a",
+    "toys.png": "d4969f59d8bc599fd22797125f279813a378a1149aa98b5efd32335123086b8e",
+    "waffle.png": "f893a0b1780ab7353452e64c6b84c70b0d43f5132d9230bf7e118ea620024d32"
+  }
+}

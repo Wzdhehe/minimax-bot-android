@@ -8,6 +8,7 @@
 - **后续主线**：App内由用户配置真实供应商后验聊天/流式/取消；ARM64 full-ICU Node 源构建、对应 addon/产品打包及手机验证；随后补 Bot 可信调用与插件等业务。产品聊天、记忆/快照、平板、插件及通知尚无本轮设备证据。
 - 新增独立 ARM64 producer：`dsh-go/tooling/android-node-probe/build-arm64-source.py` 与 `node-arm64-source-build.json`，保留原 x86_64 五个授权输入不变；只共享只读的配方变换。**目前仅入参/结果验证用例通过，未实际编译 ARM64，也未放开产品 ARM64 admission。** GitHub最新任务仍因计费限制零步骤启动；该 producer 可在有工具链的 Linux x86_64 主机执行。不要把脚本落地说成手机包落地。
 - 本轮将 descriptor 等待从60秒调到既有启动预算90秒，修复上述首冷启62秒会被 UI 提前报告为无服务的窗口；这一后续调整尚未设备复跑。
+- UI 后续：顶部改为 `mbot`，首页主 Bot 展示区/金色星标、群成员头像叠放、底部搜索、浅深色中性主题；编辑页支持多个 `isMain` 管理员（服务端保留最后一个主 Bot 的规则不变）与11种原版材质头像。原图逐字节复用 vendor，12套原版配色/矢量轮廓作旧记录回退，MIT许可与来源摘要入包；`python3 dsh-go/app/tool/sync_mbot_artwork.py --check` 校验来源。云端9项文件 analyze 零问题、6个定向widget文件 **34项通过**（含6项新增与实际PNG解码），390浅/深色和1024展开预览已查看；**新UI未设备验证**。本机可复用现有 x86_64 product 准备产物，直接 `flutter build apk --debug --target-platform android-x64 --flavor x64`，不必重编 Node/ICU；若产物闸门拒绝，须报告具体输入，不能跳过校验。
 
 以下历史内容保留作证据背景；旧任务卡及 NEXT-AGENT 的旧“当前入口”不能推翻以上结果。继续只用 `feat/t-plugins`，不动 main/dev/integration，不 force、不 PR、不发布二进制，不向 runtime 传真实 Key。
 

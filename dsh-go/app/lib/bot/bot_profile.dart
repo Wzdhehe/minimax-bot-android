@@ -7,6 +7,7 @@ import '../l10n/l10n.dart';
 import 'bot_memory_page.dart';
 import 'bot_schedules.dart';
 import 'bot_notification_prefs.dart';
+import 'bot_avatar.dart';
 
 class BotProfilePage extends StatefulWidget {
   const BotProfilePage({super.key, required this.api, required this.botId, this.store});
@@ -21,6 +22,7 @@ class _BotProfilePageState extends State<BotProfilePage> {
   Map<String, Object?>? _bot;
   PrefsStore? _store;
   int _enabledSchedules = 0;
+  int _mainCount = 0;
   bool _notifications = true;
   bool _busy = false;
   bool _failed = false;
@@ -50,6 +52,7 @@ class _BotProfilePageState extends State<BotProfilePage> {
       if (!mounted) return;
       setState(() {
         _bot = Map<String, Object?>.from(bot);
+        _mainCount = bots.whereType<Map>().where((row) => row['isMain'] == true).length;
         _store = store;
         _notifications = enabled;
         _enabledSchedules = schedules
@@ -71,6 +74,11 @@ class _BotProfilePageState extends State<BotProfilePage> {
     setState(() => _editing = true);
     final name = TextEditingController(text: _bot?['name']?.toString() ?? '');
     final role = TextEditingController(text: _bot?['role']?.toString() ?? '');
+    final wasMain = _bot?['isMain'] == true;
+    var main = wasMain;
+    final oldSkin = _bot?['skin'];
+    var skin = oldSkin is String && MbotAvatar.skinIds.contains(oldSkin) ? oldSkin : 'bubble';
+    var appearanceChanged = false;
     try {
       final route = DialogRoute<bool>(
         context: context,
@@ -78,24 +86,87 @@ class _BotProfilePageState extends State<BotProfilePage> {
           builder: (context, update) {
             // A name that says something is the only requirement; the role
             // may stay empty.
-            final ready = name.text.trim().isNotEmpty;
+            final retainsMain = main || !wasMain || _mainCount > 1;
+            final ready = name.text.trim().isNotEmpty && retainsMain;
             return AlertDialog(
               title: Text(context.l10n.mobileBotEdit),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: name,
-                    onChanged: (_) => update(() {}),
-                    decoration: InputDecoration(labelText: context.l10n.mobileBotName),
+              content: SizedBox(
+                width: 380,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: name,
+                        onChanged: (_) => update(() {}),
+                        decoration: InputDecoration(labelText: context.l10n.mobileBotName),
+                      ),
+                      TextField(
+                        controller: role,
+                        minLines: 2,
+                        maxLines: 5,
+                        decoration: InputDecoration(labelText: context.l10n.mobileBotRole),
+                      ),
+                      const SizedBox(height: 14),
+                      SwitchListTile.adaptive(
+                        key: const Key('mbot.edit.main'),
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(context.l10n.mobileBotMain),
+                        subtitle: Text(retainsMain ? context.l10n.mobileBotMainHint : context.l10n.mobileBotKeepMain),
+                        value: main,
+                        onChanged: (value) => update(() => main = value),
+                      ),
+                      const SizedBox(height: 12),
+                      Align(alignment: Alignment.centerLeft, child: Text(context.l10n.mobileBotAppearance)),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 94,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: MbotAvatar.skinIds.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 6),
+                          itemBuilder: (context, index) {
+                            final id = MbotAvatar.skinIds[index];
+                            return Semantics(
+                              selected: skin == id,
+                              button: true,
+                              child: InkWell(
+                                key: ValueKey('mbot.skin.$id'),
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: () => update(() {
+                                  skin = id;
+                                  appearanceChanged = true;
+                                }),
+                                child: Container(
+                                  width: 72,
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: skin == id ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      MbotAvatar(bot: {'skin': id}, size: 50, showMain: false),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        MbotAvatar.skinLabel(context, id),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context).textTheme.labelSmall,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                  TextField(
-                    controller: role,
-                    minLines: 2,
-                    maxLines: 5,
-                    decoration: InputDecoration(labelText: context.l10n.mobileBotRole),
-                  ),
-                ],
+                ),
               ),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context, false), child: Text(context.l10n.mobileBotCancel)),
@@ -112,7 +183,13 @@ class _BotProfilePageState extends State<BotProfilePage> {
       await route.completed;
       if (accepted != true || !mounted) return;
       setState(() => _busy = true);
-      await widget.api.updateBot(widget.botId, {'name': name.text.trim(), 'role': role.text.trim()});
+      await widget.api.updateBot(widget.botId, {
+        'name': name.text.trim(),
+        'role': role.text.trim(),
+        if (main != wasMain) 'isMain': main,
+        if (appearanceChanged) 'skin': skin,
+        if (appearanceChanged) 'avatar': null,
+      });
       if (mounted) await _reload();
     } catch (_) {
       if (mounted) setState(() => _failed = true);
@@ -158,17 +235,18 @@ class _BotProfilePageState extends State<BotProfilePage> {
               children: [
                 if (_busy) const LinearProgressIndicator(),
                 if (_failed) TextButton(onPressed: _reload, child: Text(context.l10n.mobileBotRetry)),
-                Center(
-                  child: CircleAvatar(
-                    radius: 52,
-                    child: Text(
-                      name.isEmpty ? 'B' : name.characters.first,
-                      style: Theme.of(context).textTheme.headlineLarge,
-                    ),
-                  ),
-                ),
+                Center(child: MbotAvatar(bot: _bot ?? const {}, size: 112)),
                 const SizedBox(height: 16),
                 Center(child: Text(name, style: Theme.of(context).textTheme.headlineMedium)),
+                if (_bot?['isMain'] == true) ...[
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      context.l10n.mobileBotMain,
+                      style: const TextStyle(color: Color(0xffb78018), fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
                 Center(
                   child: TextButton(
                     onPressed: _busy || _editing || _bot == null ? null : _edit,

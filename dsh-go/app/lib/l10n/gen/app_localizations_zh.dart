@@ -8339,7 +8339,7 @@ class L10nZh extends L10n {
   String get mediaSettingsEnabledHint => '关闭后不再用这个服务生成';
 
   @override
-  String get mobileBotTitle => 'Bot';
+  String get mobileBotTitle => 'mbot';
 
   @override
   String get mobileBotSearch => '搜索 Bot 和群聊';
@@ -8459,6 +8459,51 @@ class L10nZh extends L10n {
 
   @override
   String get mobileBotScheduleSelfHint => '手动设置与 Bot 创建的任务共用同一列表';
+
+  @override
+  String get mobileBotMain => '主 Bot（管理员）';
+
+  @override
+  String get mobileBotMainHint => '主 Bot 可以管理团队，可以设置多个。';
+
+  @override
+  String get mobileBotKeepMain => '至少保留一个主 Bot。';
+
+  @override
+  String get mobileBotAppearance => '头像样式';
+
+  @override
+  String get mobileBotSkinFuzzy => '蓝色毛绒';
+
+  @override
+  String get mobileBotSkinBubble => '泡泡';
+
+  @override
+  String get mobileBotSkinGlass => '粉色玻璃';
+
+  @override
+  String get mobileBotSkinGold => '金色';
+
+  @override
+  String get mobileBotSkinJade => '翡翠';
+
+  @override
+  String get mobileBotSkinPlush => '毛绒';
+
+  @override
+  String get mobileBotSkinWaffle => '华夫饼';
+
+  @override
+  String get mobileBotSkinPixel => '像素';
+
+  @override
+  String get mobileBotSkinSmiley => '笑脸球';
+
+  @override
+  String get mobileBotSkinToys => '玩具';
+
+  @override
+  String get mobileBotSkinMoon => '月岩';
 
   @override
   String get nearbyThisChat => '本对话';

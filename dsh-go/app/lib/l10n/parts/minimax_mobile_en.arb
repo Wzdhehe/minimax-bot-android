@@ -1,5 +1,5 @@
 {
-  "mobileBotTitle": "Bot",
+  "mobileBotTitle": "mbot",
   "mobileBotSearch": "Search bots and groups",
   "mobileBotNew": "Create bot",
   "mobileBotGroup": "Create group",
@@ -45,5 +45,20 @@
         "type": "int"
       }
     }
-  }
+  },
+  "mobileBotMain": "Main Bot (admin)",
+  "mobileBotMainHint": "Main Bots manage the team. You can have more than one.",
+  "mobileBotKeepMain": "Keep at least one Main Bot.",
+  "mobileBotAppearance": "Avatar style",
+  "mobileBotSkinFuzzy": "Fuzzy",
+  "mobileBotSkinBubble": "Bubble",
+  "mobileBotSkinGlass": "Pink glass",
+  "mobileBotSkinGold": "Gold",
+  "mobileBotSkinJade": "Jade",
+  "mobileBotSkinPlush": "Plush",
+  "mobileBotSkinWaffle": "Waffle",
+  "mobileBotSkinPixel": "Pixel",
+  "mobileBotSkinSmiley": "Smiley",
+  "mobileBotSkinToys": "Toys",
+  "mobileBotSkinMoon": "Moon"
 }

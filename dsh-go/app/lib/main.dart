@@ -32,5 +32,5 @@ Future<void> _startApp() async {
   // The App opens on the official Bot interface. The old install guide and the
   // old workbench are not on the way in any more; the shell around it (the
   // language, the theme, the launch window) stays.
-  runApp(const ProviderScope(child: DshApp(home: BotEntry())));
+  runApp(const ProviderScope(child: DshApp(home: BotEntry(), botAppearance: true)));
 }

@@ -8793,7 +8793,7 @@ class L10nEn extends L10n {
   String get mediaSettingsEnabledHint => 'Turns this service off for generation';
 
   @override
-  String get mobileBotTitle => 'Bot';
+  String get mobileBotTitle => 'mbot';
 
   @override
   String get mobileBotSearch => 'Search bots and groups';
@@ -8915,6 +8915,51 @@ class L10nEn extends L10n {
 
   @override
   String get mobileBotScheduleSelfHint => 'Tasks created here and by the Bot share the same list';
+
+  @override
+  String get mobileBotMain => 'Main Bot (admin)';
+
+  @override
+  String get mobileBotMainHint => 'Main Bots manage the team. You can have more than one.';
+
+  @override
+  String get mobileBotKeepMain => 'Keep at least one Main Bot.';
+
+  @override
+  String get mobileBotAppearance => 'Avatar style';
+
+  @override
+  String get mobileBotSkinFuzzy => 'Fuzzy';
+
+  @override
+  String get mobileBotSkinBubble => 'Bubble';
+
+  @override
+  String get mobileBotSkinGlass => 'Pink glass';
+
+  @override
+  String get mobileBotSkinGold => 'Gold';
+
+  @override
+  String get mobileBotSkinJade => 'Jade';
+
+  @override
+  String get mobileBotSkinPlush => 'Plush';
+
+  @override
+  String get mobileBotSkinWaffle => 'Waffle';
+
+  @override
+  String get mobileBotSkinPixel => 'Pixel';
+
+  @override
+  String get mobileBotSkinSmiley => 'Smiley';
+
+  @override
+  String get mobileBotSkinToys => 'Toys';
+
+  @override
+  String get mobileBotSkinMoon => 'Moon';
 
   @override
   String get nearbyThisChat => 'This chat';
