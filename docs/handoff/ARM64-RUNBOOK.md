@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # ARM64执行手册：把编译、来源核验、产品准入分开
 
-适用：feat/t-plugins，2026-11-07；2026-11-10补A/C1实际结果（见文末）。先读[当前状态](../HANDOFF.md)和[下一位合同](NEXT-AGENT.md)。本手册刻意给出停止点；**遇错不要自行取消安全检查或扩大写入范围。**
+适用：feat/t-plugins，2026-11-07；2026-11-10补A/C1/B2实际结果（见文末）。先读[当前状态](../HANDOFF.md)和[下一位合同](NEXT-AGENT.md)。本手册刻意给出停止点；**遇错不要自行取消安全检查或扩大写入范围。**
 
 ## 当前到底有什么
 
@@ -10,7 +10,7 @@
 - 独立编译作业：[android-node-arm64-source.yml](../../.github/workflows/android-node-arm64-source.yml)，只在本仓feat/t-plugins执行，使用自己的ARM64缓存和候选artifact名，不改x64的五个权威输入。
 - 独立Actions来源检查：[verify-arm64-source-run.py](../../dsh-go/tooling/android-node-probe/verify-arm64-source-run.py)。检查成功也仅得到source-candidate-only收据，不是Android通过或准入开关。
 - 当前云机没有可用NDK/clang/ninja/ccache，根盘剩余不足0.2GiB，/tmp剩余约3.6GiB；不应在这里硬塞完整Node源编译。2026-11-07实查9a7cffe最新CI作业annotation仍是计费/支出限制导致未启动，不是源码编译失败。环境会变，以新实查为准。
-- prepare-product.py的ARM64拒绝仍在。不能把“新编译作业已写”说成“手机包完成”。
+- prepare-product.py已在76f67a0接通ARM64分支（正反例齐全后），本机已编出未入库的ARM64调试APK。**不能把“产品准入或APK已构建”说成“手机可用或阶段C完成”。**
 
 CI配置复核：初版07c5a34的run42379715185为failure且无build job；actionlint 1.7.7实际指出job级env不能引用runner.temp。已将CCACHE_DIR移入编译step的env，同一actionlint检查退出0，ARM64源码/来源20项通过。**这个初版失败不能归因于计费或Node编译**；修正版是否能分配runner，须另查新run的job/annotation。前述9a7cffe的计费阻塞是另一条已实查记录。
 
@@ -149,7 +149,7 @@ Windows CRLF会触发精确字节拒绝，按DEVELOPMENT已有git cat-file原始
 | 输出目录已存在 | 保留旧attempt，明确改名/换全新目录后另试 | rmtree覆盖未知产物、把半包当成功 |
 | 无空间/OOM/超时 | 记录真实资源/进度；保存缓存，交主agent处理 | 以旧lib/无Intl发行版补齐、伪造成功退出 |
 | 只有x64库或Linux arm64库 | 拒绝ARM64 Android候选 | 仅改目录名/ABI标签、把glibc addon打进APK |
-| prepare-product仍拒ARM64 | 正常：进入下节代码任务 | 直接删拒绝或把验证标志手改true |
+| prepare-product拒ARM64（B2之后） | 查真实输入：审阅记录、归档SHA、headers、Intl/SQLite/FD元数据、ELF/ABI | 直接删闸门或把验证标志手改true；用夹具库或x64输入凑过 |
 
 ## 消费者代码任务C：交强agent，不与A混改
 
@@ -183,7 +183,7 @@ A/B成功以后按[NEXT-AGENT阶段B/C](NEXT-AGENT.md)做。**SQLite固定ABI选
 5. 正确建立上表ARM64 Node头/manifest/native库/基础probe资产，再调用现有prepare-sqlite --abi arm64-v8a。此阶段不需要新增通用Agent执行器，不需要真实模型Key。
 6. 添加正反例：来源/commit/recipe/headers/config/ABI/库/zip中任一篡改都拒绝；缺Intl/ICU/FD基础资产不接产品；失败不改x64。补Linux/Windows路径与CRLF输入说明。确认旧来源5项、原Node宿主6项、SQLite26项、backup11项仍通过。
 
-**本小阶段停止点**：可信ARM64 Node输入和真正NDK编译的addon各自可核验；尚未授权prepare-product。下一张卡再接产品来源/资产/Gradle闸门，逐项反例齐全后才移除拒绝。不要在同一弱模型任务里同时改consumer、原安全边界和UI。
+**C1停止点（历史，2026-11-10已完成）**：可信ARM64 Node输入和真正NDK编译的addon各自可核验后，已另开B2接通prepare-product。不要在同一任务里同时改consumer、原安全边界和UI。
 
 允许路径要在具体卡里列明。不得顺手改x64的旧五个权威输入、vendor快照、Key边界、UID/Binder/backup/文件保护或UI；不把候选库接进产品后就称手机通过。arm64 flavor已经存在只表示构建配置，不表示引擎输入可用。原有x64产品与20项ARM64源码/来源测试、5项x64来源测试应继续通过。
 
@@ -202,12 +202,19 @@ python3 dsh-go/tooling/android-node-probe/prepare-sqlite.py --abi arm64-v8a \
 python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_arm64_node_consumer.py' -v
 ```
 
-2026-11-10云端Linux x86_64实测：两条准备命令均EXIT0；输出build/abi/arm64-v8a/verified-jni/arm64-v8a下libnode（`d46110d0…`）、NDK libc++_shared（API21 ident，按预编运行库允许≤26）、真实编出的libmbot_node_probe.so（95,608字节，`864156b8…21a4`）、libmbot_sqlite_probe.so（2,170,624字节，`8e8eb0ca…78ff`，36条defines，SQLite3.53.2）；三者readelf为AArch64、API26、LOAD 0x4000，NEEDED仅libnode/libc++_shared/libc/libm/libdl。node-validation.json：requiresIntl/requiresSqlite/requiresFdVfs均true，admittedForProduct=false。**prepare-backup尚未跑ARM64，prepare-product仍拒绝ARM64，无APK、无设备。** 这些产物不入库。
+2026-11-10云端Linux x86_64实测（C1）：两条准备命令均EXIT0；输出build/abi/arm64-v8a/verified-jni/arm64-v8a下libnode（`d46110d0…`）、NDK libc++_shared（API21 ident，按预编运行库允许≤26）、真实编出的libmbot_node_probe.so（95,608字节，`864156b8…21a4`）、libmbot_sqlite_probe.so（2,170,624字节，`8e8eb0ca…78ff`，36条defines，SQLite3.53.2）；readelf为AArch64、API26、LOAD 0x4000。node-validation.json：requiresIntl/requiresSqlite/requiresFdVfs均true，admittedForProduct=false。这些准备产物不入库。
 
 - **模拟器边界**：云机/dev/kvm对box用户不可用（emulator-check accel实测无权限），仅有API35 x86_64镜像/AVD；软件模拟只可回归x64，**不能产生ARM64设备证据**。
 
-### 下一张卡B2（产品准入，单独一卡）
+### 2026-11-10实际结果：B2产品准入与调试APK
 
-1. prepare-backup.py对arm64-v8a的真实编译（已支持两ABI，确认输入与输出目录）。
-2. prepare-product.py：ARM64分支要求build/abi/arm64-v8a的node-validation（requiresIntl/Sqlite/FdVfs、admittedForProduct=false来自消费者，**由产品闸门而非消费者决定准入**）、node-headers.json与审阅记录SHA、各.so ELF/ABI/16KiB、SQLite/backup build-inputs一致；正反例覆盖混入x64库、陈旧/篡改输入、缺Intl/SQLite/FD元数据。然后才替换"not yet admitted"拒绝。
-3. Gradle arm64 flavor exact-input校验与APK内容检查（引擎/JS/许可证、未压缩库）。x64 prepare-product与Gradle闸门须回归不变。
+- **prepare-backup.py**对x86_64与arm64-v8a均EXIT0；arm64-v8a的libmbot_sqlite_backup.so为AArch64、API26、LOAD 0x4000。产物不入库。
+- **prepare-product.py --abi arm64-v8a**与`--verify-only`均EXIT0（76f67a0）。闸门只信已提交审阅记录；admittedForProduct必须仍为false。真实拒绝：混入x64库、误传x64归档SHA、缺FD元数据、陈旧头文件。x64重跑prepare-product时，除prepare-product.py自身源摘要外，产品资产/库清单与接通前基线相同。
+- 测试：`python3 -m unittest discover -s dsh-go/tooling/mobile-runtime-bundle -p 'test_product*.py'` → 35项OK；android-node-probe全目录149项OK（6项既有skip）。
+- **ARM64调试APK**（本机，未入库）295,445,843字节，SHA256 `6331421c307d1c4a592072d49ef8e1279c56bbd26bb1ee2ce54eb0bb48f8622f`：仅arm64-v8a；26项product-inputs（引擎/JS/许可）全部命中；全部`.so` stored且在APK内16KiB对齐；extractNativeLibs=false（useLegacyPackaging=false）；无MANAGE_EXTERNAL_STORAGE；库均为AArch64。
+- **重编x64调试APK** 290,520,571字节，SHA256 `9e37a9ee4e1598bffb095da80509244240117c22384fca01f2e6dda21715d7d5`；lib/与assets/mbot/与接通前基线APK（498a151构建，290,520,567字节）逐项摘要相同。
+- **x64软解模拟器**（API35，无KVM）安装该x64包Success。设备时钟：17:39:16 Background started FGS Allowed；17:40:21 ForegroundServiceDidNotStartInTimeException，随后MiniMaxBotRuntime: bot_assets_manifest_verified并拉起IsolatedBotService；17:41:01主进程ANR；17:41:18 IsolatedBotService“failed to complete startup”后被杀。**未见bot_ready**。与此前软解FGS超时同类：**不写成启动回归通过，也不写成产品回归失败**，不能当ARM64设备证据。
+
+### 下一张卡：阶段C（用户指定的ARM64真机）
+
+按[NEXT-AGENT阶段C](NEXT-AGENT.md)：仅用户指定设备，先只读确认序列号/ABI/API/boot；install -r同应用ID，不清数据/wipe。记录源码HEAD、APK大小/SHA、ready与真实UID。无该设备则保持“仅编译/打包，设备未验证”。

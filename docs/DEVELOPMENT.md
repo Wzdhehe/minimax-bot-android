@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 开发与复现入口
 
-更新：2026-11-07。现状与证据以 [HANDOFF](HANDOFF.md) 为准，后续工作以 [NEXT-AGENT](handoff/NEXT-AGENT.md) 为准。**正式入口已是官方Bot，API35/x86_64已有真实MiniMax文本产品验收**；根目录app是废弃Java原型，旧DSH rootfs不是本产品构建前提。[整理前的开发记录](https://github.com/Wzdhehe/minimax-bot-android/blob/e9d0bebd5fc2487b87d3b5a77b32c2107a0fe54e/docs/DEVELOPMENT.md)保留在Git历史。
+更新：2026-11-10。现状与证据以 [HANDOFF](HANDOFF.md) 为准，后续工作以 [NEXT-AGENT](handoff/NEXT-AGENT.md) 为准。**正式入口已是官方Bot，API35/x86_64已有真实MiniMax文本产品验收**；根目录app是废弃Java原型，旧DSH rootfs不是本产品构建前提。[整理前的开发记录](https://github.com/Wzdhehe/minimax-bot-android/blob/e9d0bebd5fc2487b87d3b5a77b32c2107a0fe54e/docs/DEVELOPMENT.md)保留在Git历史。
 
 ## 环境与版本
 
@@ -86,7 +86,17 @@ python3 dsh-go/tooling/mobile-runtime-bundle/prepare-product.py --abi x86_64 \
 
 ARM64独立编译、来源收据和给Ubuntu agent的零源码改动任务见[ARM64执行手册](handoff/ARM64-RUNBOOK.md)。新增verify-arm64-source-run.py仅授权同仓同分支的ARM64候选，outerArtifactSha256是GitHub外层ZIP摘要，不能当内层Node归档SHA。
 
-**ARM64目前不能直接套以上整链命令**：prepare-product明确拒绝，prepare-probe仍固定x64。prepare-sqlite已增加`--abi arm64-v8a`，仅从`android-node-probe/build/abi/arm64-v8a/`取同ABI的Node头、manifest、libnode与基础probe资产并写回该ABI目录；缺输入就拒绝，不回退x64。ARM64 Node输入由prepare-arm64-node.py从已提交审阅记录的候选准备（2026-11-10已补，见ARM64手册文末），不能手工复制x64输入补齐；产品准入仍缺。按NEXT-AGENT先真实producer与来源/ABI准入，不删除产品拒绝来凑手机APK。Linux/ARM64的npm预编译addon不是Android/Bionic库。
+**ARM64产品准备（2026-11-10 B2已接通，仍非设备验收）**：prepare-probe.py仍固定x64。先用prepare-arm64-node.py从已提交审阅记录的候选写入`android-node-probe/build/abi/arm64-v8a/`，再`prepare-sqlite.py --abi arm64-v8a`（只读该ABI目录，缺输入就拒绝，不回退x64），并跑已支持双ABI的prepare-backup.py。然后：
+
+```bash
+python3 dsh-go/tooling/mobile-runtime-bundle/prepare-product.py --abi arm64-v8a \
+  --ndk "$MBOT_NDK" --mobile-bundle "$MBOT_STAGE/mobile" \
+  --source-build-sha "$MBOT_ARM64_ARCHIVE_SHA"
+(cd dsh-go/app && flutter build apk --debug --target-platform android-arm64 --flavor arm64)
+```
+
+`--source-build-sha`必须是已提交审阅记录中的内层候选归档SHA，不能传x64 SHA或任意摘要。闸门失败要查真实输入，不注释或手改标志。APK在`dsh-go/app/build/app/outputs/flutter-apk/app-arm64-debug.apk`，不入库。编出ARM64 APK不等于设备通过；无用户指定的ARM64真机就写未验证，不能拿x64模拟器补勾。Linux/ARM64的npm预编译addon不是Android/Bionic库。命令与实测摘要见[ARM64手册](handoff/ARM64-RUNBOOK.md)。
+
 
 ## 按修改面验证，不重复全仓
 

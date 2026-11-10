@@ -24,7 +24,7 @@
 
 ### A. 独立 full-ICU ARM64 producer
 
-**现状**：producer与candidateOnly=true的pin已在库；新增android-node-arm64-source.yml独立编译任务、verify-arm64-source-run.py独立来源核验。20项ARM64源码/来源、原x64来源5项通过；**仍没有实际ARM64 full-ICU编译成功证据**。新的CI代码不等于已编译。当前GitHub实查仍计费阻塞，Ubuntu手工编译按ARM64手册执行，不先删prepare-product里的拒绝。
+**现状（2026-11-10）**：producer与candidateOnly=true的pin已在库；独立CI/来源核验已有。20项ARM64源码/来源、原x64来源5项通过。**手工full-ICU候选已编出并复核**（见下方实际），不是CI产物；GitHub ARM64作业仍可能因账户计费未启动，不必为补候选反复排队。阶段B产品准入已接通，勿再把“A尚未编出”或“prepare-product仍拒绝”当成当前事实。
 
 - 先读 [producer](../../dsh-go/tooling/android-node-probe/build-arm64-source.py)、[ARM64 pin](../../dsh-go/tooling/android-node-probe/node-arm64-source-build.json)、共享[原producer](../../dsh-go/tooling/android-node-probe/build-source.py)及其宿主测试。
 - 编译宿主须Linux x86_64 + NDK27.3.13750724；Windows本机无WSL，不能替它声称已编。可用用户另一个Ubuntu云端agent承担长编译，先明确同分支/文件分工；不能假定它已经拿到产物。
@@ -43,10 +43,12 @@
 1. `prepare-sqlite.py`已支持明确的x86_64/arm64-v8a→Android26 triple允许表，并检查headers的Android/target_arch与输入、输出ELF；Windows仍用clang.exe而不是.cmd/shell=True。x64原路径不变，ARM64独立放`android-node-probe/build/abi/arm64-v8a/`，26项SQLite宿主/输入用例通过。**这是mock编译命令与拒绝用例，不是已编出ARM64 addon。** `prepare-probe.py`仍固定x64、未改。**2026-11-10已补ARM64消费者**`prepare-arm64-node.py`：只信已提交的审阅记录（工作树须等于HEAD），无任何传SHA参数；再对照producer四输入现值与祖先commit、归档大小/SHA、安全解包（白名单成员、重复/大小写别名/越界/反斜杠/链接/加密/压缩比/预算）、mbotSourceBuild与mbotArm64Producer精确相等、唯一arm64 slice/ABI137/ICU版本、头config与node_version、纯Python ELF（AArch64 DYN、API26 note、16KiB LOAD、NEEDED白名单；NDK预编libc++_shared允许API≤26），只写build/abi/arm64-v8a（先.partial再原子改名，已存在拒绝，x64位置拒绝）。随后`prepare-sqlite.py --abi arm64-v8a`以真实NDK编出addon。
 2. Node24.22.2 full-ICU产物、对应headers/config.gypi、ABI、NDK、source recipe和实际归档摘要必须互相匹配；ARM64的mbotArm64Producer不能冒充x64的mbotSourceBuild。当前verify-source-run.py只授权旧x64工作流，ARM64来源验证需要独立设计/实查，不能传x64 SHA凑通过。
 3. SQLite仍用12.11.1钉住归档和全部36条defines.gypi定义，fd_vfs/fd_vfs_node用目标ABI重编；backup准备已支持两ABI，但其输入变动仍须重编。**Linux ARM64/glibc的npm预编译addon不能当Android/Bionic库使用**，Node ABI相同也不够。
-4. `prepare-product.py --abi arm64-v8a`当前故意报“ARM64 full-ICU product inputs are not yet admitted”。只有完整来源、头、配置、ABI及native输入闸门有正反例后才接通ARM64分支；不直接删if、不降低验证。
+4. **2026-11-10：B2已接通ARM64产品分支（76f67a0）。** `admitted_native_arm64`只信已提交审阅记录与`build/abi/arm64-v8a`准备输入；requiresIntl/Sqlite/FdVfs须为true且admittedForProduct仍为false（由产品闸门而非消费者自准）；再核recipe/头/ELF（AArch64、API26、16KiB LOAD、依赖白名单）、SQLite/backup一致性。正反例覆盖混入x64库、陈旧/篡改输入、缺Intl/SQLite/FD元数据。x64仍走原`admitted_native`，路径与闸门不变。不得降低验证或把标志手改true。
 5. App已有arm64 flavor不代表引擎已支持。保持useLegacyPackaging=false / extractNativeLibs=false：独立UID从APK未压缩库映射。不能为旧PRoot库改回true。所有目标库检查Android/API26、AArch64、依赖和16KiB LOAD；静态对齐不等于16KiB页设备运行。
 
 **阶段B验收**：x64/ARM64各自prepare-product及Gradle闸门通过；篡改ABI/头/recipe/digest、缺Intl/SQLite/FD元数据、混入宿主库和陈旧输入必须失败。ARM64 APK可构建且确实含对应引擎/JS/许可；仍不称手机可用。
+
+**2026-11-10实际：B已完成（产品准入与调试APK，非设备）。** prepare-backup.py对x86_64与arm64-v8a均EXIT0。prepare-product `--abi arm64-v8a`与`--verify-only`均EXIT0；真实拒绝：混入x64库、误传x64归档SHA、缺FD元数据、陈旧头文件。`test_product*.py` 35项OK（原x64 7项未改）；android-node-probe 149项OK（6项既有skip）。ARM64调试APK（本机，未入库）295,445,843字节，SHA256 `6331421c307d1c4a592072d49ef8e1279c56bbd26bb1ee2ce54eb0bb48f8622f`：仅arm64-v8a，26项product-inputs全部命中（引擎/JS/许可），全部`.so` stored且APK内16KiB对齐，extractNativeLibs=false，无MANAGE_EXTERNAL_STORAGE，readelf均为AArch64。重编x64调试APK 290,520,571字节，SHA256 `9e37a9ee4e1598bffb095da80509244240117c22384fca01f2e6dda21715d7d5`；其lib/与assets/mbot/与498a151基线APK逐项摘要相同（整包SHA因prepare-product.py自身进入源清单而不同）。API35/x86_64软解模拟器（无KVM）安装该x64包Success；设备时钟17:39:16 FGS Allowed，17:40:21 ForegroundServiceDidNotStartInTimeException，随后bot_assets_manifest_verified，17:41:01主进程ANR，17:41:18 IsolatedBotService启动超时ANR后被杀；**未见bot_ready**。这与此前软解模拟器FGS超时同类，**不写成启动回归通过，也不写成产品回归失败**，更不能当ARM64设备证据。
 
 ### C. ARM64设备
 
@@ -106,9 +108,9 @@
 
 ## 可直接发给接手模型的启动提示词
 
-> 接手私有仓Wzdhehe/minimax-bot-android的feat/t-plugins，不新开分支。先git status，保留任何他人改动，再fetch并只允许merge --ff-only。读AGENTS.md、dsh-go/AGENTS.md、docs/HANDOFF.md、docs/handoff/NEXT-AGENT.md、docs/DEVELOPMENT.md和docs/handoff/ARM64-RUNBOOK.md。旧DSH背景不覆盖这些当前合同。x64产品在e9d0beb已通过真实MiniMax文本/取消/恢复，别重新造launcher、换芯或连通性测试。ARM64手工full-ICU候选已复核并提交审阅记录，256ca35补Node消费者并真实编出ARM64 JNI胶水/SQLite addon；07c5a34/01941e0/faa531c分别完成独立CI/来源、CI表达式修正、SQLite双ABI隔离；均不代表手机已可用，prepare-product仍拒绝ARM64。下一张是ARM64手册文末的B2产品准入卡。最新ARM64 CI受账户计费限制未启动。你先报告当前HEAD与实际工具/资源，按ARM64手册选择确实能执行的一张小卡：Ubuntu只编候选；已有可信候选才补Node消费者；消费者与反例齐全后另接产品。不要一口气改所有层、放宽验证或把mock打印当编译。Key不需要交给你。每一小阶段跑相关测试、记下真实结果和未验证项，明确暂存自己的文件，commit并正常push。main/dev/integration不动，不force、不PR、不发布二进制。文档已写明的日常选择直接执行，只有缺少来源/授权等无法从代码与文档决定的信息才提问。
+> 接手私有仓Wzdhehe/minimax-bot-android的feat/t-plugins，不新开分支。先git status，保留任何他人改动，再fetch并只允许merge --ff-only。读AGENTS.md、dsh-go/AGENTS.md、docs/HANDOFF.md、docs/handoff/NEXT-AGENT.md、docs/DEVELOPMENT.md和docs/handoff/ARM64-RUNBOOK.md。旧DSH背景不覆盖这些当前合同。x64产品在e9d0beb已通过真实MiniMax文本/取消/恢复，别重新造launcher、换芯或连通性测试。ARM64手工full-ICU候选已复核；256ca35补Node消费者并真实编出ARM64 JNI/SQLite addon；76f67a0接通prepare-product ARM64闸门并编出ARM64调试APK。07c5a34/01941e0/faa531c分别完成独立CI/来源、CI表达式修正、SQLite双ABI隔离。**阶段B（产品准入与APK）已完成，仍不代表手机可用。** 下一张是阶段C：仅在用户指定的ARM64真机上install -r并验收启动与短文本；无该设备就写“仅编译/打包，设备未验证”，不能拿x64模拟器补勾。不要重做已完成的producer/消费者/产品闸门，不要放宽验证或把mock打印当编译。Key不需要交给你。每一小阶段跑相关测试、记下真实结果和未验证项，明确暂存自己的文件，commit并正常push。main/dev/integration不动，不force、不PR、不发布二进制。文档已写明的日常选择直接执行，只有缺少来源/授权等无法从代码与文档决定的信息才提问。
 
-不要让“模型较弱”变成越过准入的理由。任务太大就依现有边界拆开，交付一个完整、可审阅的小阶段；没有真实候选时可以审查/完善消费者反例，但结论必须仍写“真实候选未验证”，不能宣布阶段B通过。
+不要让“模型较弱”变成越过准入的理由。任务太大就依现有边界拆开，交付一个完整、可审阅的小阶段。阶段B已完成产品准入与调试APK；没有用户指定的ARM64设备就不能宣布阶段C通过，也不能拿x64模拟器结果补勾。
 
 ## 最后一次代码增量与检查，防止误读状态
 
@@ -118,7 +120,9 @@
 | 07c5a34 | ARM64独立workflow与来源核验器 | ARM64源码/来源20项，原x64来源5项 | 未编ARM64；workflow初版后由01941e0修正 |
 | 01941e0 | CCACHE_DIR移入可用runner上下文的step | actionlint1.7.7退出0，ARM6420项；新run42380251554的计费阻塞已实查 | 没有编译步骤执行，不存在成功artifact |
 | faa531c | prepare-sqlite固定双ABI目标、独立目录、headers/ELF防混装 | SQLite26项、backup宿主11项、原Node宿主6项全部OK；原x64五个权威输入逐路径diff为空 | 无NDK，未真编任一ABI，未构建新产品APK，未解除产品ARM64拒绝 |
-| 256ca35 | ARM64候选审阅记录+Node消费者prepare-arm64-node.py及51项正反例 | 消费者51项OK；android-node-probe全目录149项OK（6项为既有directory_lease无编译器skip）；真实候选+真实NDK27d：消费者EXIT0、ARM64 libmbot_node_probe.so与libmbot_sqlite_probe.so真实编出并readelf核验；篡改1字节归档与重复输出均拒绝 | 未改prepare-probe/prepare-product/Gradle/x64五输入；未建ARM64 APK；无ARM64设备 |
+| 256ca35 | ARM64候选审阅记录+Node消费者prepare-arm64-node.py及51项正反例 | 消费者51项OK；android-node-probe全目录149项OK（6项为既有directory_lease无编译器skip）；真实候选+真实NDK27d：消费者EXIT0、ARM64 libmbot_node_probe.so与libmbot_sqlite_probe.so真实编出并readelf核验；篡改1字节归档与重复输出均拒绝 | 当时未改prepare-product/Gradle；无ARM64设备 |
+| 498a151 | 缺锁定esbuild时跳过真实probe bundler测试 | 有依赖时该项仍执行；移走node_modules后明确skip并写原因；51项中该项skip时其余OK | 不跳过有依赖时的真实失败 |
+| 76f67a0 | prepare-product接通ARM64：只信审阅记录，完整来源/ABI/ELF/SQLite/backup闸门与28项正反例；x64仍走原admitted_native | test_product*.py 35项OK（原x64 7项未改）；probe 149项OK（6 skip）；真实prepare-product arm64与verify-only均EXIT0；混入x64库/错SHA/缺FD/陈旧头均拒绝；Gradle编出ARM64与x64调试APK（见上方面实测） | 未发布APK/Release；无ARM64设备；x64软解模拟器未见bot_ready，不作启动通过或产品失败结论 |
 
 复现上述准备器测试，从repo根运行：
 

@@ -1,11 +1,11 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 当前开发状态与验收基线
 
-更新：2026-11-10。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。最新阶段（2026-11-10）：Ubuntu手工ARM64 full-ICU候选已编出并经独立复核，提交审阅记录[node-arm64-candidate.json](../dsh-go/tooling/android-node-probe/node-arm64-candidate.json)与ARM64 Node消费者prepare-arm64-node.py，并用真实NDK编出ARM64 JNI胶水与SQLite addon；尚未改变已验x64产品代码，**prepare-product仍拒绝ARM64，未建ARM64 APK，未上设备**。[接手启动提示词与最后增量](handoff/NEXT-AGENT.md)可直接转发；[ARM64手册](handoff/ARM64-RUNBOOK.md)含Ubuntu长编译任务、精确目录和下一张消费者小卡。
+更新：2026-11-10。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。最新阶段（2026-11-10）：**B2已完成**（产品准入与ARM64调试APK）。手工full-ICU候选已复核并写入[审阅记录](../dsh-go/tooling/android-node-probe/node-arm64-candidate.json)；prepare-arm64-node.py与真实NDK编出ARM64 JNI/SQLite/backup；prepare-product在完整正反例闸门后接通ARM64，Gradle arm64 flavor已编出调试APK（本机产物，未入库）。**仍不是已发布版本，也未经ARM64设备验证，不能称手机可用。** 下一步是[阶段C](handoff/NEXT-AGENT.md)：仅在用户指定的ARM64真机上验收。[接手启动提示词与最后增量](handoff/NEXT-AGENT.md)可直接转发；[ARM64手册](handoff/ARM64-RUNBOOK.md)含编译、消费者与产品准入的实测记录。
 
 ## 当前结论
 
-**已有 API35/x86_64 模拟器上的基本可聊天产品调试 APK。真实 MiniMax 连接探针、短文本回复、生成中取消及取消后继续对话已通过。** 不是只有宿主协议夹具，也不是旧 DSH 界面；但还不是 ARM64 手机包、完整功能版或已发布版本。
+**已有 API35/x86_64 模拟器上的基本可聊天产品调试 APK。真实 MiniMax 连接探针、短文本回复、生成中取消及取消后继续对话已通过。** 不是只有宿主协议夹具，也不是旧 DSH 界面。另有未发布的 ARM64 调试 APK（本机构建，未入库），**未经 ARM64 设备验证，不是完整功能版或已发布版本，不能称手机可用**。
 
 当前运行链（模型Key不进入guest）：
 
@@ -64,7 +64,7 @@ flowchart LR
 
 | 优先级 | 工作 | 明确缺口 |
 |---|---|---|
-| P0 | ARM64手机产品链 | **A完成**：手工候选（40c922a producer，内层归档SHA256 `424bee7c…60ec`，libnode `d46110d0…0a93`）复核通过。**B1完成**：prepare-arm64-node.py只信已提交审阅记录，校验producer四输入/祖先commit、归档字节、安全解包、recipe/ABI/ICU/头/ELF(API26、16KiB LOAD、依赖白名单)，写入build/abi/arm64-v8a；51项正反例通过，全目录149项OK(6项既有skip)。真实NDK编出ARM64 libmbot_node_probe.so与libmbot_sqlite_probe.so（36 defines，AArch64/API26/16KiB）。**B2缺**：prepare-product/Gradle的ARM64来源/资产闸门与反例，拒绝仍在；无ARM64设备，KVM不可用。详见[ARM64手册](handoff/ARM64-RUNBOOK.md) |
+| P0 | ARM64设备验收（阶段C） | **A/B已完成**：手工候选（40c922a producer，内层归档SHA256 `424bee7c…60ec`，libnode `d46110d0…0a93`）复核通过。B1消费者与真实NDK JNI/SQLite addon已落地。B2：prepare-backup双ABI真实编出；prepare-product ARM64闸门与28项正反例（加原x64 7项共35项OK）后解除拒绝；ARM64调试APK 295,445,843字节，SHA256 `6331421c…622f`，仅arm64-v8a，product-inputs 26项全部命中，`.so`均为stored且16KiB对齐，extractNativeLibs=false，无MANAGE_EXTERNAL_STORAGE。x64 APK重编后 lib/ 与 assets/mbot/ 与498a151基线逐项摘要相同。**C缺**：无ARM64设备，KVM不可用，不能拿x64软解模拟器补勾。详见[ARM64手册](handoff/ARM64-RUNBOOK.md) |
 | P0并行小项 | 逐字流式/停止观察 | 可用本机已安装的e9d0beb，不必先重编；记录真实增量及首token后停止。不要把完整suite重跑当进展 |
 | P1 | effort与多模态 | 五档effort、1M上下文、模态只是可配置；真实provider是否收到/接受尚未验证。附件上传不等于附件入模 |
 | P1 | Bot工具/协作/定时 | 每Bot设置与同源任务界面已有；真实模型工具回合、Bot可信MCP caller、自建任务/到点执行、群聊/helper联动未端到端验收 |
