@@ -214,7 +214,7 @@ python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_arm64
 - **ARM64调试APK**（本机，未入库）295,445,843字节，SHA256 `6331421c307d1c4a592072d49ef8e1279c56bbd26bb1ee2ce54eb0bb48f8622f`：仅arm64-v8a；26项product-inputs（引擎/JS/许可）全部命中；全部`.so` stored且在APK内16KiB对齐；extractNativeLibs=false（useLegacyPackaging=false）；无MANAGE_EXTERNAL_STORAGE；库均为AArch64。
 - **重编x64调试APK** 290,520,571字节，SHA256 `9e37a9ee4e1598bffb095da80509244240117c22384fca01f2e6dda21715d7d5`；lib/与assets/mbot/与接通前基线APK（498a151构建，290,520,567字节）逐项摘要相同。
 - **x64软解模拟器**（API35，无KVM）安装该x64包Success。设备时钟：17:39:16 Background started FGS Allowed；17:40:21 ForegroundServiceDidNotStartInTimeException，随后MiniMaxBotRuntime: bot_assets_manifest_verified并拉起IsolatedBotService；17:41:01主进程ANR；17:41:18 IsolatedBotService“failed to complete startup”后被杀。**未见bot_ready**。与此前软解FGS超时同类：**不写成启动回归通过，也不写成产品回归失败**，不能当ARM64设备证据。
-- **阶段D跟进（2026-11-10）**：已确认上述 FGS 超时是产品启动顺序问题并合入修复（`ForegroundStartGate` 等到主 Looper 空闲再 `startForegroundService`）。同机同模拟器新包：19:18:01 `bot_fgs_requested`，19:18:03 `bot_fgs_foreground`，无 FGS 超时、无本包 ANR；IsolatedBotService 以独立 UID `u0i2` 启动。仍未见 bot_ready（19:19:33 `bot_runtime_start_timeout`）。不能把阶段 D 写成启动全流程通过或阶段 C 完成。
+- **阶段D跟进（2026-11-10）**：已确认上述 FGS 超时是产品启动顺序问题并合入修复（`ForegroundStartGate` 等到主 Looper 空闲再 `startForegroundService`）。随后将我们自己的启动预算 90→180 秒（`BotRuntimeStartBudget`）。同机同模拟器 180 秒包：19:48:56 `bot_fgs_requested`，19:48:57 `bot_fgs_foreground`，隔离 UID `u0i4`，19:51:57 仍 `bot_runtime_start_timeout`，未见 bot_ready。不能把阶段 D 写成启动全流程通过或阶段 C 完成，也不要为这一台过载软解模拟器再盲目加时。
 
 ### 下一张卡：阶段C（用户指定的ARM64真机）
 

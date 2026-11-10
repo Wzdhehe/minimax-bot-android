@@ -132,10 +132,11 @@ internal object BotRuntimeManager {
     }
     fun descriptorWhenSettled(reply: (Map<String, String>?) -> Unit) {
         readers.execute {
-            // First-install seeding took 62s in the API35 product run. Keep
-            // the UI waiting within the launcher's existing 90s startup
-            // budget instead of declaring a still-starting service absent.
-            val deadline = System.nanoTime() + 90_000_000_000L
+            // The UI wait follows the shared start budget (180s) so it never
+            // declares a still-starting service absent before the runtime
+            // budget elapses. The old value was 90s, picked because
+            // first-install seeding took 62s in the API35 product run.
+            val deadline = System.nanoTime() + BotRuntimeStartBudget.DESCRIPTOR_WAIT_NANOS
             var descriptor: Map<String, String>? = null
             do {
                 descriptor = BotRuntimeEndpoint.descriptor()

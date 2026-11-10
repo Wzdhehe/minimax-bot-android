@@ -149,7 +149,7 @@ internal class BotRuntimeExecution(private val context: Context, private val cha
             catch (_: LinkageError) { if (!closing.get()) fail("bot_runtime_assets_unavailable") }
             finally { startDone.countDown() }
         }
-        deadlines.schedule({ if (run.phase == BotRuntimeCoordinator.Run.Phase.STARTING) fail("bot_runtime_start_timeout") }, 90, TimeUnit.SECONDS)
+        deadlines.schedule({ if (run.phase == BotRuntimeCoordinator.Run.Phase.STARTING) fail("bot_runtime_start_timeout") }, BotRuntimeStartBudget.START_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     }
     private fun send(target: IBinder, what: Int, body: Bundle = Bundle()) {
         body.putString("session", session)
