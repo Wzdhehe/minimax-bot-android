@@ -1,0 +1,32 @@
+{
+  "_license": "SPDX-License-Identifier: AGPL-3.0-only",
+  "_scope": "Reviewed manual ARM64 source candidate for Node consumer preparation only; NOT admitted by prepare-product.py and not a device result.",
+  "kind": "manual-linux-x86_64-producer-run",
+  "admittedForProduct": false,
+  "reviewedAt": "2026-11-10",
+  "abi": "arm64-v8a",
+  "androidApi": 26,
+  "ndkRevision": "27.3.13750724",
+  "archiveSha256": "424bee7cf1e9e2cae702fbb797a6a21aeb1ef0a90ab16fe78441a931eb7460ec",
+  "archiveSize": 43376124,
+  "librarySha256": "d46110d0505b2f55c13134c907689c0bc5dae35cd7821e2fa79409230ead0a93",
+  "configSha256": "5f0fd33ec8709e339f6ac8dc948f55cf57249b8fe328002590e62562ffb55efa",
+  "modifiedRecipeSha256": "4f843a5c3a9ff34a9228e8ac30b233aa344a8ee3bd35344fc753086659793166",
+  "versionsScriptSha256": "31727e9c467a5d2ea68ffc17e76cbe5603539cd48d32e454b4e2844d8feafb58",
+  "modifiedVersionsScriptSha256": "405be02b5f0c575cb03ac248d32a33952506c4b32ee95de172931e0aa0b64cfe",
+  "versions": {
+    "node": "24.22.2",
+    "modules": "137",
+    "icu": "78.3",
+    "unicode": "17.0"
+  },
+  "producer": {
+    "commit": "40c922a1d30f288ee065c77aa5bea66626dfaedf",
+    "inputs": {
+      "dsh-go/tooling/android-node-probe/node-arm64-source-build.json": "8bcf20f978b5963f8298cb73d3dbfc7645e477e35f85587df8982a327d53be70",
+      "dsh-go/tooling/android-node-probe/build-arm64-source.py": "068ee533ecbc4250cbf8cf817f96d550f570376a39180e2ab435fb3165878618",
+      "dsh-go/tooling/android-node-probe/build-source.py": "10e59bd34d6e6312a65fb0511c2df4523580c7b79938c439ca446318963df720",
+      "dsh-go/tooling/android-node-probe/node-source-build.json": "3b3376c31c1cdec2a13ff2582c5fa8c5b9c9608915c384467d7645620a23345e"
+    }
+  }
+}
