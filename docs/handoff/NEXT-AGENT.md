@@ -125,7 +125,7 @@
 | 256ca35 | ARM64候选审阅记录+Node消费者prepare-arm64-node.py及51项正反例 | 消费者51项OK；android-node-probe全目录149项OK（6项为既有directory_lease无编译器skip）；真实候选+真实NDK27d：消费者EXIT0、ARM64 libmbot_node_probe.so与libmbot_sqlite_probe.so真实编出并readelf核验；篡改1字节归档与重复输出均拒绝 | 当时未改prepare-product/Gradle；无ARM64设备 |
 | 498a151 | 缺锁定esbuild时跳过真实probe bundler测试 | 有依赖时该项仍执行；移走node_modules后明确skip并写原因；51项中该项skip时其余OK | 不跳过有依赖时的真实失败 |
 | 76f67a0 | prepare-product接通ARM64：只信审阅记录，完整来源/ABI/ELF/SQLite/backup闸门与28项正反例；x64仍走原admitted_native | test_product*.py 35项OK（原x64 7项未改）；probe 149项OK（6 skip）；真实prepare-product arm64与verify-only均EXIT0；混入x64库/错SHA/缺FD/陈旧头均拒绝；Gradle编出ARM64与x64调试APK（见上方面实测） | 未发布APK/Release；无ARM64设备；当时x64软解模拟器因FGS超时未见bot_ready，不作启动通过或产品失败结论 |
-| 本提交 | 阶段D：ForegroundStartGate 将 startForegroundService 推迟到主 Looper 空闲；onStartCommand 仍先 startForeground；IsolatedBotService 保持 isolatedProcess=true | ForegroundStartGateTest 6 项 + 相关 Runtime/BotRuntime 宿主单测共 78 项 OK；软解模拟器 bot_fgs_requested→bot_fgs_foreground（1.8s），无 FGS 超时/本包 ANR，隔离 UID u0i2 已核验 | 本轮 90 秒预算内未见 bot_ready（bot_runtime_start_timeout）；未发布 APK/Release；无 ARM64 设备；真实模型调用需用户配置 provider |
+| 622e830 | 阶段D：ForegroundStartGate 将 startForegroundService 推迟到主 Looper 空闲；onStartCommand 仍先 startForeground；IsolatedBotService 保持 isolatedProcess=true | ForegroundStartGateTest 6 项 + 相关 Runtime/BotRuntime 宿主单测共 78 项 OK；软解模拟器 bot_fgs_requested→bot_fgs_foreground（1.8s），无 FGS 超时/本包 ANR，隔离 UID u0i2 已核验 | 本轮 90 秒预算内未见 bot_ready（bot_runtime_start_timeout）；未发布 APK/Release；无 ARM64 设备；真实模型调用需用户配置 provider |
 
 复现上述准备器测试，从repo根运行：
 
