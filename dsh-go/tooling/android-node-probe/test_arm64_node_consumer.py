@@ -631,7 +631,12 @@ class Arm64NodeConsumerTest(unittest.TestCase):
         self.assertFalse(self.output.exists())
         self.assertEqual([], list(self.output.parent.glob('*.partial-*')))
 
+    # The real bundler needs node and the locked model-sdk-probe esbuild
+    # (npm ci --ignore-scripts --prefix dsh-go/tooling/model-sdk-probe). Skip
+    # only when either is absent; with both present, any failure is reported.
     @unittest.skipUnless(shutil.which('node'), 'node is not installed')
+    @unittest.skipUnless((HERE.parent / 'model-sdk-probe/node_modules/esbuild/lib/main.js').is_file(),
+                         'model-sdk-probe esbuild is not installed (run npm ci --ignore-scripts there)')
     def test_the_real_probe_bundler_still_produces_the_probe_asset(self):
         with patch.object(self.module.subprocess, 'run', side_effect=self.fake_run), \
              contextlib.redirect_stdout(io.StringIO()):
