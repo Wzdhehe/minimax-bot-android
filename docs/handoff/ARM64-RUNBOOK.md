@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # ARM64执行手册：把编译、来源核验、产品准入分开
 
-适用：feat/t-plugins，2026-11-07。先读[当前状态](../HANDOFF.md)和[下一位合同](NEXT-AGENT.md)。本手册刻意给出停止点；**遇错不要自行取消安全检查或扩大写入范围。**
+适用：feat/t-plugins，2026-11-07；2026-11-10补A/C1实际结果（见文末）。先读[当前状态](../HANDOFF.md)和[下一位合同](NEXT-AGENT.md)。本手册刻意给出停止点；**遇错不要自行取消安全检查或扩大写入范围。**
 
 ## 当前到底有什么
 
@@ -188,3 +188,26 @@ A/B成功以后按[NEXT-AGENT阶段B/C](NEXT-AGENT.md)做。**SQLite固定ABI选
 允许路径要在具体卡里列明。不得顺手改x64的旧五个权威输入、vendor快照、Key边界、UID/Binder/backup/文件保护或UI；不把候选库接进产品后就称手机通过。arm64 flavor已经存在只表示构建配置，不表示引擎输入可用。原有x64产品与20项ARM64源码/来源测试、5项x64来源测试应继续通过。
 
 最终要分别报告：**候选编译、来源授权、消费者准备、APK构建、设备启动、真实模型**。缺哪一步就留在哪一步，不按“做了很多代码”推算完成百分比。
+
+## 2026-11-10实际结果：A候选与C1消费者
+
+- **A**：手工候选已编出并复核（见[NEXT-AGENT阶段A](NEXT-AGENT.md)），审阅结论在[node-arm64-candidate.json](../../dsh-go/tooling/android-node-probe/node-arm64-candidate.json)。producer四输入以后若改变，消费者会拒绝此候选，必须重新生产与审阅，不改记录迎合。
+- **C1**：从repo根，提交审阅记录后：
+
+```bash
+python3 dsh-go/tooling/android-node-probe/prepare-arm64-node.py \
+  --ndk "$MBOT_NDK" --archive "$MBOT_ARM64_ARCHIVE"
+python3 dsh-go/tooling/android-node-probe/prepare-sqlite.py --abi arm64-v8a \
+  --ndk "$MBOT_NDK" --esbuild "$MBOT_ESBUILD_EXECUTABLE" --archive "$MBOT_SQLITE_ARCHIVE"
+python3 -m unittest discover -s dsh-go/tooling/android-node-probe -p 'test_arm64_node_consumer.py' -v
+```
+
+2026-11-10云端Linux x86_64实测：两条准备命令均EXIT0；输出build/abi/arm64-v8a/verified-jni/arm64-v8a下libnode（`d46110d0…`）、NDK libc++_shared（API21 ident，按预编运行库允许≤26）、真实编出的libmbot_node_probe.so（95,608字节，`864156b8…21a4`）、libmbot_sqlite_probe.so（2,170,624字节，`8e8eb0ca…78ff`，36条defines，SQLite3.53.2）；三者readelf为AArch64、API26、LOAD 0x4000，NEEDED仅libnode/libc++_shared/libc/libm/libdl。node-validation.json：requiresIntl/requiresSqlite/requiresFdVfs均true，admittedForProduct=false。**prepare-backup尚未跑ARM64，prepare-product仍拒绝ARM64，无APK、无设备。** 这些产物不入库。
+
+- **模拟器边界**：云机/dev/kvm对box用户不可用（emulator-check accel实测无权限），仅有API35 x86_64镜像/AVD；软件模拟只可回归x64，**不能产生ARM64设备证据**。
+
+### 下一张卡B2（产品准入，单独一卡）
+
+1. prepare-backup.py对arm64-v8a的真实编译（已支持两ABI，确认输入与输出目录）。
+2. prepare-product.py：ARM64分支要求build/abi/arm64-v8a的node-validation（requiresIntl/Sqlite/FdVfs、admittedForProduct=false来自消费者，**由产品闸门而非消费者决定准入**）、node-headers.json与审阅记录SHA、各.so ELF/ABI/16KiB、SQLite/backup build-inputs一致；正反例覆盖混入x64库、陈旧/篡改输入、缺Intl/SQLite/FD元数据。然后才替换"not yet admitted"拒绝。
+3. Gradle arm64 flavor exact-input校验与APK内容检查（引擎/JS/许可证、未压缩库）。x64 prepare-product与Gradle闸门须回归不变。

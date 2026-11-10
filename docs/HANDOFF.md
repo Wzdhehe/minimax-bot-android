@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 当前开发状态与验收基线
 
-更新：2026-11-07。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。最新后续阶段补ARM64候选编译/来源链及SQLite双ABI准备隔离，尚未改变已验x64产品代码或放开ARM64产品准入。[接手启动提示词与最后增量](handoff/NEXT-AGENT.md)可直接转发；[ARM64手册](handoff/ARM64-RUNBOOK.md)含Ubuntu长编译任务、精确目录和下一张消费者小卡。
+更新：2026-11-10。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。最新阶段（2026-11-10）：Ubuntu手工ARM64 full-ICU候选已编出并经独立复核，提交审阅记录[node-arm64-candidate.json](../dsh-go/tooling/android-node-probe/node-arm64-candidate.json)与ARM64 Node消费者prepare-arm64-node.py，并用真实NDK编出ARM64 JNI胶水与SQLite addon；尚未改变已验x64产品代码，**prepare-product仍拒绝ARM64，未建ARM64 APK，未上设备**。[接手启动提示词与最后增量](handoff/NEXT-AGENT.md)可直接转发；[ARM64手册](handoff/ARM64-RUNBOOK.md)含Ubuntu长编译任务、精确目录和下一张消费者小卡。
 
 ## 当前结论
 
@@ -64,7 +64,7 @@ flowchart LR
 
 | 优先级 | 工作 | 明确缺口 |
 |---|---|---|
-| P0 | ARM64手机产品链 | 独立producer/CI/Actions来源检查已有，20项ARM64、5项原x64来源测试通过。SQLite新增固定双ABI目标、独立目录与headers/ELF拒绝，26项通过；backup宿主11项、原Node宿主6项回归通过。均非真实ARM64编译证据。Node输入消费者/产品准入仍缺，prepare-product继续拒绝；最新ARM64 CI因计费未启动。逐步命令见[ARM64手册](handoff/ARM64-RUNBOOK.md) |
+| P0 | ARM64手机产品链 | **A完成**：手工候选（40c922a producer，内层归档SHA256 `424bee7c…60ec`，libnode `d46110d0…0a93`）复核通过。**B1完成**：prepare-arm64-node.py只信已提交审阅记录，校验producer四输入/祖先commit、归档字节、安全解包、recipe/ABI/ICU/头/ELF(API26、16KiB LOAD、依赖白名单)，写入build/abi/arm64-v8a；51项正反例通过，全目录149项OK(6项既有skip)。真实NDK编出ARM64 libmbot_node_probe.so与libmbot_sqlite_probe.so（36 defines，AArch64/API26/16KiB）。**B2缺**：prepare-product/Gradle的ARM64来源/资产闸门与反例，拒绝仍在；无ARM64设备，KVM不可用。详见[ARM64手册](handoff/ARM64-RUNBOOK.md) |
 | P0并行小项 | 逐字流式/停止观察 | 可用本机已安装的e9d0beb，不必先重编；记录真实增量及首token后停止。不要把完整suite重跑当进展 |
 | P1 | effort与多模态 | 五档effort、1M上下文、模态只是可配置；真实provider是否收到/接受尚未验证。附件上传不等于附件入模 |
 | P1 | Bot工具/协作/定时 | 每Bot设置与同源任务界面已有；真实模型工具回合、Bot可信MCP caller、自建任务/到点执行、群聊/helper联动未端到端验收 |
