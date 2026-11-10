@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 当前开发状态与验收基线
 
-更新：2026-11-10。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。最新阶段（2026-11-10）：**B2已完成**（产品准入与ARM64调试APK）。手工full-ICU候选已复核并写入[审阅记录](../dsh-go/tooling/android-node-probe/node-arm64-candidate.json)；prepare-arm64-node.py与真实NDK编出ARM64 JNI/SQLite/backup；prepare-product在完整正反例闸门后接通ARM64，Gradle arm64 flavor已编出调试APK（本机产物，未入库）。**仍不是已发布版本，也未经ARM64设备验证，不能称手机可用。** 下一步是[阶段C](handoff/NEXT-AGENT.md)：仅在用户指定的ARM64真机上验收。[接手启动提示词与最后增量](handoff/NEXT-AGENT.md)可直接转发；[ARM64手册](handoff/ARM64-RUNBOOK.md)含编译、消费者与产品准入的实测记录。
+更新：2026-11-10。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。最新阶段（2026-11-10）：**B2已完成**（产品准入与ARM64调试APK）；**阶段D已合入**（前台服务启动顺序：`startForegroundService`推迟到主 Looper 空闲后才调用，`IsolatedBotService`仍为 isolatedProcess=true，Node 不回主进程）。软解模拟器上 FGS 超时已消除，但本轮 90 秒启动预算内未见 bot_ready，**不能称启动全流程已通，也不能称手机可用。** 下一步仍是[阶段C](handoff/NEXT-AGENT.md)：仅在用户指定的ARM64真机上验收。[接手启动提示词与最后增量](handoff/NEXT-AGENT.md)可直接转发；[ARM64手册](handoff/ARM64-RUNBOOK.md)含编译、消费者、产品准入与阶段D实测记录。
 
 ## 当前结论
 
@@ -65,6 +65,7 @@ flowchart LR
 | 优先级 | 工作 | 明确缺口 |
 |---|---|---|
 | P0 | ARM64设备验收（阶段C） | **A/B已完成**：手工候选（40c922a producer，内层归档SHA256 `424bee7c…60ec`，libnode `d46110d0…0a93`）复核通过。B1消费者与真实NDK JNI/SQLite addon已落地。B2：prepare-backup双ABI真实编出；prepare-product ARM64闸门与28项正反例（加原x64 7项共35项OK）后解除拒绝；ARM64调试APK 295,445,843字节，SHA256 `6331421c…622f`，仅arm64-v8a，product-inputs 26项全部命中，`.so`均为stored且16KiB对齐，extractNativeLibs=false，无MANAGE_EXTERNAL_STORAGE。x64 APK重编后 lib/ 与 assets/mbot/ 与498a151基线逐项摘要相同。**C缺**：无ARM64设备，KVM不可用，不能拿x64软解模拟器补勾。详见[ARM64手册](handoff/ARM64-RUNBOOK.md) |
+| P0（已合入，残留） | x64 FGS启动顺序（阶段D） | **已合入**：`startForegroundService`不再在 `provideFlutterEngine`/`onAttachedToEngine` 里同步调用，改由 `ForegroundStartGate` 等到主 Looper 空闲。IsolatedBotService 仍 isolatedProcess=true。宿主单测 78 项 OK（含 ForegroundStartGateTest 6 项）。软解模拟器（API35，无KVM）install -r 后 19:18:01 `bot_fgs_requested`、19:18:03 `bot_fgs_foreground`（间隔约 1.8s），无 ForegroundServiceDidNotStartInTimeException，无本包 ANR；IsolatedBotService 以独立 UID `u0i2`（kill 记录 `u0a209i2`，非应用 UID `u0_a209`）启动并 `bot_isolated_peer_verified`。**未见 bot_ready**：19:19:33 `bot_runtime_start_timeout`（自 onStartCommand 起 90 秒，隔离进程仍在加载 Node/备份 worker）。未放宽该 90 秒预算。无 Key，真实模型文本/流式/取消仍写“需用户在 App 配置 provider 后验证”。 |
 | P0并行小项 | 逐字流式/停止观察 | 可用本机已安装的e9d0beb，不必先重编；记录真实增量及首token后停止。不要把完整suite重跑当进展 |
 | P1 | effort与多模态 | 五档effort、1M上下文、模态只是可配置；真实provider是否收到/接受尚未验证。附件上传不等于附件入模 |
 | P1 | Bot工具/协作/定时 | 每Bot设置与同源任务界面已有；真实模型工具回合、Bot可信MCP caller、自建任务/到点执行、群聊/helper联动未端到端验收 |

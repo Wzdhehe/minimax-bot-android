@@ -19,6 +19,8 @@ internal object BotRuntimeManager {
     private var lastCode: String? = null
     private var restart = false
     private var launchRequested = false
+    private var gate: ForegroundStartGate? = null
+    private var gateContext: Context? = null
     private val main = Handler(Looper.getMainLooper())
     private val listeners = CopyOnWriteArraySet<() -> Unit>()
     private val readers = Executors.newFixedThreadPool(2)
@@ -35,10 +37,41 @@ internal object BotRuntimeManager {
             launchRequested = true
         }
         changed()
-        val intent = Intent(context, BotRuntimeService::class.java).setAction(BotRuntimeService.START)
-        try {
-            if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent) else context.startService(intent)
-        } catch (_: Exception) { synchronized(lock) { launchRequested = false; if (current == null) lastCode = "bot_start_unavailable" }; changed() }
+        gateFor(context).request()
+    }
+    /**
+     * Stage D: startForegroundService() arms the system startForeground() timer,
+     * but BotRuntimeService.onStartCommand only runs on the main thread. Arming
+     * it while the engine is still being built (Dart entrypoint, plugin
+     * registration and first frame queued behind us) made the system kill the
+     * service with ForegroundServiceDidNotStartInTimeException. The real start
+     * is therefore deferred to the next idle moment of the main looper.
+     */
+    private fun gateFor(context: Context): ForegroundStartGate {
+        val app = context.applicationContext
+        return synchronized(lock) {
+            val existing = gate
+            if (existing != null && gateContext === app) existing
+            else {
+                val created = ForegroundStartGate(
+                    whenIdle = { task -> main.post { Looper.myQueue().addIdleHandler { task(); false } } },
+                    launch = { startService(app) },
+                    onLaunchFailed = { launchUnavailable() },
+                )
+                gate = created
+                gateContext = app
+                created
+            }
+        }
+    }
+    private fun startService(app: Context) {
+        android.util.Log.i("MiniMaxBotRuntime", "bot_fgs_requested")
+        val intent = Intent(app, BotRuntimeService::class.java).setAction(BotRuntimeService.START)
+        if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(intent) else app.startService(intent)
+    }
+    private fun launchUnavailable() {
+        synchronized(lock) { launchRequested = false; if (current == null) lastCode = "bot_start_unavailable" }
+        changed()
     }
     fun start(context: Context) {
         val execution = synchronized(lock) {
@@ -79,6 +112,7 @@ internal object BotRuntimeManager {
     fun attach(context: Context) { activeContext = context.applicationContext }
     fun stop() {
         val execution = synchronized(lock) { restart = false; launchRequested = false; current }
+        gate?.cancel()
         execution?.run?.close()
         if (execution != null) onExecutionChanged(execution) else changed()
     }

@@ -26,6 +26,7 @@ class BotRuntimeService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         foreground(notification())
+        android.util.Log.i("MiniMaxBotRuntime", "bot_fgs_foreground")
         if (intent?.action == STOP) BotRuntimeManager.stop() else BotRuntimeManager.start(this)
         update()
         return START_NOT_STICKY
