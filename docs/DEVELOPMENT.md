@@ -67,6 +67,7 @@ SQLite归档是钉住的12.11.1 better-sqlite3.tgz，SHA256 `ebf0ed75a7a59dbcb3b
 repo根、干净钉点checkout、全新输出子目录：
 
 ```bash
+mkdir -p "$MBOT_STAGE"
 node dsh-go/runtime/minimax-bot-host/build-runtime-bundle.mjs \
   --source "$MBOT_WEBUI_SOURCE" \
   --esbuild-module dsh-go/tooling/model-sdk-probe/node_modules/esbuild/lib/main.js \
@@ -99,6 +100,17 @@ python3 dsh-go/tooling/mobile-runtime-bundle/prepare-product.py --abi arm64-v8a 
 
 
 ## 按修改面验证，不重复全仓
+
+虚拟文件系统/附件改动先真实构建mobile bundle，再跑其产物，不用未编译源码替代打包验证：
+
+```bash
+MBOT_MOBILE_FS_BUNDLE="$MBOT_STAGE/mobile/filesystem.mjs" \
+ESBUILD_MODULE="$PWD/dsh-go/tooling/model-sdk-probe/node_modules/esbuild/lib/main.js" \
+node --test dsh-go/tooling/mobile-runtime-bundle/test-filesystem.mjs \
+  dsh-go/tooling/mobile-runtime-bundle/test-uploads.mjs
+```
+
+11-11此组合6项全过；`bot-host.yml`现有上游构建job已加实际mobile构建与此检查。这里只是宿主JS/文件/真实官方HTTP服务；未编Android JNI、未跑设备。修改mobile-filesystem必须重建mobile与prepare-product才能进入APK，Node本体和未变的SQLite/backup无需因此重编。
 
 常见Node/model改动，从repo根：
 

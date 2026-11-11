@@ -40,6 +40,7 @@ export function installMobileFilesystem({ files, assets = [], code = null, metad
   const volume = new Volume(), memory = createFsFromVolume(volume), descriptors = new Map(), restores = [];
   const contentCache = new Map(), acknowledged = new Set();
   let previousChunks = new Set();
+  let publishedManifest = null;
   const persistent = [runtimeRoot, workspaceRoot];
   const uploadsRoot = path.join(workspaceRoot, '.mbot/uploads');
   const sqlite = path.join(runtimeRoot, 'v2/sqlite');
@@ -135,6 +136,9 @@ export function installMobileFilesystem({ files, assets = [], code = null, metad
         volume.chmodSync(name, entry.mode);
         volume.utimesSync(name, entry.mtimeMs / 1000, entry.mtimeMs / 1000);
       }
+      // Reuse only a completely validated, restored commit. A malformed
+      // manifest or missing/corrupt blob must still refuse the whole start.
+      publishedManifest = Buffer.from(bytes);
     } catch { throw fault('mobile_fs_state_invalid'); }
   }
   volume.mkdirSync(path.join(sqlite, 'backups'), { recursive: true, mode: 0o700 });
@@ -198,7 +202,15 @@ export function installMobileFilesystem({ files, assets = [], code = null, metad
       }
       persistent.forEach((root, index) => walk(root, index));
       const bytes = Buffer.from(JSON.stringify({ version: 2, entries }));
-      if (bytes.length > MAX || files.replaceSync(STATE, bytes) !== 'published') throw Error();
+      if (bytes.length > MAX) throw Error();
+      // Startup repeatedly ensures directories, modes and syncs. If their
+      // durable representation is unchanged, the last confirmed commit is
+      // still authoritative: do not send another Binder/write/fsync round.
+      // Real changes still commit synchronously; UNKNOWN poisons execution
+      // before this shortcut can ever be used again. No batching or delay.
+      if (publishedManifest?.equals(bytes)) return;
+      if (files.replaceSync(STATE, bytes) !== 'published') throw Error();
+      publishedManifest = Buffer.from(bytes);
       // The manifest replacement is the sole commit point. Only now may a
       // former blob be retired. Failed optional cleanup cannot undo success.
       for (const hash of previousChunks) if (!referenced.has(hash) && typeof files.removeSync === 'function') {

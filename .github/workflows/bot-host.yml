@@ -16,6 +16,7 @@ on:
       - 'dsh-go/tooling/android-node-probe/prepare-sqlite.py'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
       - 'dsh-go/tooling/runtime-host-probe/**'
+      - 'dsh-go/tooling/mobile-runtime-bundle/**'
       - 'packages/mbot-workspace-guard/**'
       - 'docs/UPSTREAM-RUNTIME.md'
       - '.github/workflows/bot-host.yml'
@@ -34,6 +35,7 @@ on:
       - 'dsh-go/tooling/android-node-probe/prepare-sqlite.py'
       - 'dsh-go/runtime/vendor/minimax-bot/**'
       - 'dsh-go/tooling/runtime-host-probe/**'
+      - 'dsh-go/tooling/mobile-runtime-bundle/**'
       - 'packages/mbot-workspace-guard/**'
       - 'docs/UPSTREAM-RUNTIME.md'
       - '.github/workflows/bot-host.yml'
@@ -149,6 +151,18 @@ jobs:
           node dsh-go/runtime/minimax-bot-host/build-runtime-bundle.mjs \
             --source "$WEBUI_SOURCE" --esbuild-module "$ESBUILD_MODULE" \
             --out-dir "$RUNNER_TEMP/mbot-real-host"
+      - name: Install locked mobile JS dependencies without lifecycle scripts
+        working-directory: dsh-go/tooling/mobile-runtime-bundle
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build the actual mobile bundle and verify persistence and uploads
+        env:
+          MBOT_MOBILE_FS_BUNDLE: ${{ runner.temp }}/mbot-mobile/filesystem.mjs
+        run: |
+          node dsh-go/tooling/mobile-runtime-bundle/build.mjs \
+            "$GITHUB_WORKSPACE/upstream-runtime" "$RUNNER_TEMP/mbot-real-host" \
+            "$ESBUILD_MODULE" "$RUNNER_TEMP/mbot-mobile"
+          node --test dsh-go/tooling/mobile-runtime-bundle/test-filesystem.mjs \
+            dsh-go/tooling/mobile-runtime-bundle/test-uploads.mjs
       - name: Download and prepare the verified Linux-only SQLite host addon
         run: |
           curl -fL --retry 2 --max-time 120 \

@@ -46,6 +46,40 @@ if(phase==='write'){
  assert.throws(()=>fs.writeFileSync('/work/uncertain','accepted but receipt lost'),{code:'mobile_fs_outcome_unknown'});
  assert.equal(commits,before+1);
  assert.throws(()=>fs.readFileSync('/work/uncertain'),{code:'mobile_fs_outcome_unknown'});
+}else if(phase==='noops'||phase==='seed-noops'||phase==='restored-noops'){
+ if(phase!=='restored-noops'){
+  fs.mkdirSync('/work/initialized',{recursive:true});
+  fs.writeFileSync('/work/initialized/config','durably saved',{mode:0o600});
+ }else{
+  // Recreating the private SQLite namespace can change its virtual parent's
+  // mtime. If so, the first operation must publish that real metadata change.
+  fs.mkdirSync('/work/initialized',{recursive:true});assert.ok(commits<=1);
+ }
+ const file='/work/initialized/config', before=commits, info=fs.statSync(file);
+ // Typical repeated startup setup: all operations still run in memfs, but
+ // none changes any field in the already acknowledged durable manifest.
+ for(let i=0;i<50;i++){
+  fs.mkdirSync('/work/initialized',{recursive:true});
+  fs.utimesSync(file,info.atime,info.mtime);
+ }
+ await fs.promises.mkdir('/work/initialized',{recursive:true});
+ const handle=await fs.promises.open(file,'r+');
+ await handle.sync();await handle.datasync();await handle.close();
+ assert.equal(commits,before,'unchanged startup metadata must not republish the durable manifest');
+ assert.equal(fs.readFileSync(file,'utf8'),'durably saved');
+ if(phase==='seed-noops')process.exit(0);
+ // Actual metadata and content changes retain synchronous commit receipts.
+ fs.chmodSync(file,0o640);assert.equal(commits,before+1);
+ fs.writeFileSync(file,'changed and saved');assert.equal(commits,before+2);
+ fs.chmodSync(file,0o600);assert.equal(commits,before+3);
+ fs.writeFileSync(file,'durably saved');assert.equal(commits,before+4);
+ uncertain=true;
+ const after=commits;
+ fs.mkdirSync('/work/initialized',{recursive:true});assert.equal(commits,after);
+ assert.throws(()=>fs.writeFileSync(file,'lost receipt on a real change'),{code:'mobile_fs_outcome_unknown'});
+ assert.equal(commits,after+1);
+ assert.throws(()=>fs.chmodSync(file,0o600),{code:'mobile_fs_outcome_unknown'});
+ assert.equal(commits,after+1,'unknown outcomes must never be deduplicated into success or retried');
 }
 process.exit(0);
 `;
@@ -75,4 +109,10 @@ test('a corrupt persisted blob refuses the entire restored execution without cre
   const name = readdirSync(root).find((name) => name.startsWith('fsblob-'));
   assert.ok(name); writeFileSync(join(root, name), Buffer.from('corrupt bytes'));
   run(root, 'corrupt');
+});
+test('unchanged startup metadata avoids Main publications while real changes and unknown receipts keep their semantics', (t) => {
+  run(fixture(t), 'noops');
+});
+test('a new process may reuse only the validated restored manifest for unchanged metadata', (t) => {
+  const root=fixture(t);run(root,'seed-noops');run(root,'restored-noops');
 });

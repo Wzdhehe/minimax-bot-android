@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 当前开发状态与验收基线
 
-更新：2026-11-10。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。最新阶段（2026-11-10）：**B2已完成**（产品准入与ARM64调试APK）；**阶段D已合入**（FGS 启动顺序 + 将我们自己的启动预算从 90 秒提到 180 秒并抽成 `BotRuntimeStartBudget`）。`IsolatedBotService`仍为 isolatedProcess=true，Node 不回主进程。软解模拟器上 FGS 超时已消除，但 180 秒预算内仍未见 bot_ready，**不能称启动全流程已通，也不能称手机可用。** 下一步仍是[阶段C](handoff/NEXT-AGENT.md)：仅在用户指定的ARM64真机上验收。[接手启动提示词与最后增量](handoff/NEXT-AGENT.md)可直接转发；[ARM64手册](handoff/ARM64-RUNBOOK.md)含编译、消费者、产品准入与阶段D实测记录。
+更新：2026-11-11。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。**B2已完成**（产品准入与ARM64调试APK）；**阶段D已合入**（FGS启动顺序及180秒有限启动预算）。11-11又减少了虚拟文件系统中状态未变时的重复Main提交，宿主组合验证见下文；**尚无新Android启动结果**。`IsolatedBotService`仍为isolatedProcess=true，Node不回主进程。此前软解模拟器180秒内未见bot_ready，不把“机器慢”当已证实的完整根因。阶段C仍须用户指定ARM64设备验收。[接手合同](handoff/NEXT-AGENT.md)与[ARM64手册](handoff/ARM64-RUNBOOK.md)保留具体构建与设备边界。
 
 ## 当前结论
 
@@ -47,6 +47,7 @@ flowchart LR
 | 附件 | 同阶段真实系统选择器、上传、预览/移除/取消选择已验；**尚未证明附件进入真实模型并被理解** |
 | SQLite与快照 | 31d5864 broker组件1/23项通过；5962d4b Node组合2/58项通过，含活WAL备份、只读/冻结、错身份拒绝、删除后已授予只读FD继续可读。API35/x86_64，不能扩成断电恢复或ARM64设备 |
 | 云端最新回归 | e9d0beb：Node124项零skip（实际gateway包装内部15项）、App相关widget19项、analyze零问题、l10n5554键。完整产品host夹具实际probe→Bot/原Anthropic SDK→native FD模拟供应商→文字落库，及native拒绝明确失败且不重提；未使用真实Key |
+| 11-11持久化优化 | 已确认清单字节完全相同时，不再重复Main发布；真实变化仍同步发布，UNKNOWN仍毒化执行。实际partial/mobile bundle重建（2124上游输入、780资源）后，文件恢复/硬链接/损坏拒绝/UNKNOWN/官方HTTP附件共6项通过、0 skip。新夹具在改动前两项失败（104次提交，初始化仅需2次），改后同样102次无变化操作不再发布；不是设备耗时或启动通过证据 |
 
 产品小卡 [T-Flash-RealProviderTurn](handoff/T-Flash-RealProviderTurn.md) **已结项**。本机完整报告留在 D:/mbotapp/docs/research/flash-real-provider-turn.md，未提交；其它 flash-*.md 同理。接手不要假定云端能读 D 盘，也不要为补证据扫描凭据或整机日志。
 

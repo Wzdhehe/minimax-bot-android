@@ -1,7 +1,9 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 下一位 agent 的开发合同
 
-更新：2026-11-10。这是当前接手顺序，旧专题卡的“下一步”不覆盖本文件。历史详见[整理前版本](https://github.com/Wzdhehe/minimax-bot-android/blob/e9d0bebd5fc2487b87d3b5a77b32c2107a0fe54e/docs/handoff/NEXT-AGENT.md)。用户因GPT即将到期要求详细交接，不应再让用户重新讲一遍架构。可直接转发给Ubuntu agent的编译卡、逐步命令与失败处理见[ARM64执行手册](ARM64-RUNBOOK.md)。
+更新：2026-11-11。这是当前接手顺序，旧专题卡的“下一步”不覆盖本文件。历史详见[整理前版本](https://github.com/Wzdhehe/minimax-bot-android/blob/e9d0bebd5fc2487b87d3b5a77b32c2107a0fe54e/docs/handoff/NEXT-AGENT.md)。用户要求详细交接，不应再让用户重新讲一遍架构。ARM64已完成候选、消费与调试包，设备仍缺；命令与精确边界见[ARM64执行手册](ARM64-RUNBOOK.md)。
+
+**11-11新增（启动开销）**：`mobile-filesystem.mjs`缓存已验证恢复/确实published的清单，只在下一次持久表示字节完全相同时跳过重复Main发布，不延迟或合并真实变更；UNKNOWN依旧先毒化，不能命中缓存当成功。完整partial/mobile与官方HTTP上传组合6项通过、0 skip；新增两项在旧实现上失败（102次无变化操作仍有102次重复发布）。已加CI真实mobile构建/此组合检查。**未编新APK/未验设备**，不能据此宣布180秒启动问题已解决，也不能断言全部都是模拟器速度问题。下一次打包必须重建mobile/prepare-product，不改Node源码pin、不再盲目加超时。
 
 ## 先做什么
 
