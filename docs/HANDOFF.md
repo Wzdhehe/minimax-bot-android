@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # 当前开发状态与验收基线
 
-更新：2026-11-11。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。**B2已完成**（产品准入与ARM64调试APK）；**阶段D已合入**（FGS启动顺序及180秒有限启动预算）。11-11又减少了虚拟文件系统中状态未变时的重复Main提交，宿主组合验证见下文；**尚无新Android启动结果**。`IsolatedBotService`仍为isolatedProcess=true，Node不回主进程。此前软解模拟器180秒内未见bot_ready，不把“机器慢”当已证实的完整根因。阶段C仍须用户指定ARM64设备验收。[接手合同](handoff/NEXT-AGENT.md)与[ARM64手册](handoff/ARM64-RUNBOOK.md)保留具体构建与设备边界。
+更新：2026-11-11。**本文件和 [NEXT-AGENT](handoff/NEXT-AGENT.md) 覆盖旧专题卡中的“当前/下一步”。** 下一位先读 AGENTS.md、本文件、NEXT-AGENT、[开发命令](DEVELOPMENT.md)、[隔离约束](sandbox.md)。**B2已完成**（产品准入与ARM64调试APK）；**阶段D已合入**（FGS启动顺序及180秒有限启动预算）。11-11减少无变化文件清单的重复Main提交，并补固定启动阶段与bootstrap停止信号接线，宿主组合验证见下文；**新JNI/新APK/新Android启动仍未验证**。`IsolatedBotService`仍为isolatedProcess=true，Node不回主进程。此前软解模拟器180秒内未见bot_ready，不把“机器慢”当已证实的完整根因。可给Windows本机一次[启动定位卡](handoff/T-Flash-StartupTrace.md)；阶段C仍须用户指定ARM64设备。[接手合同](handoff/NEXT-AGENT.md)与[ARM64手册](handoff/ARM64-RUNBOOK.md)保留具体构建与设备边界。
 
 ## 当前结论
 
@@ -48,6 +48,7 @@ flowchart LR
 | SQLite与快照 | 31d5864 broker组件1/23项通过；5962d4b Node组合2/58项通过，含活WAL备份、只读/冻结、错身份拒绝、删除后已授予只读FD继续可读。API35/x86_64，不能扩成断电恢复或ARM64设备 |
 | 云端最新回归 | e9d0beb：Node124项零skip（实际gateway包装内部15项）、App相关widget19项、analyze零问题、l10n5554键。完整产品host夹具实际probe→Bot/原Anthropic SDK→native FD模拟供应商→文字落库，及native拒绝明确失败且不重提；未使用真实Key |
 | 11-11持久化优化 | 已确认清单字节完全相同时，不再重复Main发布；真实变化仍同步发布，UNKNOWN仍毒化执行。实际partial/mobile bundle重建（2124上游输入、780资源）后，文件恢复/硬链接/损坏拒绝/UNKNOWN/官方HTTP附件共6项通过、0 skip。新夹具在改动前两项失败（104次提交，初始化仅需2次），改后同样102次无变化操作不再发布；不是设备耗时或启动通过证据 |
+| 11-11启动与停止接线 | 新增13个静态阶段，JNI→Kotlin只发允许列表、单调、每项最多一次，停止即关闭；不是ready收据。bootstrap现在把停止转换成AbortSignal传到原runtime，之前只更新本地stopping标记，未传signal。实际bootstrap控制流/FD启动/阶段JS共19项、真实钉点gateway包装1项（内部15项）及Kotlin门5项通过；旧bootstrap在新“启动中停止”用例失败。消费者51/产品闸门35项回归通过（夹具非编译）。完整mobile JS重建为18,905,102字节/780资源，再跑文件与HTTP附件6项通过。**无NDK，未编新JNI/APK、未在设备执行** |
 
 产品小卡 [T-Flash-RealProviderTurn](handoff/T-Flash-RealProviderTurn.md) **已结项**。本机完整报告留在 D:/mbotapp/docs/research/flash-real-provider-turn.md，未提交；其它 flash-*.md 同理。接手不要假定云端能读 D 盘，也不要为补证据扫描凭据或整机日志。
 

@@ -22,7 +22,7 @@ export { readRuntimeDescriptor, readRuntimeDescriptorFd };
 // separate argument: the descriptor is the trust boundary, so the guest
 // cannot be handed a catalog the host never wrote, and a descriptor that
 // breaks the field policy is refused before anything is projected.
-export async function createBuiltinBotRuntime({ dataDir, appVersion, signal, descriptor = null, probe = null, nativeBinding = null, nativeSqlite = null }) {
+export async function createBuiltinBotRuntime({ dataDir, appVersion, signal, descriptor = null, probe = null, nativeBinding = null, nativeSqlite = null, onStartupPhase }) {
   const sqlite = nativeSqlite === null ? null : bindRuntimeSqlite({ dataDir,
     open: typeof nativeSqlite?.open === 'function' ? nativeSqlite.open.bind(nativeSqlite) : null,
     backup: typeof nativeSqlite?.backup === 'function' ? nativeSqlite.backup.bind(nativeSqlite) : nativeSqlite?.backup,
@@ -30,7 +30,7 @@ export async function createBuiltinBotRuntime({ dataDir, appVersion, signal, des
     metadata: typeof nativeSqlite?.metadata === 'function' ? nativeSqlite.metadata.bind(nativeSqlite) : nativeSqlite?.metadata,
     snapshots: nativeSqlite?.snapshots });
   try {
-    const runtime = await createBotRuntimeSession({ dataDir, signal, catalog: catalogFromDescriptor(descriptor), probe, nativeBinding, startHost: ({ dataDir: root }) =>
+    const runtime = await createBotRuntimeSession({ dataDir, signal, catalog: catalogFromDescriptor(descriptor), probe, nativeBinding, onStartupPhase, startHost: ({ dataDir: root }) =>
       createWebuiRuntimeHost({ dataDir: root, appVersion, mcodeToolsRequested: false }) });
     if (!sqlite) return runtime;
     let closing;

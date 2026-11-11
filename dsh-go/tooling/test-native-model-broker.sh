@@ -34,6 +34,8 @@ done
   "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/BotLoopbackBridge.kt" \
   "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/BotConnectionGrants.kt" \
   "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/BotRuntimeCoordinator.kt" \
+  "$root_dir/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/BotRuntimeStartupProgress.kt" \
+  "$root_dir/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/runtime/BotRuntimeStartupProgressTest.kt" \
   "$root_dir/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/bot/BotRuntimeCoordinatorTest.kt" \
   "$root_dir/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/bot/BotConnectionGrantsTest.kt" \
   "$root_dir/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/bot/BotLoopbackBridgeTest.kt" \
@@ -53,6 +55,7 @@ classpath="$test_dir/tests.jar:$classpath"
   io.github.ccch1mneyyy.dsh_app.isolation.SqliteBackupExchangeTest \
   io.github.ccch1mneyyy.dsh_app.bot.GuestProviderCatalogTest \
   io.github.ccch1mneyyy.dsh_app.runtime.RuntimeDescriptorPayloadTest \
+  io.github.ccch1mneyyy.dsh_app.runtime.BotRuntimeStartupProgressTest \
   io.github.ccch1mneyyy.dsh_app.bot.BotRuntimeEndpointTest \
   io.github.ccch1mneyyy.dsh_app.bot.BotLoopbackBridgeTest \
   io.github.ccch1mneyyy.dsh_app.bot.BotConnectionGrantsTest \

@@ -26,6 +26,7 @@ internal object EmbeddedBotNode {
     private var assetReader: ((String) -> ByteArray)? = null
     private var readySignal: (() -> Boolean)? = null
     private var failureSignal: ((String) -> Unit)? = null
+    private val startupProgress = BotRuntimeStartupProgress { android.util.Log.i("MiniMaxBotRuntime", it) }
     fun configure(context: android.content.Context, modelHost: IBinder, modelSession: String,
                   fileHost: IBinder, fileSession: String, snapshotHost: IBinder, snapshotSession: String,
                   readAsset: (String) -> ByteArray, ready: () -> Boolean, failed: (String) -> Unit) {
@@ -40,8 +41,9 @@ internal object EmbeddedBotNode {
     fun readStaticAsset(name: String): ByteArray = checkNotNull(assetReader)(name)
     fun markReady(): Boolean = accepting.get() && readySignal?.invoke() == true
     fun reportFailure(phase: String) { failureSignal?.invoke(phase) }
+    fun reportStartupPhase(phase: String): Boolean = startupProgress.report(phase)
     fun waitForStop(): Int { try { stopSignal.await() } catch (_: InterruptedException) { Thread.currentThread().interrupt() }; return 0 }
-    fun stop() { accepting.set(false); botConnections.close(); stopSignal.countDown() }
+    fun stop() { accepting.set(false); startupProgress.close(); botConnections.close(); stopSignal.countDown() }
     private val botConnections = GrantedConnectionQueue<ParcelFileDescriptor>()
     fun offerBotConnection(fd: ParcelFileDescriptor) = botConnections.offer(fd)
     fun takeBotConnection(): Int {

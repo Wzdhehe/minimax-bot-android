@@ -5,6 +5,8 @@
 
 **11-11新增（启动开销）**：`mobile-filesystem.mjs`缓存已验证恢复/确实published的清单，只在下一次持久表示字节完全相同时跳过重复Main发布，不延迟或合并真实变更；UNKNOWN依旧先毒化，不能命中缓存当成功。完整partial/mobile与官方HTTP上传组合6项通过、0 skip；新增两项在旧实现上失败（102次无变化操作仍有102次重复发布）。已加CI真实mobile构建/此组合检查。**未编新APK/未验设备**，不能据此宣布180秒启动问题已解决，也不能断言全部都是模拟器速度问题。下一次打包必须重建mobile/prepare-product，不改Node源码pin、不再盲目加超时。
 
+**11-11再补（启动定位与取消）**：`bootstrap.cjs`现在给真实runtime传入随native stop中止的AbortSignal；此前缺此接线，不能拿旧组件的取消测试当产品bootstrap已经传了signal。另有13个静态启动阶段：assets→filesystem→runtime import→原host factory→native目录→Bot service→ingress，JNI的progress经Kotlin允许列表门记录，每UID单调且每项最多一次；不记录异常原文、不触碰Key、不改变ready/健康检查/死亡判定，也不再改180秒。宿主：JS19项、真实gateway包装1项（内部15）和Kotlin5项通过；消费者51/产品闸门35项通过；完整mobile重建+文件/HTTP附件6项通过。**新JNI没有本轮NDK编译，Android未验证。** 给Windows本机的零源码改动任务已写成[T-Flash-StartupTrace](T-Flash-StartupTrace.md)：一轮重包/一次启动，失败就交回最后阶段，不来回跑58/23大套件。node_probe.cpp/product_entry.inc变了，必须让准备器重编所需JNI，不能复用旧库或改摘要。
+
 ## 先做什么
 
 1. 阅读根AGENTS.md、dsh-go/AGENTS.md、[HANDOFF](../HANDOFF.md)、本文件、[DEVELOPMENT](../DEVELOPMENT.md)、[sandbox](../sandbox.md)、[架构](../architecture.md)、[runtime pin](../UPSTREAM-RUNTIME.md)。改哪个子树再读其适用指令。

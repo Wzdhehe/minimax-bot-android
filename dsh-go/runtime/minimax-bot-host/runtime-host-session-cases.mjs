@@ -73,11 +73,13 @@ function fixture(dataDir, { runTurn, onClose = async () => {}, modelApplication 
 
 test('trusted registration uses the actual gateway and ignores request-supplied identity', async (t) => {
   let host;
-  const session = await createBotRuntimeSession({ dataDir: '/fixture/first', ...boundFixture(), startHost: async ({ dataDir }) => {
+  const phases = [];
+  const session = await createBotRuntimeSession({ dataDir: '/fixture/first', ...boundFixture(), onStartupPhase: (phase) => phases.push(phase), startHost: async ({ dataDir }) => {
     host = fixture(dataDir);
     return host.assembled;
   } });
   t.after(() => session.close());
+  assert.deepEqual(phases, ['runtime_factory_starting', 'runtime_factory_started', 'native_catalog_starting', 'native_catalog_projected']);
   assert.equal('registerArena' in host.application, false);
   assert.deepEqual(Object.keys(session).sort(), ['agent', 'close', 'providerBinding', 'setSessionModel']);
   assert.equal(Object.isFrozen(session.agent), true);

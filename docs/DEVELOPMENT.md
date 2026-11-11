@@ -115,6 +115,9 @@ node --test dsh-go/tooling/mobile-runtime-bundle/test-filesystem.mjs \
 常见Node/model改动，从repo根：
 
 ```bash
+node --test dsh-go/runtime/minimax-bot-host/product-bootstrap.test.mjs \
+  dsh-go/runtime/minimax-bot-host/runtime-startup-progress.test.mjs \
+  dsh-go/runtime/minimax-bot-host/bot-runtime-start.test.mjs
 WEBUI_SOURCE="$MBOT_WEBUI_SOURCE" \
 ESBUILD_MODULE="$PWD/dsh-go/tooling/model-sdk-probe/node_modules/esbuild/lib/main.js" \
 node --test dsh-go/runtime/minimax-bot-host/runtime-host-session.test.mjs \
@@ -139,6 +142,8 @@ python3 dsh-go/tooling/android-node-probe/test-sqlite-backup.py --java-home /pat
 ```
 
 先按脚本/对应workflow准备真实依赖；最后一条是Linux JDK+JNI宿主SQLite/worker测试，不是Android执行。android-broker-probe/node-probe可做组件编译/仪器测试；已通过的23/58套件不需要为纯UI/文档变化重跑，不能代替产品端到端。
+
+11-11的BotRuntimeStartupProgressTest已加入test-native-model-broker.sh。单独用kotlinc+JUnit跑该纯Kotlin门是5项；不等于EmbeddedBotNode/JNI已编译。product-bootstrap.test执行真实bootstrap脚本文本，但明确替换两处import和native bindings为夹具，19项启动组合不证明Android VM/实际STOP已跑。新JNI签名reportStartupPhase(String):boolean及产品progress导出须由NDK重编并随新Kotlin进APK；现有EmbeddedBotNode整类R8 keep规则已覆盖该方法。设备定位只按[小卡](handoff/T-Flash-StartupTrace.md)跑一次，guest的bot_start_ingress_started不等于Main的bot_ready。
 
 App从dsh-go/app运行（字体变量用实际存在路径）：
 

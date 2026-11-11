@@ -8,6 +8,7 @@ import { createBotAgentPort } from './agent-port.mjs';
 import { createNativeModelBinding, NativeBindingError } from './native-model-binding.mjs';
 import { withNativeByokHost } from './runtime-native-review.mjs';
 import { createNativeModelRuntime } from './native-model-runtime.mjs';
+import { reportStartupProgress } from './runtime-startup-progress.mjs';
 
 // A colon cannot occur in an installed plugin name in either pinned manifest
 // reader. An installed package cannot replace this built-in arena by name.
@@ -40,7 +41,7 @@ export function createMiniAppAgentGateway(options) {
  * Production binds it to the pinned createWebuiRuntimeHost, which constructs
  * and binds the REAL gateway/session ports. No replacement ports are built.
  */
-export async function createBotRuntimeSession({ dataDir, startHost, signal, catalog = null, probe = null, nativeBinding = null }) {
+export async function createBotRuntimeSession({ dataDir, startHost, signal, catalog = null, probe = null, nativeBinding = null, onStartupPhase }) {
   if (typeof dataDir !== 'string' || !isAbsolute(dataDir) || dataDir.includes('\0')) {
     throw failure('runtime_data_directory_required');
   }
@@ -81,6 +82,7 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal, cata
       constructionBinding = createNativeModelBinding({ byForkProviderId: {}, binding: nativeBinding });
       constructionBinding.install(globalThis);
     }
+    reportStartupProgress(onStartupPhase, 'runtime_factory_starting');
     try { assembled = await construction.run(scope, () => catalog && nativeBinding
       ? withNativeByokHost(() => startHost({ dataDir: scope.dataDir })) : startHost({ dataDir: scope.dataDir })); }
     finally { scope.active = false; }
@@ -89,6 +91,7 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal, cata
     if (!closeRuntime || !scope.gateway || !assembled.host.application?.miniAppAgent) {
       throw failure('runtime_agent_registration_unavailable');
     }
+    reportStartupProgress(onStartupPhase, 'runtime_factory_started');
     if (signal?.aborted) throw failure('REQUEST_CANCELLED');
     const caller = Object.freeze({ pluginId: BUILTIN_ID, runId: randomUUID() });
     release = scope.gateway.registerArena({
@@ -98,9 +101,11 @@ export async function createBotRuntimeSession({ dataDir, startHost, signal, cata
     // The native catalog is projected through the upstream provider API: the
     // pinned upstream service owns provider keys, config locking and writes.
     const application = assembled.host.application;
+    reportStartupProgress(onStartupPhase, 'native_catalog_starting');
     const nativeRuntime = await createNativeModelRuntime({
       application, catalog, probe, nativeBinding, fetchTarget: globalThis,
     });
+    reportStartupProgress(onStartupPhase, 'native_catalog_projected');
     const providerBinding = nativeRuntime.providerBinding;
     modelBinding = nativeRuntime.binding;
     constructionBinding?.close();

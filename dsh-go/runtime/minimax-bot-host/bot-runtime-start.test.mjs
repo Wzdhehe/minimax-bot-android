@@ -75,11 +75,13 @@ async function fixture(t, descriptorPatch = {}) {
 
 test('native capabilities and the real Bot service start before the private ready receipt, without listening', async (t) => {
   const f = await fixture(t);
-  const handle = await f.start();
+  const phases = [];
+  const handle = await f.start({ onStartupPhase: (phase) => phases.push(phase) });
   // The parent still holds the advertised TCP port; success proves the Bot
   // attached its HTTP server to FD transport rather than calling listen.
   assert.equal(f.counts.ready, 1);
   assert.equal(f.counts.factory, 1);
+  assert.deepEqual(phases, ['bot_service_starting', 'bot_service_started', 'ingress_started']);
   assert.throws(() => fstatSync(f.descriptorFd), { code: 'EBADF' });
   const closing = handle.close();
   assert.equal(handle.close(), closing);
@@ -87,6 +89,14 @@ test('native capabilities and the real Bot service start before the private read
   await handle.done;
   assert.equal(f.counts.close, 1);
   assert.equal(f.counts.cancel, 1);
+});
+
+test('a failing phase observer cannot prevent the real Bot service from starting or draining', async (t) => {
+  const f = await fixture(t);
+  const handle = await f.start({ onStartupPhase() { throw Error('private diagnostic fixture'); } });
+  assert.equal(f.counts.ready, 1);
+  await handle.close();
+  assert.equal(f.counts.close, 1);
 });
 
 test('missing native model capability refuses startup and still consumes the descriptor', async (t) => {

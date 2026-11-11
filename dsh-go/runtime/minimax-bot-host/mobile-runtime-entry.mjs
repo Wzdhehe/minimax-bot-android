@@ -7,7 +7,7 @@ import { createSnapshotFdDatabase } from './runtime-snapshot-database.mjs';
 import fs from 'node:fs';
 
 export async function startMobileBotRuntime({ descriptorFd, ownerUid, Database, addon, dataFds,
-  files, models, snapshots, connections, filesystem, onReady, signal }) {
+  files, models, snapshots, connections, filesystem, onReady, signal, onStartupPhase }) {
   if (!Array.isArray(dataFds) || dataFds.length !== 4 || dataFds.some((fd) => !Number.isInteger(fd) || fd < 3)) throw Error('mobile_database_grant_invalid');
   addon.setFdVfs(...dataFds);
   dataFds.forEach((fd) => fs.closeSync(fd)); // Before any SQLite locks exist.
@@ -20,7 +20,7 @@ export async function startMobileBotRuntime({ descriptorFd, ownerUid, Database, 
     handle = await startBuiltinBotRuntimeFromFd({ descriptorFd, expectedOwnerUid: ownerUid,
       runtimeDataDir: filesystem.runtimeRoot, botDataDir: filesystem.botFiles.dataDir, mobileFiles: filesystem.botFiles,
       appVersion: 'android-bot', signal,
-      files, nativeBinding: models, connections, onReady,
+      files, nativeBinding: models, connections, onReady, onStartupPhase,
       nativeSqlite: { open: (options) => new Database('state.db', { ...options, nativeBinding: addon }),
         metadata: (slot) => addon.fdVfsMetadata(slot), backup: snapshotPort.backup,
         openBackup: snapshotPort.openBackup, snapshots: snapshotPort.snapshots },

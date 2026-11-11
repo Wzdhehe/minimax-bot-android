@@ -458,8 +458,9 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   asset_read_method = env->GetMethodID(type, "readStaticAsset", "(Ljava/lang/String;)[B");
   ready_method = env->GetMethodID(type, "markReady", "()Z");
   failure_method = env->GetMethodID(type, "reportFailure", "(Ljava/lang/String;)V");
+  progress_method = env->GetMethodID(type, "reportStartupPhase", "(Ljava/lang/String;)Z");
   wait_stop_method = env->GetMethodID(type, "waitForStop", "()I");
-  if (!asset_read_method || !ready_method || !failure_method || !wait_stop_method) return JNI_ERR;
+  if (!asset_read_method || !ready_method || !failure_method || !wait_stop_method || !progress_method) return JNI_ERR;
   JNINativeMethod method{const_cast<char*>("start"),
       const_cast<char*>("(Ljava/lang/String;IILjava/lang/String;[I)I"), reinterpret_cast<void*>(StartProduct)};
 #else

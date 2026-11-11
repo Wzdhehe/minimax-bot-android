@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Product profile of the shared Node bridge. Included inside its private
 // namespace; no arbitrary script, endpoint or path is received over IPC.
-jmethodID asset_read_method = nullptr, ready_method = nullptr, wait_stop_method = nullptr, failure_method = nullptr;
+jmethodID asset_read_method = nullptr, ready_method = nullptr, wait_stop_method = nullptr, failure_method = nullptr, progress_method = nullptr;
 std::atomic<bool> control_waiting{false};
 
 void ReadCodeAsset(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -39,6 +39,19 @@ void ReportBootFailure(const v8::FunctionCallbackInfo<v8::Value>& args) {
   if (phase && !env->ExceptionCheck()) env->CallVoidMethod(dispatcher, failure_method, phase);
   if (env->ExceptionCheck()) env->ExceptionClear();
   if (phase) env->DeleteLocalRef(phase);
+}
+void ReportStartupProgress(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  JNIEnv* env = nullptr;
+  args.GetReturnValue().Set(false);
+  if (args.Length() != 1 || !args[0]->IsString() || args[0].As<v8::String>()->Length() > 40 ||
+      java_vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;
+  v8::String::Value value(args.GetIsolate(), args[0]);
+  auto phase = env->NewString(reinterpret_cast<const jchar*>(*value), value.length());
+  const bool accepted = phase && !env->ExceptionCheck() && env->CallBooleanMethod(dispatcher, progress_method, phase);
+  const bool failed = env->ExceptionCheck();
+  if (failed) env->ExceptionClear();
+  if (phase) env->DeleteLocalRef(phase);
+  args.GetReturnValue().Set(accepted && !failed);
 }
 struct StopWork {
   uv_work_t work{};
@@ -80,6 +93,7 @@ void InitializeProduct(v8::Local<v8::Object> exports, v8::Local<v8::Value>, v8::
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "read"), v8::Function::New(context, ReadCodeAsset).ToLocalChecked()).Check();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "ready"), v8::Function::New(context, MarkReady).ToLocalChecked()).Check();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "failed"), v8::Function::New(context, ReportBootFailure).ToLocalChecked()).Check();
+  exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "progress"), v8::Function::New(context, ReportStartupProgress).ToLocalChecked()).Check();
   exports->Set(context, v8::String::NewFromUtf8Literal(isolate, "waitForStop"), v8::Function::New(context, WaitForStop).ToLocalChecked()).Check();
 }
 namespace product_module_registration {

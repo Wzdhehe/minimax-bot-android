@@ -6,6 +6,7 @@ import { createBotFdTransport } from './bot-fd-transport.mjs';
 import { startBotFdIngress } from './bot-fd-ingress.mjs';
 import { startBotService } from './service.mjs';
 import { createNativeProbeClient } from './native-probe-client.mjs';
+import { reportStartupProgress } from './runtime-startup-progress.mjs';
 
 const failure = (code) => Object.assign(new Error(code), { code });
 
@@ -16,7 +17,7 @@ const failure = (code) => Object.assign(new Error(code), { code });
  * Bot persistence uses only files; no workspace/media access or guest listener.
  */
 export async function startBotRuntimeFromFd({ descriptorFd, expectedOwnerUid, runtimeDataDir, botDataDir,
-  appVersion, nativeBinding, nativeSqlite, files, connections, onReady, signal, logger, startRuntime, mobileFiles = null } = {}) {
+  appVersion, nativeBinding, nativeSqlite, files, connections, onReady, signal, logger, startRuntime, mobileFiles = null, onStartupPhase } = {}) {
   const descriptor = readRuntimeDescriptorFd({ fd: descriptorFd, expectedOwnerUid });
   if (descriptor.broker !== null ||
       typeof runtimeDataDir !== 'string' || !isAbsolute(runtimeDataDir) || runtimeDataDir.includes('\0') ||
@@ -82,19 +83,22 @@ export async function startBotRuntimeFromFd({ descriptorFd, expectedOwnerUid, ru
   if (signal?.aborted) onAbort();
   try {
     ensureLive();
-    runtime = await startRuntime({ dataDir: runtimeDataDir, appVersion, descriptor, nativeBinding, nativeSqlite, signal: controller.signal });
+    runtime = await startRuntime({ dataDir: runtimeDataDir, appVersion, descriptor, nativeBinding, nativeSqlite, signal: controller.signal, onStartupPhase });
     if (!runtime || typeof runtime.close !== 'function' ||
         ['run', 'models', 'reply', 'answer'].some((name) => typeof runtime.agent?.[name] !== 'function')) {
       throw failure('runtime_start_invalid');
     }
     ensureLive();
+    reportStartupProgress(onStartupPhase, 'bot_service_starting');
     service = await startBotService({ port: descriptor.port, authToken: descriptor.token,
       dataDir: botDataDir, fileMode: mobileFiles ? 'mobile' : 'unavailable', mobileFiles, ...persistence, agent: runtime.agent,
       modelBroker: createNativeProbeClient(nativeBinding),
       signal: controller.signal, logger, fdTransport: transport });
+    reportStartupProgress(onStartupPhase, 'bot_service_started');
     ensureLive();
     ingress = startBotFdIngress({ transport, next: () => connections.next(), signal: controller.signal });
     void ingress.done.then(ingressEnded, ingressEnded);
+    reportStartupProgress(onStartupPhase, 'ingress_started');
     ensureLive();
     // No token, URL, Key, descriptor or agent-controlled data in this receipt.
     // Main must correlate it to the actual launching UID and run generation.
